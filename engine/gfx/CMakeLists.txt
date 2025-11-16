@@ -11,7 +11,7 @@ add_library(strata_gfx STATIC
 target_include_directories(strata_gfx PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_compile_features(strata_gfx PUBLIC cxx_std_23)
 enable_strict_warnings(strata_gfx)
-target_link_libraries(strata_gfx PUBLIC strata_platform Vulkan::Vulkan)
+target_link_libraries(strata_gfx PUBLIC engine_options strata_platform Vulkan::Vulkan)
 
 # Vulkan WSI macros localized to this target
 if (WIN32)
