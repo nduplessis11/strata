@@ -15,6 +15,22 @@ option(STRATA_ENABLE_ASAN "Enable AddressSanitizer on supported toolchains" OFF)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(warnings)  # provides: enable_strict_warnings(<target>)
 
+# Shared, target-based options for all engine targets
+add_library(engine_options INTERFACE)
+
+# Ensure C++23 is requested by all targets that link this.
+target_compile_features(engine_options INTERFACE cxx_std_23)
+
+# Make MSVC interpret sources and execution charset as UTF‑8
+if (MSVC)
+  target_compile_options(engine_options INTERFACE /utf-8)
+endif()
+
+# Use wide-character Win32 APIs everywhere on Windows
+if (WIN32)
+  target_compile_definitions(engine_options INTERFACE UNICODE _UNICODE)
+endif()
+
 # Layered targets (Option B: separate gfx layer)
 add_subdirectory(engine/platform)
 add_subdirectory(engine/gfx)
