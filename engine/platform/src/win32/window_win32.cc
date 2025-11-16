@@ -1,184 +1,269 @@
-// engine/platform/src/win32/window_win32.h
-// 
-// A skeleton that correctly fills WsiHandle from HWND/HINSTANCE.
+﻿// engine/platform/src/win32/window_win32.cc
+//
+// Win32 window backend for strata::platform::Window.
+//
+// DESIGN NOTES
+// - This TU uses the "pImpl + static thunk" pattern to keep Win32 details
+//   OUT of public headers and to satisfy strict C++ access rules (/permissive-).
+// - The platform layer creates/owns the native window; gfx consumes a typed
+//   WsiHandle to build a Vulkan surface (no Vulkan here).
+// - The message pump is non-blocking (PeekMessageW) to suit a real-time game loop.
 
 #include <windows.h>
-#include "strata/platform/window.h"
 #include <string>
+#include <utility>
+
+#include "strata/platform/window.h"
+#include "strata/platform/wsi_handle.h"
 
 namespace {
-	// Use a unique class name to avoid collisions
-	constexpr const wchar_t* kStrataWndClass = L"strata_window_class";
 
-	// Register the window class once per process.
-	ATOM register_wnd_class(HINSTANCE hinst, WNDPROC proc) {
-		WNDCLASSEXW wc{};
-		wc.cbSize = sizeof(wc);
-		wc.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
-		wc.lpfnWndProc = proc;
-		wc.cbClsExtra = 0;
-		wc.cbWndExtra = 0;
-		wc.hInstance = hinst;
-		wc.hIcon = ::LoadIconW(nullptr, IDI_APPLICATION);
-		wc.hCursor = ::LoadCursorW(nullptr, IDC_ARROW);
-		wc.hbrBackground = nullptr;     // no background erase -> less flicker
-		wc.lpszMenuName = nullptr;
-		wc.lpszClassName = kStrataWndClass;
-		wc.hIconSm = wc.hIcon;
+    // ────────────────────────────────────────────────────────────────────────────────
+    // A unique class name for this process.
+    // Each "window class" in Win32 describes default behavior (cursor, icon, WndProc).
+    // We register it once, then use it to create one or more windows of that class.
+    constexpr const wchar_t* kStrataWndClass = L"strata_window_class";
 
-		ATOM atom = ::RegisterClassExW(&wc);
-		if (!atom && ::GetLastError() == ERROR_CLASS_ALREADY_EXISTS) {
-			atom = static_cast<ATOM>(1);
-		}
-		return atom;
-	}
-	std::wstring utf8_to_wide(std::string_view s) {
-		if (s.empty()) return std::wstring();
-		const int needed = ::MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0);
+    // Register the window class once per process.
+    // NOTES on key fields:
+    //  - CS_OWNDC: give each window its own device context (useful for GDI, harmless otherwise).
+    //  - CS_HREDRAW | CS_VREDRAW: request repaint on horizontal/vertical size changes.
+    //  - lpfnWndProc: the function Windows calls for EVERY message (clicks, sizing, focus, etc.).
+    //  - hbrBackground = nullptr: don't auto-erase background → reduces flicker in renderers.
+    //  - If the class is already registered (typical in multi-window engines),
+    //    treat that as success; registration is idempotent for our purposes.
+    ATOM register_wnd_class(HINSTANCE hinst, WNDPROC proc) {
+        WNDCLASSEXW wc{};
+        wc.cbSize = sizeof(wc);
+        wc.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
+        wc.lpfnWndProc = proc;          // our static thunk (see Impl below)
+        wc.cbClsExtra = 0;
+        wc.cbWndExtra = 0;
+        wc.hInstance = hinst;
+        wc.hIcon = ::LoadIconW(nullptr, IDI_APPLICATION);
+        wc.hCursor = ::LoadCursorW(nullptr, IDC_ARROW);
+        wc.hbrBackground = nullptr;       // no background erase → less flicker
+        wc.lpszMenuName = nullptr;
+        wc.lpszClassName = kStrataWndClass;
+        wc.hIconSm = wc.hIcon;
 
-		std::wstring w;
-		if (needed > 0) {
-			w.resize(needed);
-			::MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), w.data(), needed);
-		}
-		return w;
-	}
+        ATOM atom = ::RegisterClassExW(&wc);
+        if (!atom && ::GetLastError() == ERROR_CLASS_ALREADY_EXISTS) {
+            // Already registered by a previous window → fine; treat as success.
+            atom = static_cast<ATOM>(1);
+        }
+        return atom;
+    }
 
-} // namepace
+    // UTF-8 → UTF-16 for window titles.
+    // Public API uses UTF-8 (std::string_view); Win32 "W" APIs use UTF-16 (wchar_t*).
+    std::wstring utf8_to_wide(std::string_view s) {
+        if (s.empty()) return std::wstring();
+        const int needed = ::MultiByteToWideChar(
+            CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0);
+
+        std::wstring w;
+        if (needed > 0) {
+            w.resize(needed);
+            ::MultiByteToWideChar(
+                CP_UTF8, 0, s.data(), static_cast<int>(s.size()), w.data(), needed);
+        }
+        return w;
+    }
+
+} // namespace
 
 namespace strata::platform {
-	struct Window::Impl {
-		HWND hwnd{};
-		HINSTANCE hinstance{};
-		bool closing{ false };
-		bool minimized{ false };
 
-		// Instance handler
-		LRESULT wnd_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
-			switch (msg) {
-			case WM_CLOSE:   closing = true; return 0;
-			case WM_DESTROY: ::PostQuitMessage(0); return 0;
-			case WM_SIZE:    minimized = (w == SIZE_MINIMIZED); return 0;
-			default: break;
-			}
-			return ::DefWindowProcW(h, msg, w, l);
-		}
+    // ────────────────────────────────────────────────────────────────────────────────
+    // Window::Impl — private Win32 state (pImpl)
+    //
+    // WHY pImpl?
+    //  - Keeps <windows.h> out of public headers.
+    //  - Lets us change backend details without breaking public ABI.
+    //  - Works with /permissive-: private nested types can be named inside members.
+    //
+    // WHY the "static thunk"?
+    //  - Win32 requires a free/static WNDPROC function.
+    //  - Free functions can't legally name private nested types under /permissive-.
+    //  - We put the WNDPROC THUNK *inside* Impl so it can name Impl,
+    //    then stash Impl* in GWLP_USERDATA on WM_NCCREATE and forward
+    //    all later messages to the instance handler (wnd_proc).
+    struct Window::Impl {
+        HINSTANCE hinstance{};
+        HWND      hwnd{};
+        bool      closing{ false };
+        bool      minimized{ false };
 
-		// Static thunk: allowed to name Impl
-		static LRESULT CALLBACK wndproc_static(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
-			if (msg == WM_NCCREATE) {
-				auto* cs = reinterpret_cast<CREATESTRUCTW*>(l);
-				if (cs && cs->lpCreateParams) {
-					::SetWindowLongPtrW(
-						hwnd, GWLP_USERDATA,
-						reinterpret_cast<LONG_PTR>(cs->lpCreateParams));
-				}
-			}
-			auto* impl = reinterpret_cast<Impl*>(::GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-			if (impl) return impl->wnd_proc(hwnd, msg, w, l);
-			return ::DefWindowProcW(hwnd, msg, w, l);
-		}
+        // Instance WndProc: receives messages after GWLP_USERDATA holds our Impl*.
+        LRESULT wnd_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
+            switch (msg) {
+            case WM_CLOSE:
+                // User requested close (e.g., Alt-F4 or clicking "X").
+                // We don't destroy here; we mark and let Application drive teardown.
+                closing = true;
+                return 0;
 
-		WsiHandle make_wsi_handle() const {
-			using namespace wsi;
-			Win32 h{};
-			h.instance.value = reinterpret_cast<std::uintptr_t>(hinstance);
-			h.window.value = reinterpret_cast<std::uintptr_t>(hwnd);
-			return WsiHandle{ std::in_place_type<Win32>, h };
-		}
-	};
+            case WM_DESTROY:
+                // For single-window apps, post a quit message so the thread's message
+                // loop can exit if anyone is waiting on it.
+                ::PostQuitMessage(0);
+                return 0;
 
-	Window::Window(const WindowDesc& desc) : p_(std::make_unique<Impl>()) {
-		p_->hinstance = ::GetModuleHandleW(nullptr);
+            case WM_SIZE:
+                // Track minimized state; the render loop can throttle when minimized.
+                minimized = (w == SIZE_MINIMIZED);
+                return 0;
 
-		if (!register_wnd_class(p_->hinstance, &Impl::wndproc_static)) {
-			p_->closing = true;
-			return;
-		}
+            default:
+                break;
+            }
+            return ::DefWindowProcW(h, msg, w, l);
+        }
 
-		// Window style + resizable toggle
-		DWORD style = WS_OVERLAPPEDWINDOW;
-		DWORD ex = WS_EX_APPWINDOW;
-		if (!desc.resizable) {
-			style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
-		}
+        // Static THUNK: allowed to name Impl because it's a member.
+        // 1) On WM_NCCREATE, we receive lpCreateParams (our Impl*) and store it in
+        //    per-window storage (GWLP_USERDATA).
+        // 2) Afterwards, fetch Impl* and forward messages to the instance handler.
+        static LRESULT CALLBACK wndproc_static(HWND hwnd, UINT msg, WPARAM w, LPARAM l) {
+            if (msg == WM_NCCREATE) {
+                auto* cs = reinterpret_cast<CREATESTRUCTW*>(l);
+                if (cs && cs->lpCreateParams) {
+                    ::SetWindowLongPtrW(
+                        hwnd, GWLP_USERDATA,
+                        reinterpret_cast<LONG_PTR>(cs->lpCreateParams));
+                }
+            }
+            auto* impl = reinterpret_cast<Impl*>(
+                ::GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+            if (impl) {
+                return impl->wnd_proc(hwnd, msg, w, l);
+            }
+            return ::DefWindowProcW(hwnd, msg, w, l);
+        }
 
-		// Convert desired client size -> outer rect.
-		RECT rect{ 0, 0, desc.size.width, desc.size.height };
-		::AdjustWindowRectEx(&rect, style, FALSE, ex);
-		const int outer_w = rect.right - rect.left;
-		const int outer_h = rect.bottom - rect.top;
+        // Build a strongly-typed WSI descriptor for the gfx layer.
+        // No OS headers leak outside; gfx later casts back to HWND/HINSTANCE to call
+        // vkCreateWin32SurfaceKHR in a single "WSI bridge" TU.
+        WsiHandle make_wsi_handle() const {
+            using namespace wsi;
+            Win32 h{};
+            h.instance.value = reinterpret_cast<std::uintptr_t>(hinstance);
+            h.window.value = reinterpret_cast<std::uintptr_t>(hwnd);
+            return WsiHandle{ std::in_place_type<Win32>, h };
+        }
+    };
 
-		std::wstring wtitle = utf8_to_wide(desc.title);
+    // ────────────────────────────────────────────────────────────────────────────────
+    // Window API — construct, pump, query, teardown
 
-		// Create the window; pass Impl* via lpCreateParams for WM_NCCREATE.
-		HWND hwnd = ::CreateWindowExW(
-			ex, kStrataWndClass, wtitle.c_str(), style,
-			CW_USEDEFAULT, CW_USEDEFAULT, outer_w, outer_h,
-			nullptr, nullptr, p_->hinstance, p_.get());
+    Window::Window(const WindowDesc& desc)
+        : p_(std::make_unique<Impl>()) {
 
-		if (!hwnd) {
-			p_->closing = true;
-			return;
-		}
+        // Module handle of this EXE/DLL.
+        p_->hinstance = ::GetModuleHandleW(nullptr);
 
-		p_->hwnd = hwnd;
+        // Register our window class (idempotent).
+        if (!register_wnd_class(p_->hinstance, &Impl::wndproc_static)) {
+            p_->closing = true;
+            return;
+        }
 
-		if (desc.visible) {
-			::ShowWindow(p_->hwnd, SW_SHOW);
-			::UpdateWindow(p_->hwnd);
-		}
-		else {
-			::ShowWindow(p_->hwnd, SW_HIDE);
-		}
-	}
+        // Choose style flags. If not resizable, remove thick frame + maximize box.
+        DWORD style = WS_OVERLAPPEDWINDOW;
+        DWORD ex = WS_EX_APPWINDOW;
+        if (!desc.resizable) {
+            style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
+        }
 
-	Window::~Window() = default;
+        // Convert desired client size → outer window rect for this style.
+        RECT rect{ 0, 0, desc.size.width, desc.size.height };
+        ::AdjustWindowRectEx(&rect, style, FALSE, ex);
+        const int outer_w = rect.right - rect.left;
+        const int outer_h = rect.bottom - rect.top;
 
-	Window::Window(Window&&) noexcept = default;
-	Window& Window::operator=(Window&&) noexcept = default;
+        // Title: UTF-8 → UTF-16.
+        std::wstring wtitle = utf8_to_wide(desc.title);
 
-	bool Window::should_close() const noexcept {
-		return p_->closing;
-	}
+        // Create the window. Pass Impl* via lpCreateParams so WM_NCCREATE can stash it.
+        HWND hwnd = ::CreateWindowExW(
+            ex, kStrataWndClass, wtitle.c_str(), style,
+            CW_USEDEFAULT, CW_USEDEFAULT, outer_w, outer_h,
+            nullptr, nullptr, p_->hinstance, p_.get());
 
-	void Window::request_close() noexcept {
-		if (p_->hwnd) {
-			::PostMessageW(p_->hwnd, WM_CLOSE, 0, 0);
-		}
-	}
+        if (!hwnd) {
+            p_->closing = true;
+            return;
+        }
 
-	void Window::poll_events() {
-		MSG msg;
-		// Process all thread messages (don�t filter to a single HWND).
-		while (::PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
-			::TranslateMessage(&msg);
-			::DispatchMessageW(&msg);
-		}
-	}
+        p_->hwnd = hwnd;
 
-	void Window::set_title(std::string_view title) {
-		if (!p_->hwnd) return;
-		const std::wstring w = utf8_to_wide(title);
-		::SetWindowTextW(p_->hwnd, w.c_str());
-	}
+        // Initial visibility.
+        if (desc.visible) {
+            ::ShowWindow(p_->hwnd, SW_SHOW);
+            ::UpdateWindow(p_->hwnd); // trigger an immediate paint if needed
+        }
+        else {
+            ::ShowWindow(p_->hwnd, SW_HIDE);
+        }
+    }
 
-	auto Window::window_size() const noexcept -> std::pair<int, int> {
-		if (!p_->hwnd) return { 0, 0 };
-		RECT rc{};
-		::GetClientRect(p_->hwnd, &rc);
-		const int w = rc.right - rc.left;
-		const int h = rc.bottom - rc.top;
-		return { w, h };
-	}
+    Window::~Window() = default;
 
-	auto Window::framebuffer_size() const noexcept -> std::pair<int, int> {
-		// For first bring-up, assume client == framebuffer.
-		// If you enable per-monitor DPI awareness, compute pixels using GetDpiForWindow().
-		return window_size();
-	}
+    // Move-only owner of the native window (unique_ptr pImpl makes copy deleted).
+    Window::Window(Window&&) noexcept = default;
+    Window& Window::operator=(Window&&) noexcept = default;
 
-	WsiHandle Window::native_wsi() const noexcept {
-		return p_->make_wsi_handle();
-	}
-}
+    // Has the user (or OS) requested close? (Set on WM_CLOSE in wnd_proc.)
+    bool Window::should_close() const noexcept {
+        return p_->closing;
+    }
+
+    // Asynchronously request a close by posting WM_CLOSE to this window.
+    void Window::request_close() noexcept {
+        if (p_->hwnd) {
+            ::PostMessageW(p_->hwnd, WM_CLOSE, 0, 0);
+        }
+    }
+
+    // Non-blocking message pump for game loops.
+    // Processes ALL messages for this GUI thread (nullptr filter).
+    void Window::poll_events() {
+        MSG msg;
+        while (::PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            ::TranslateMessage(&msg);
+            ::DispatchMessageW(&msg);
+        }
+    }
+
+    // Change the window title (public API uses UTF-8).
+    void Window::set_title(std::string_view title) {
+        if (!p_->hwnd) return;
+        const std::wstring w = utf8_to_wide(title);
+        ::SetWindowTextW(p_->hwnd, w.c_str());
+    }
+
+    // Client area size (logical units). The render area equals client for now.
+    // If you enable Per-Monitor DPI Awareness (PMv2), use GetDpiForWindow()
+    // to compute true pixel framebuffer size in framebuffer_size().
+    auto Window::window_size() const noexcept -> std::pair<int, int> {
+        if (!p_->hwnd) return { 0, 0 };
+        RECT rc{};
+        ::GetClientRect(p_->hwnd, &rc);
+        const int w = rc.right - rc.left;
+        const int h = rc.bottom - rc.top;
+        return { w, h };
+    }
+
+    auto Window::framebuffer_size() const noexcept -> std::pair<int, int> {
+        // FIRST BRING-UP: assume client == framebuffer.
+        // LATER: if DPI-aware, multiply by DPI/96 or use GetDpiForWindow().
+        return window_size();
+    }
+
+    // Return a typed WSI descriptor for gfx (used to create a VkSurfaceKHR).
+    WsiHandle Window::native_wsi() const noexcept {
+        return p_->make_wsi_handle();
+    }
+
+} // namespace strata::platform
