@@ -1,0 +1,38 @@
+﻿{
+  "version": 5,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 27
+  },
+  "configurePresets": [
+    {
+      "name": "ninja-debug",
+      "generator": "Ninja",
+      "binaryDir": "build/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "STRATA_WARNINGS_AS_ERRORS": "ON",
+        "STRATA_USE_X11": "ON"
+      }
+    },
+    {
+      "name": "ninja-rel",
+      "generator": "Ninja",
+      "binaryDir": "build/rel",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "STRATA_USE_X11": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "ninja-debug"
+    },
+    {
+      "name": "rel",
+      "configurePreset": "ninja-rel"
+    }
+  ]
+}
