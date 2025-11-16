@@ -115,6 +115,13 @@ namespace strata::platform {
                 minimized = (w == SIZE_MINIMIZED);
                 return 0;
 
+            case WM_NCDESTROY:
+                // Break association so future messages can't see stale Impl*.
+                ::SetWindowLongPtrW(h, GWLP_USERDATA, 0);
+                hwnd = nullptr;
+                closing = true;
+                return ::DefWindowProcW(h, msg, w, l); // returning 0 is also fine
+
             default:
                 break;
             }
