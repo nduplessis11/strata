@@ -13,6 +13,7 @@ target_compile_features(strata_platform PUBLIC cxx_std_23)
 enable_strict_warnings(strata_platform)
 
 if (WIN32)
+  target_compile_definitions(strata_platform PUBLIC UNICODE _UNICODE)
   # user32, gdi32 for windowing; winmm if you use timeBeginPeriod for timer granularity
   target_link_libraries(strata_platform PUBLIC user32 gdi32 winmm)
 elseif (UNIX AND NOT APPLE)

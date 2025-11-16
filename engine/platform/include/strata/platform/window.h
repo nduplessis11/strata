@@ -1,3 +1,10 @@
+// engine/platform/include/strata/platform/window.h
+// 
+// The public RAII + pImpl window class. 
+// It owns the native window;
+// exposes portable operations; 
+// and can hand the renderer a WsiHandle.
+
 #pragma once
 #include <memory>
 #include <string_view>
@@ -24,18 +31,24 @@ namespace strata::platform {
 		Window(Window&&) noexcept;
 		Window& operator=(Window&&) noexcept;
 
-		bool should_close() const noexcept;
+		Window(const Window&) = delete;
+		Window& operator=(const Window&) = delete;
+
+		[[nodiscard]] bool should_close() const noexcept;
 		void request_close() noexcept;
 
 		void poll_events();
 		void set_title(std::string_view title);
 
 		// size queries
-		auto window_size() const noexcept -> std::pair<int, int>;
-		auto framebuffer_size() const noexcept -> std::pair<int, int>;
+		[[nodiscard]] auto window_size() const noexcept -> std::pair<int, int>;
+		[[nodiscard]] auto framebuffer_size() const noexcept -> std::pair<int, int>;
+
+		bool is_minimized() const noexcept;
+		bool is_visible()  const noexcept;
 
 		// access to native handles in a strongly-typed variant
-		auto native_wsi() const noexcept -> WsiHandle;
+		[[nodiscard]] auto native_wsi() const noexcept -> WsiHandle;
 
 	private:
 		struct Impl;
