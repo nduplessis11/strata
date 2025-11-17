@@ -94,6 +94,7 @@ namespace strata::platform {
         HWND      hwnd{};
         bool      closing{ false };
         bool      minimized{ false };
+        HBRUSH    clear_brush{};    // TEMP: dark-gray fill for smoke test (renderer-ready)
 
         // Instance WndProc: receives messages after GWLP_USERDATA holds our Impl*.
         LRESULT wnd_proc(HWND h, UINT msg, WPARAM w, LPARAM l) {
@@ -113,11 +114,37 @@ namespace strata::platform {
             case WM_SIZE:
                 // Track minimized state; the render loop can throttle when minimized.
                 minimized = (w == SIZE_MINIMIZED);
+                // Ask Windows to send WM_PAINT soon; don't erase (we'll paint everything).
+                ::InvalidateRect(h, nullptr, FALSE);
                 return 0;
 
+            case WM_ERASEBKGND:
+                // Prevent the OS from erasing the background separately (reduces flicker).
+                // We fully cover the client area in WM_PAINT (or with the renderer later).
+                return 1;
+
+            case WM_PAINT: {
+                // TEMPORARY SMOKE TEST: Fill the invalid region so grows aren't black.
+                // Later, when Vulkan is wired, this block becomes BeginPaint/EndPaint only.
+                PAINTSTRUCT ps{};
+                HDC dc{ ::BeginPaint(h, &ps) };
+
+                // Lazy-create a neutral dark gray brush
+                if (!clear_brush) {
+                    clear_brush = ::CreateSolidBrush(RGB(32, 32, 32));
+                }
+
+                ::FillRect(dc, &ps.rcPaint, clear_brush);
+                ::EndPaint(h, &ps);
+                return 0;
+            }
             case WM_NCDESTROY:
-                // Break association so future messages can't see stale Impl*.
+                // Final teardown: break association, release GDI resources, mark closed.
                 ::SetWindowLongPtrW(h, GWLP_USERDATA, 0);
+                if (clear_brush) {
+                    ::DeleteObject(clear_brush);
+                    clear_brush = nullptr;
+                }
                 hwnd = nullptr;
                 closing = true;
                 return ::DefWindowProcW(h, msg, w, l); // returning 0 is also fine
