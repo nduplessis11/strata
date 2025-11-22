@@ -7,7 +7,9 @@
 #include <vector>
 
 struct VkInstance_T;
+struct VkSurfaceKHR_T;
 using VkInstance = VkInstance_T*;
+using VkSurfaceKHR = VkSurfaceKHR_T*;
 
 namespace strata::gfx {
 	struct VulkanContextDesc {
@@ -26,14 +28,15 @@ namespace strata::gfx {
 									const VulkanContextDesc& desc = {});
 
 		[[nodiscard]] VkInstance instance() const noexcept { return instance_.get(); }
-		[[nodiscard]] bool valid() const noexcept { return static_cast<bool>(instance_); }
+		[[nodiscard]] bool valid() const noexcept { return instance_.valid(); }
+
+		[[nodiscard]] VkSurfaceKHR surface() const noexcept { return surface_.get(); }
+		[[nodiscard]] bool has_surface() const noexcept { return surface_.valid(); }
 
 	private:
 		// Small RAII type that owns a VkInstance.
 		// All the "destroy" logic lives here; VulkanContext just holds one.
 		struct InstanceHandle {
-			VkInstance handle{ nullptr };
-
 			InstanceHandle() = default;
 			explicit InstanceHandle(VkInstance h) : handle(h) {}
 
@@ -45,9 +48,33 @@ namespace strata::gfx {
 			InstanceHandle& operator=(InstanceHandle&& other) noexcept;
 
 			[[nodiscard]] VkInstance get() const noexcept { return handle; }
-			explicit operator bool() const noexcept { return handle != nullptr; }
+			[[nodiscard]] bool valid() const noexcept { return handle != nullptr; }
+
+		private:
+			VkInstance handle{ nullptr };
+		};
+
+		struct SurfaceHandle {
+			SurfaceHandle() = default;
+			SurfaceHandle(VkInstance inst, VkSurfaceKHR h) : instance(inst), handle(h) {}
+
+			~SurfaceHandle();
+
+			SurfaceHandle(const SurfaceHandle&) = delete;
+			SurfaceHandle& operator=(const SurfaceHandle&) = delete;
+
+			SurfaceHandle(SurfaceHandle&& other) noexcept;
+			SurfaceHandle& operator=(SurfaceHandle&& other) noexcept;
+
+			[[nodiscard]] VkSurfaceKHR get() const noexcept { return handle; }
+			[[nodiscard]] bool valid() const noexcept { return handle != nullptr; }
+
+		private:
+			VkInstance instance{ nullptr };
+			VkSurfaceKHR handle{ nullptr };
 		};
 
 		InstanceHandle instance_{};
+		SurfaceHandle surface_{};
 	};
 }

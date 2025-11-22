@@ -2,7 +2,6 @@
 #include "strata/gfx/vulkan/vulkan_context.h"
 #include "strata/gfx/vulkan/wsi_bridge.h"
 
-#include <vulkan/vulkan.h>
 #include <chrono>
 #include <thread>
 #include <print>
@@ -32,12 +31,6 @@ int main() {
 		return 2;
 	}
 
-	VkSurfaceKHR surface = vk::create_surface(ctx.instance(), wsi);
-	if (surface == nullptr) {
-		std::println(stderr, "Failed to create VkSurfaceKHR");
-		return 3;
-	}
-
 	// Main loop: pump events until the user closes the window.
 	while (!win.should_close()) {
 		win.poll_events();
@@ -45,7 +38,5 @@ int main() {
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 
-	vkDestroySurfaceKHR(ctx.instance(), surface, nullptr);
-	// VkInstance is destroyed automatically by InstanceHandle's destructor.
 	return 0;
 }

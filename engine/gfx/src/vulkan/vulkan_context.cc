@@ -9,13 +9,13 @@ namespace strata::gfx {
 	VulkanContext::InstanceHandle::~InstanceHandle() {
 		if (handle) {
 			vkDestroyInstance(handle, nullptr);
-			handle = nullptr;
+			handle = VK_NULL_HANDLE;
 		}
 	}
 
 	VulkanContext::InstanceHandle::InstanceHandle(InstanceHandle&& other) noexcept
 		: handle(other.handle) {
-		other.handle = nullptr;
+		other.handle = VK_NULL_HANDLE;
 	}
 
 	VulkanContext::InstanceHandle& VulkanContext::InstanceHandle::operator=(InstanceHandle&& other) noexcept {
@@ -24,7 +24,35 @@ namespace strata::gfx {
 				vkDestroyInstance(handle, nullptr);
 			}
 			handle = other.handle;
-			other.handle = nullptr;
+			other.handle = VK_NULL_HANDLE;
+		}
+		return *this;
+	}
+
+	VulkanContext::SurfaceHandle::~SurfaceHandle() {
+		if (instance != VK_NULL_HANDLE && handle != VK_NULL_HANDLE) {
+			vkDestroySurfaceKHR(instance, handle, nullptr);
+			handle = VK_NULL_HANDLE;
+			instance = VK_NULL_HANDLE;
+		}
+	}
+
+	VulkanContext::SurfaceHandle::SurfaceHandle(SurfaceHandle&& other) noexcept
+		: instance(other.instance), handle(other.handle) {
+		other.instance = VK_NULL_HANDLE;
+		other.handle = VK_NULL_HANDLE;
+	}
+
+	VulkanContext::SurfaceHandle&
+		VulkanContext::SurfaceHandle::operator=(SurfaceHandle&& other) noexcept {
+		if (this != &other) {
+			if (instance != VK_NULL_HANDLE && handle != VK_NULL_HANDLE) {
+				vkDestroySurfaceKHR(instance, handle, nullptr);
+			}
+			instance = other.instance;
+			handle = other.handle;
+			other.instance = VK_NULL_HANDLE;
+			other.handle = VK_NULL_HANDLE;
 		}
 		return *this;
 	}
@@ -62,15 +90,26 @@ namespace strata::gfx {
 		ci.enabledExtensionCount = static_cast<std::uint32_t>(exts.size());
 		ci.ppEnabledExtensionNames = exts.data();
 
-		VkInstance inst = VK_NULL_HANDLE;
-		const VkResult res = vkCreateInstance(&ci, nullptr, &inst);
+		VkInstance instance = VK_NULL_HANDLE;
+		const VkResult res = vkCreateInstance(&ci, nullptr, &instance);
 		if (res != VK_SUCCESS) {
 			std::println(stderr, "VkCreateInstance failed");
 			return ctx; // ctx.instance_ stays empty -> valid() == false
 		}
 
 		// Wrap in RAII handle; VulkanContext stays Rule of Zero.
-		ctx.instance_ = InstanceHandle{ inst };
+		ctx.instance_ = InstanceHandle{ instance };
+
+		VkSurfaceKHR surface = vk::create_surface(instance, wsi);
+		if (!surface) {
+			std::println(stderr, "vk::create_surface failed");
+			// Depending on policy:
+			// - either leave ctx.surface_ invalid, but ctx.valid() is still true (instance only)
+			// - or consider that a fatal error and return an "invalid" context
+			return ctx;
+		}
+
+		ctx.surface_ = SurfaceHandle{instance, surface };
 		return ctx;
 	}
 }
