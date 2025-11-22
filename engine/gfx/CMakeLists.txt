@@ -1,11 +1,14 @@
 find_package(Vulkan REQUIRED)
 
 add_library(strata_gfx STATIC
-  include/strata/gfx/vulkan_context.h
-  include/strata/gfx/renderer2d.h
+  include/strata/gfx/vulkan/vulkan_context.h
+  include/strata/gfx/vulkan/renderer2d.h
+  include/strata/gfx/vulkan/wsi_bridge.h
   src/vulkan/vulkan_context.cc
   src/vulkan/swapchain.cc
   src/vulkan/renderer2d.cc
+
+  $<$<PLATFORM_ID:Windows>:src/vulkan/wsi_bridge_win32.cc>
 )
 
 target_include_directories(strata_gfx PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
