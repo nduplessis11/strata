@@ -1,4 +1,52 @@
+﻿// -----------------------------------------------------------------------------
 // engine/gfx/include/strata/gfx/vulkan/swapchain.h
+//
+// Purpose:
+//   RAII wrapper around a Vulkan swapchain and its image views. This header
+//   provides a small, engine-facing interface for creating a window-sized
+//   swapchain from an existing VulkanContext, without exposing the details of
+//   swapchain creation (formats, present modes, capabilities, etc.) to callers.
+//
+//   The swapchain owns:
+//     • VkSwapchainKHR  – the WSI-managed series of presentable images
+//     • VkImageView[]   – one view per swapchain image, used as color attachments
+//
+//   VulkanContext owns:
+//     • VkInstance, VkSurfaceKHR, VkDevice, VkPhysicalDevice, queues
+//   Swapchain::create() uses these to construct a swapchain suitable for
+//   rendering to a given window/Extent2d.
+//
+// Design Notes:
+//   • Public Header: We avoid including <vulkan/vulkan.h> here. Instead we
+//     forward-declare Vulkan handle types (VkSwapchainKHR, VkImageView) and
+//     reuse VkDevice from vulkan_context.h. The implementation file
+//     (swapchain.cc) includes the real Vulkan headers.
+//
+//   • Rule of Zero:
+//       - Swapchain itself declares no destructor, copy, or move operations.
+//       - All Vulkan lifetime management lives in the nested Handle struct
+//         (which is move-only and RAII).
+//       - Swapchain simply aggregates Handle and an Extent2d.
+//
+//   • Ownership Model:
+//       - Handle owns the swapchain (VkSwapchainKHR) and the image views
+//         (std::vector<VkImageView>).
+//       - Handle stores a non-owning VkDevice pointer, used only to destroy
+//         the views and swapchain; VulkanContext remains the true owner of
+//         the device.
+//       - Destroy order in Handle::~Handle():
+//           1) Destroy all VkImageView objects
+//           2) Destroy the VkSwapchainKHR
+//
+//   • Separation of Concerns:
+//        Header  → declares the high-level Swapchain interface and RAII shape.
+//        Source  → implements Vulkan-specific logic:
+//                    - querying surface capabilities,
+//                    - choosing formats/present modes/extents,
+//                    - creating the swapchain and image views,
+//                    - destruction details.
+// -----------------------------------------------------------------------------
+
 
 #pragma once
 
@@ -44,10 +92,10 @@ namespace strata::gfx {
             Handle(Handle&& other) noexcept;
             Handle& operator=(Handle&& other) noexcept;
 
-            [[nodiscard]] bool valid() const noexcept { return device_ != nullptr && swapchain_ != nullptr; }
-            [[nodiscard]] VkSwapchainKHR get() const noexcept { return swapchain_; }
-            [[nodiscard]] VkDevice       device() const noexcept { return device_; }
-            [[nodiscard]] const std::vector<VkImageView>& views() const noexcept { return image_views_; }
+            [[nodiscard]] bool                            valid()  const noexcept { return device_ != nullptr && swapchain_ != nullptr; }
+            [[nodiscard]] VkSwapchainKHR                  get()    const noexcept { return swapchain_; }
+            [[nodiscard]] VkDevice                        device() const noexcept { return device_; }
+            [[nodiscard]] const std::vector<VkImageView>& views()  const noexcept { return image_views_; }
 
         private:
             VkDevice       device_{ nullptr };      // non-owning: used for destruction

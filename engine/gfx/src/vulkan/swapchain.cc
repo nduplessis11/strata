@@ -1,4 +1,18 @@
 // engine/gfx/src/vulkan/swapchain.cc
+// 
+// Swapchain images vs. image views:
+//
+// vkGetSwapchainImagesKHR gives us VkImage handles representing the raw GPU
+// pixel storage owned by the swapchain. These images are *not* directly usable
+// as framebuffer attachments or shader resources.
+//
+// To use a VkImage in a render pass, framebuffer, or descriptor set, we must
+// create a VkImageView that describes how we will access the image (2D view,
+// color aspect, mip levels, array layers, etc.).
+//
+// We do *not* destroy swapchain VkImages-those are owned and freed by the
+// swapchain itself. We *do* destroy the VkImageViews we create for each image,
+// and we must destroy them *before* destroying the swapchain.
 
 #include "strata/gfx/vulkan/swapchain.h"
 #include <vulkan/vulkan.h>
