@@ -19,9 +19,10 @@
 //       - Works naturally with std::span.
 //
 //   • Why std::span Return Type?
-//       required_instance_extensions() returns std::span<const char* const>,
-//       exposing a read-only view to the static extension list without copying or
-//       allocating memory. The lifetime is guaranteed because the array is static.
+//       required_instance_extensions() returns std::span<const ExtensionName>,
+//       exposing a read-only std::string_view to the static extension list without
+//       copying or allocating memory. The lifetime is guaranteed because the array 
+//		 is static.
 //
 //   • Variant Dispatch (std::visit):
 //       WsiHandle is a std::variant<Win32, X11, Wayland>. We use std::visit with

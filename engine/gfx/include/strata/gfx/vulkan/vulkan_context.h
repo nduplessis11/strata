@@ -4,23 +4,26 @@
 #include "strata/platform/wsi_handle.h"
 #include "strata/gfx/vulkan/wsi_bridge.h"
 
-#include <vector>
+#include <cstdint>
+#include <limits>
 
 struct VkInstance_T;
 struct VkSurfaceKHR_T;
 struct VkDevice_T;
+struct VkPhysicalDevice_T;
+struct VkQueue_T;
+
 using VkInstance = VkInstance_T*;
 using VkSurfaceKHR = VkSurfaceKHR_T*;
 using VkDevice = VkDevice_T*;
+using VkPhysicalDevice = VkPhysicalDevice_T*;
+using VkQueue = VkQueue_T*;
 
 namespace strata::gfx {
 	struct VulkanContextDesc {
 		bool enable_validation{ false };
 	};
 
-	// VulkanContext owns a VkInstance with a small RAII handle type.
-	// VulkanContext itself follows the Rule of Zero: it declares no destructor
-	// or special member functions; it just aggregates RAII members.
 	class VulkanContext {
 	public:
 		VulkanContext() = default;
@@ -34,6 +37,9 @@ namespace strata::gfx {
 
 		[[nodiscard]] VkSurfaceKHR surface() const noexcept { return surface_.get(); }
 		[[nodiscard]] bool has_surface() const noexcept { return surface_.valid(); }
+
+		[[nodiscard]] VkDevice device() const noexcept { return device_.get(); }
+		[[nodiscard]] bool has_device() const noexcept { return device_.valid(); }
 
 	private:
 		// Small RAII type that owns a VkInstance.
@@ -97,5 +103,12 @@ namespace strata::gfx {
 		InstanceHandle instance_{};
 		SurfaceHandle surface_{};
 		DeviceHandle device_{};
+
+		// Non-owning info about the chosen GPU + queues
+		VkPhysicalDevice physical_{ nullptr };
+		std::uint32_t graphics_family_{ std::numeric_limits<std::uint32_t>::max() };
+		std::uint32_t present_family_{ std::numeric_limits<std::uint32_t>::max() };
+		VkQueue graphics_queue_{ nullptr };
+		VkQueue present_queue_{ nullptr };
 	};
 }
