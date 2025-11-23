@@ -78,6 +78,9 @@ namespace strata::gfx {
 
 		struct DeviceHandle {
 			DeviceHandle() = default;
+			explicit DeviceHandle(VkDevice d) : handle(d) {}
+
+			~DeviceHandle();
 
 			DeviceHandle(const DeviceHandle&) = delete;
 			DeviceHandle& operator=(const DeviceHandle&) = delete;
@@ -93,6 +96,6 @@ namespace strata::gfx {
 
 		InstanceHandle instance_{};
 		SurfaceHandle surface_{};
-		DeviceHandle handle_{};
+		DeviceHandle device_{};
 	};
 }

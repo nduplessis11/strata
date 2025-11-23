@@ -57,6 +57,30 @@ namespace strata::gfx {
 		return *this;
 	}
 
+	VulkanContext::DeviceHandle::~DeviceHandle() {
+		if (handle) {
+			vkDestroyDevice(handle, nullptr);
+			handle = VK_NULL_HANDLE;
+		}
+	}
+
+	VulkanContext::DeviceHandle::DeviceHandle(DeviceHandle&& other) noexcept
+		: handle(other.handle) {
+		other.handle = VK_NULL_HANDLE;
+	}
+
+	VulkanContext::DeviceHandle&
+		VulkanContext::DeviceHandle::operator=(DeviceHandle&& other) noexcept {
+		if (this != &other) {
+			if (handle) {
+				vkDestroyDevice(handle, nullptr);
+			}
+			handle = other.handle;
+			other.handle = VK_NULL_HANDLE;
+		}
+		return *this;
+	}
+
 	VulkanContext VulkanContext::create(const strata::platform::WsiHandle& wsi,
 		const VulkanContextDesc& desc) {
 		VulkanContext ctx{};
