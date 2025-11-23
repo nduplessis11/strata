@@ -26,10 +26,8 @@ namespace strata::gfx {
 
 	class VulkanContext {
 	public:
-		VulkanContext() = default;
-
 		// Factory: creates an instance using the active WSI
-		static VulkanContext create(const strata::platform::WsiHandle& wsi,
+		[[nodiscard]] static VulkanContext create(const strata::platform::WsiHandle& wsi,
 			const VulkanContextDesc& desc = {});
 
 		[[nodiscard]] VkInstance instance() const noexcept { return instance_.get(); }
@@ -42,6 +40,7 @@ namespace strata::gfx {
 		[[nodiscard]] bool has_device() const noexcept { return device_.valid(); }
 
 	private:
+		VulkanContext() = default;
 		// Small RAII type that owns a VkInstance.
 		// All the "destroy" logic lives here; VulkanContext just holds one.
 		struct InstanceHandle {
