@@ -27,8 +27,16 @@ int main() {
 	VulkanContextDesc ctx_desc{};
 	VulkanContext ctx = VulkanContext::create(wsi, ctx_desc);
 	if (!ctx.valid()) {
-		std::println(stderr, "Failed to create VulkanContext");
+		std::println(stderr, "Failed to create Vulkan instance");
 		return 2;
+	}
+	if (!ctx.has_surface()) {
+		std::println(stderr, "Failed to create Vulkan surface");
+		return 3;
+	}
+	if (!ctx.has_device()) {
+		std::println(stderr, "Failed to create Vulkan device");
+		return 4;
 	}
 
 	// Main loop: pump events until the user closes the window.

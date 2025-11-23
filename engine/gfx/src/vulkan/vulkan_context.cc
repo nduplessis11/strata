@@ -4,8 +4,130 @@
 #include <vulkan/vulkan.h>
 #include <print>
 #include <vector>
+#include <array>
+#include <ranges>
+#include <algorithm>
 
 namespace strata::gfx {
+	namespace {
+		using u32 = std::uint32_t;
+		constexpr u32 kInvalidIndex = std::numeric_limits<u32>::max();
+
+		struct QueueFamilySelection {
+			VkPhysicalDevice physical{ VK_NULL_HANDLE };
+			u32 graphics_family = kInvalidIndex;
+			u32 present_family = kInvalidIndex;
+
+			bool complete() const noexcept {
+				return graphics_family != kInvalidIndex && present_family != kInvalidIndex;
+			}
+		};
+
+		QueueFamilySelection find_queue_families(VkPhysicalDevice device, VkSurfaceKHR surface);
+		bool check_device_extension_support(VkPhysicalDevice device);
+
+		QueueFamilySelection pick_physical_device_and_queues(VkInstance instance, VkSurfaceKHR surface) {
+			QueueFamilySelection result{};
+
+			// 1) Enumerate physical devices
+			u32 count = 0;
+			vkEnumeratePhysicalDevices(instance, &count, nullptr);
+			if (count == 0) {
+				return result;
+			}
+			std::vector<VkPhysicalDevice> devices(count);
+			vkEnumeratePhysicalDevices(instance, &count, devices.data());
+
+			// 2) Loop over devices and select the first "suitable" one
+			for (VkPhysicalDevice device : devices) {
+				// a) Queues that can do graphics + present
+				QueueFamilySelection q = find_queue_families(device, surface);
+				if (!q.complete()) {
+					continue;
+				}
+
+				// b) Device extensions (must support swapchain)
+				if (!check_device_extension_support(device)) {
+					continue;
+				}
+
+				// Maybe also inspect VkPhysicalDeviceProperties to prefer discrete GPUs.
+
+				return q; // first suitable device
+			}
+
+			return {}; // no suitable device found
+		}
+
+		QueueFamilySelection find_queue_families(VkPhysicalDevice device, VkSurfaceKHR surface) {
+			QueueFamilySelection result{};
+			result.physical = device;
+
+			u32 count = 0;
+			vkGetPhysicalDeviceQueueFamilyProperties(device, &count, nullptr);
+			if (count == 0) {
+				return result;
+			}
+
+			std::vector<VkQueueFamilyProperties> families(count);
+			vkGetPhysicalDeviceQueueFamilyProperties(device, &count, families.data());
+
+			for (u32 i = 0; i < count; i++) {
+				const auto& q = families[i];
+
+				// Graphics support
+				if (q.queueCount > 0 && (q.queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
+					result.graphics_family = i;
+				}
+
+				// Present support for this surface
+				VkBool32 present_supported = VK_FALSE;
+				vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &present_supported);
+				if (present_supported == VK_TRUE) {
+					result.present_family = i;
+				}
+
+				if (result.complete()) {
+					break;
+				}
+			}
+			return result;
+		}
+
+		using DeviceExtName = std::string_view;
+
+		constexpr std::array kDeviceExtensions{
+			DeviceExtName{VK_KHR_SWAPCHAIN_EXTENSION_NAME}
+			// add more device extensions here if needed
+		};
+
+		std::span<const DeviceExtName> required_device_extensions() noexcept {
+			return std::span{ kDeviceExtensions };
+		}
+
+		bool check_device_extension_support(VkPhysicalDevice device) {
+			u32 ext_count = 0;
+			vkEnumerateDeviceExtensionProperties(device, nullptr, &ext_count, nullptr);
+			if (ext_count == 0) return false;
+
+			std::vector<VkExtensionProperties> available(ext_count);
+			vkEnumerateDeviceExtensionProperties(device, nullptr, &ext_count, available.data());
+
+			std::vector<std::string_view> available_names;
+			available_names.reserve(available.size());
+			for (auto const& e : available) {
+				available_names.emplace_back(e.extensionName);
+			}
+
+			auto required = required_device_extensions();
+
+			return std::ranges::all_of(required, [&](std::string_view req) {
+				return std::ranges::contains(available_names, req);
+				});
+		}
+
+	}
+
 	VulkanContext::InstanceHandle::~InstanceHandle() {
 		if (handle) {
 			vkDestroyInstance(handle, nullptr);
@@ -57,12 +179,35 @@ namespace strata::gfx {
 		return *this;
 	}
 
+	VulkanContext::DeviceHandle::~DeviceHandle() {
+		if (handle) {
+			vkDestroyDevice(handle, nullptr);
+			handle = VK_NULL_HANDLE;
+		}
+	}
+
+	VulkanContext::DeviceHandle::DeviceHandle(DeviceHandle&& other) noexcept
+		: handle(other.handle) {
+		other.handle = VK_NULL_HANDLE;
+	}
+
+	VulkanContext::DeviceHandle& VulkanContext::DeviceHandle::operator=(DeviceHandle&& other) noexcept {
+		if (this != &other) {
+			if (handle) {
+				vkDestroyDevice(handle, nullptr);
+			}
+			handle = other.handle;
+			other.handle = VK_NULL_HANDLE;
+		}
+		return *this;
+	}
+
 	VulkanContext VulkanContext::create(const strata::platform::WsiHandle& wsi,
 		const VulkanContextDesc& desc) {
 		VulkanContext ctx{};
 
-		// 1) Require WSI instance extensions (Win32: surface + win32_surface)
-		auto span_exts = vk::required_instance_extensions(wsi);
+		// Require WSI instance extensions (Win32: surface + win32_surface)
+		auto span_exts{ vk::required_instance_extensions(wsi) };
 
 		// We expose them as std::string_view; Vulkan wants const char* const*.
 		// Here all views refer to static string literals (from Vulkan headers),
@@ -91,7 +236,7 @@ namespace strata::gfx {
 		ci.ppEnabledExtensionNames = exts.data();
 
 		VkInstance instance = VK_NULL_HANDLE;
-		const VkResult res = vkCreateInstance(&ci, nullptr, &instance);
+		const VkResult res{ vkCreateInstance(&ci, nullptr, &instance) };
 		if (res != VK_SUCCESS) {
 			std::println(stderr, "VkCreateInstance failed");
 			return ctx; // ctx.instance_ stays empty -> valid() == false
@@ -100,7 +245,7 @@ namespace strata::gfx {
 		// Wrap in RAII handle; VulkanContext stays Rule of Zero.
 		ctx.instance_ = InstanceHandle{ instance };
 
-		VkSurfaceKHR surface = vk::create_surface(instance, wsi);
+		VkSurfaceKHR surface{ vk::create_surface(instance, wsi) };
 		if (!surface) {
 			std::println(stderr, "vk::create_surface failed");
 			// Depending on policy:
@@ -109,7 +254,70 @@ namespace strata::gfx {
 			return ctx;
 		}
 
-		ctx.surface_ = SurfaceHandle{instance, surface };
+		ctx.surface_ = SurfaceHandle{ instance, surface };
+
+		// Pick a physical device + queue families that can present to this surface
+		auto selection = pick_physical_device_and_queues(instance, surface);
+		if (!selection.complete()) {
+			std::println(stderr, "No suitable physical device found.");
+			return ctx; // instance + surface valid, but no device
+		}
+
+		// Create logical device + queues
+		// We need to create infos for the unique families (graphics + present).
+		std::vector<VkDeviceQueueCreateInfo> queue_infos;
+		std::vector<u32> unique_families;
+		unique_families.push_back(selection.graphics_family);
+		if (selection.present_family != selection.graphics_family) {
+			unique_families.push_back(selection.present_family);
+		}
+
+		float queue_priority{ 1.0f };
+		for (u32 family_index : unique_families) {
+			VkDeviceQueueCreateInfo qci{};
+			qci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+			qci.queueFamilyIndex = family_index;
+			qci.queueCount = 1;
+			qci.pQueuePriorities = &queue_priority; // one queue at priority 1.0
+			queue_infos.push_back(qci);
+		}
+
+		// Enable swapchain extension (we already checked support in check_device_extension_support)
+		auto dev_ext_span{ required_device_extensions() };
+		std::vector<const char*> dev_ext_cstrs;
+		dev_ext_cstrs.reserve(dev_ext_span.size());
+		for (std::string_view sv : dev_ext_span) {
+			dev_ext_cstrs.push_back(sv.data());
+		}
+
+		VkPhysicalDeviceFeatures features{}; // for now, default (all zero)
+
+		VkDeviceCreateInfo dci{};
+		dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+		dci.queueCreateInfoCount = static_cast<u32>(queue_infos.size());
+		dci.pQueueCreateInfos = queue_infos.data();
+		dci.enabledExtensionCount = static_cast<u32>(dev_ext_cstrs.size());
+		dci.ppEnabledExtensionNames = dev_ext_cstrs.data();
+		dci.pEnabledFeatures = &features;
+
+		VkDevice device{ VK_NULL_HANDLE };
+		VkResult dres{ vkCreateDevice(selection.physical, &dci, nullptr, &device) };
+		if (dres != VK_SUCCESS) {
+			std::println(stderr, "vkCreateDevice failed: {}", static_cast<int>(dres));
+			return ctx;
+		}
+
+		// Wrap device in RAII handle
+		ctx.device_ = DeviceHandle{ device };
+
+		// Store non-owning GPU + queue info in the context
+		ctx.physical_ = selection.physical;
+		ctx.graphics_family_ = selection.graphics_family;
+		ctx.present_family_ = selection.present_family;
+
+		vkGetDeviceQueue(device, selection.graphics_family, 0, &ctx.graphics_queue_);
+		vkGetDeviceQueue(device, selection.present_family, 0, &ctx.present_queue_);
+
 		return ctx;
 	}
 }
