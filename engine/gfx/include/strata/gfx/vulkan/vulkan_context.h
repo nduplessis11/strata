@@ -27,17 +27,20 @@ namespace strata::gfx {
 	class VulkanContext {
 	public:
 		// Factory: creates an instance using the active WSI
-		[[nodiscard]] static VulkanContext create(const strata::platform::WsiHandle& wsi,
-			const VulkanContextDesc& desc = {});
+		[[nodiscard]] static VulkanContext create(const strata::platform::WsiHandle& wsi, const VulkanContextDesc& desc = {});
 
-		[[nodiscard]] VkInstance instance() const noexcept { return instance_.get(); }
-		[[nodiscard]] bool valid() const noexcept { return instance_.valid(); }
+		[[nodiscard]] VkInstance		   instance()			   const noexcept { return instance_.get(); }
+		[[nodiscard]] bool			       valid()				   const noexcept { return instance_.valid(); }
 
-		[[nodiscard]] VkSurfaceKHR surface() const noexcept { return surface_.get(); }
-		[[nodiscard]] bool has_surface() const noexcept { return surface_.valid(); }
+		[[nodiscard]] VkSurfaceKHR	       surface()			   const noexcept { return surface_.get(); }
+		[[nodiscard]] bool			       has_surface()		   const noexcept { return surface_.valid(); }
 
-		[[nodiscard]] VkDevice device() const noexcept { return device_.get(); }
-		[[nodiscard]] bool has_device() const noexcept { return device_.valid(); }
+		[[nodiscard]] VkDevice             device()				   const noexcept { return device_.get(); }
+		[[nodiscard]] bool			       has_device()			   const noexcept { return device_.valid(); }
+
+		[[nodiscard]] VkPhysicalDevice     physical_device()	   const noexcept { return physical_; }
+		[[nodiscard]] std::uint32_t        graphics_family_index() const noexcept { return graphics_family_; }
+		[[nodiscard]] std::uint32_t        present_family_index()  const noexcept { return present_family_; }
 
 	private:
 		VulkanContext() = default;
