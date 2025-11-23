@@ -129,81 +129,80 @@ namespace strata::gfx {
 	}
 
 	VulkanContext::InstanceHandle::~InstanceHandle() {
-		if (handle) {
-			vkDestroyInstance(handle, nullptr);
-			handle = VK_NULL_HANDLE;
+		if (handle_) {
+			vkDestroyInstance(handle_, nullptr);
+			handle_ = VK_NULL_HANDLE;
 		}
 	}
 
 	VulkanContext::InstanceHandle::InstanceHandle(InstanceHandle&& other) noexcept
-		: handle(other.handle) {
-		other.handle = VK_NULL_HANDLE;
+		: handle_(other.handle_) {
+		other.handle_ = VK_NULL_HANDLE;
 	}
 
 	VulkanContext::InstanceHandle& VulkanContext::InstanceHandle::operator=(InstanceHandle&& other) noexcept {
 		if (this != &other) {
-			if (handle) {
-				vkDestroyInstance(handle, nullptr);
+			if (handle_) {
+				vkDestroyInstance(handle_, nullptr);
 			}
-			handle = other.handle;
-			other.handle = VK_NULL_HANDLE;
+			handle_ = other.handle_;
+			other.handle_ = VK_NULL_HANDLE;
 		}
 		return *this;
 	}
 
 	VulkanContext::SurfaceHandle::~SurfaceHandle() {
-		if (instance != VK_NULL_HANDLE && handle != VK_NULL_HANDLE) {
-			vkDestroySurfaceKHR(instance, handle, nullptr);
-			handle = VK_NULL_HANDLE;
-			instance = VK_NULL_HANDLE;
+		if (instance_ != VK_NULL_HANDLE && handle_ != VK_NULL_HANDLE) {
+			vkDestroySurfaceKHR(instance_, handle_, nullptr);
+			handle_ = VK_NULL_HANDLE;
+			instance_ = VK_NULL_HANDLE;
 		}
 	}
 
 	VulkanContext::SurfaceHandle::SurfaceHandle(SurfaceHandle&& other) noexcept
-		: instance(other.instance), handle(other.handle) {
-		other.instance = VK_NULL_HANDLE;
-		other.handle = VK_NULL_HANDLE;
+		: instance_(other.instance_), handle_(other.handle_) {
+		other.instance_ = VK_NULL_HANDLE;
+		other.handle_ = VK_NULL_HANDLE;
 	}
 
 	VulkanContext::SurfaceHandle&
 		VulkanContext::SurfaceHandle::operator=(SurfaceHandle&& other) noexcept {
 		if (this != &other) {
-			if (instance != VK_NULL_HANDLE && handle != VK_NULL_HANDLE) {
-				vkDestroySurfaceKHR(instance, handle, nullptr);
+			if (instance_ != VK_NULL_HANDLE && handle_ != VK_NULL_HANDLE) {
+				vkDestroySurfaceKHR(instance_, handle_, nullptr);
 			}
-			instance = other.instance;
-			handle = other.handle;
-			other.instance = VK_NULL_HANDLE;
-			other.handle = VK_NULL_HANDLE;
+			instance_ = other.instance_;
+			handle_ = other.handle_;
+			other.instance_ = VK_NULL_HANDLE;
+			other.handle_ = VK_NULL_HANDLE;
 		}
 		return *this;
 	}
 
 	VulkanContext::DeviceHandle::~DeviceHandle() {
-		if (handle) {
-			vkDestroyDevice(handle, nullptr);
-			handle = VK_NULL_HANDLE;
+		if (handle_) {
+			vkDestroyDevice(handle_, nullptr);
+			handle_ = VK_NULL_HANDLE;
 		}
 	}
 
 	VulkanContext::DeviceHandle::DeviceHandle(DeviceHandle&& other) noexcept
-		: handle(other.handle) {
-		other.handle = VK_NULL_HANDLE;
+		: handle_(other.handle_) {
+		other.handle_ = VK_NULL_HANDLE;
 	}
 
 	VulkanContext::DeviceHandle& VulkanContext::DeviceHandle::operator=(DeviceHandle&& other) noexcept {
 		if (this != &other) {
-			if (handle) {
-				vkDestroyDevice(handle, nullptr);
+			if (handle_) {
+				vkDestroyDevice(handle_, nullptr);
 			}
-			handle = other.handle;
-			other.handle = VK_NULL_HANDLE;
+			handle_ = other.handle_;
+			other.handle_ = VK_NULL_HANDLE;
 		}
 		return *this;
 	}
 
-	VulkanContext VulkanContext::create(const strata::platform::WsiHandle& wsi,
-		const VulkanContextDesc& desc) {
+	VulkanContext VulkanContext::create(const strata::platform::WsiHandle& wsi, const VulkanContextDesc& desc) {
 		VulkanContext ctx{};
 
 		// Require WSI instance extensions (Win32: surface + win32_surface)
