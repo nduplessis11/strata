@@ -63,12 +63,15 @@ namespace strata::gfx::vk {
 			using T = std::decay_t<decltype(alt)>;
 			if constexpr (std::is_same_v<T, wsi::Win32>) {
 				VkSurfaceKHR surface = VK_NULL_HANDLE;
+
 				VkWin32SurfaceCreateInfoKHR ci{ };
 				ci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
 				ci.hinstance = reinterpret_cast<HINSTANCE>(alt.instance.value);
 				ci.hwnd = reinterpret_cast<HWND>(alt.window.value);
-				if (vkCreateWin32SurfaceKHR(instance, &ci, nullptr, &surface) != VK_SUCCESS)
+
+				if (vkCreateWin32SurfaceKHR(instance, &ci, nullptr, &surface) != VK_SUCCESS) {
 					return VK_NULL_HANDLE;
+				}
 				return surface;
 			}
 			else {

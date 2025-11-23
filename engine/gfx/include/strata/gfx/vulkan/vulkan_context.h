@@ -8,8 +8,10 @@
 
 struct VkInstance_T;
 struct VkSurfaceKHR_T;
+struct VkDevice_T;
 using VkInstance = VkInstance_T*;
 using VkSurfaceKHR = VkSurfaceKHR_T*;
+using VkDevice = VkDevice_T*;
 
 namespace strata::gfx {
 	struct VulkanContextDesc {
@@ -22,10 +24,10 @@ namespace strata::gfx {
 	class VulkanContext {
 	public:
 		VulkanContext() = default;
-		
+
 		// Factory: creates an instance using the active WSI
 		static VulkanContext create(const strata::platform::WsiHandle& wsi,
-									const VulkanContextDesc& desc = {});
+			const VulkanContextDesc& desc = {});
 
 		[[nodiscard]] VkInstance instance() const noexcept { return instance_.get(); }
 		[[nodiscard]] bool valid() const noexcept { return instance_.valid(); }
@@ -74,7 +76,23 @@ namespace strata::gfx {
 			VkSurfaceKHR handle{ nullptr };
 		};
 
+		struct DeviceHandle {
+			DeviceHandle() = default;
+
+			DeviceHandle(const DeviceHandle&) = delete;
+			DeviceHandle& operator=(const DeviceHandle&) = delete;
+
+			DeviceHandle(DeviceHandle&& other) noexcept;
+			DeviceHandle& operator=(DeviceHandle&& other) noexcept;
+
+			[[nodiscard]] VkDevice get() const noexcept { return handle; }
+			[[nodiscard]] bool valid() const noexcept { return handle != nullptr; }
+		private:
+			VkDevice handle{ nullptr };
+		};
+
 		InstanceHandle instance_{};
 		SurfaceHandle surface_{};
+		DeviceHandle handle_{};
 	};
 }
