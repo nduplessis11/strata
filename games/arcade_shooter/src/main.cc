@@ -1,6 +1,7 @@
 ﻿#include "strata/platform/window.h"
 #include "strata/gfx/vulkan/vulkan_context.h"
 #include "strata/gfx/vulkan/wsi_bridge.h"
+#include "strata/gfx/vulkan/swapchain.h"
 
 #include <chrono>
 #include <thread>
@@ -38,6 +39,9 @@ int main() {
 		std::println(stderr, "Failed to create Vulkan device");
 		return 4;
 	}
+
+	auto [width, height] = win.framebuffer_size();
+	Swapchain sc = Swapchain::create(ctx, Extent2d{ width, height });
 
 	// Main loop: pump events until the user closes the window.
 	while (!win.should_close()) {

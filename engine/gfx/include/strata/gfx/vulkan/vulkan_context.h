@@ -26,27 +26,29 @@ namespace strata::gfx {
 
 	class VulkanContext {
 	public:
-		VulkanContext() = default;
-
 		// Factory: creates an instance using the active WSI
-		static VulkanContext create(const strata::platform::WsiHandle& wsi,
-			const VulkanContextDesc& desc = {});
+		[[nodiscard]] static VulkanContext create(const strata::platform::WsiHandle& wsi, const VulkanContextDesc& desc = {});
 
-		[[nodiscard]] VkInstance instance() const noexcept { return instance_.get(); }
-		[[nodiscard]] bool valid() const noexcept { return instance_.valid(); }
+		[[nodiscard]] VkInstance		   instance()			   const noexcept { return instance_.get(); }
+		[[nodiscard]] bool			       valid()				   const noexcept { return instance_.valid(); }
 
-		[[nodiscard]] VkSurfaceKHR surface() const noexcept { return surface_.get(); }
-		[[nodiscard]] bool has_surface() const noexcept { return surface_.valid(); }
+		[[nodiscard]] VkSurfaceKHR	       surface()			   const noexcept { return surface_.get(); }
+		[[nodiscard]] bool			       has_surface()		   const noexcept { return surface_.valid(); }
 
-		[[nodiscard]] VkDevice device() const noexcept { return device_.get(); }
-		[[nodiscard]] bool has_device() const noexcept { return device_.valid(); }
+		[[nodiscard]] VkDevice             device()				   const noexcept { return device_.get(); }
+		[[nodiscard]] bool			       has_device()			   const noexcept { return device_.valid(); }
+
+		[[nodiscard]] VkPhysicalDevice     physical_device()	   const noexcept { return physical_; }
+		[[nodiscard]] std::uint32_t        graphics_family_index() const noexcept { return graphics_family_; }
+		[[nodiscard]] std::uint32_t        present_family_index()  const noexcept { return present_family_; }
 
 	private:
+		VulkanContext() = default;
 		// Small RAII type that owns a VkInstance.
 		// All the "destroy" logic lives here; VulkanContext just holds one.
 		struct InstanceHandle {
 			InstanceHandle() = default;
-			explicit InstanceHandle(VkInstance h) : handle(h) {}
+			explicit InstanceHandle(VkInstance h) : handle_(h) {}
 
 			~InstanceHandle();
 			InstanceHandle(const InstanceHandle&) = delete;
@@ -55,16 +57,16 @@ namespace strata::gfx {
 			InstanceHandle(InstanceHandle&& other) noexcept;
 			InstanceHandle& operator=(InstanceHandle&& other) noexcept;
 
-			[[nodiscard]] VkInstance get() const noexcept { return handle; }
-			[[nodiscard]] bool valid() const noexcept { return handle != nullptr; }
+			[[nodiscard]] VkInstance get() const noexcept { return handle_; }
+			[[nodiscard]] bool valid() const noexcept { return handle_ != nullptr; }
 
 		private:
-			VkInstance handle{ nullptr };
+			VkInstance handle_{ nullptr };
 		};
 
 		struct SurfaceHandle {
 			SurfaceHandle() = default;
-			SurfaceHandle(VkInstance inst, VkSurfaceKHR h) : instance(inst), handle(h) {}
+			SurfaceHandle(VkInstance inst, VkSurfaceKHR h) : instance_(inst), handle_(h) {}
 
 			~SurfaceHandle();
 
@@ -74,17 +76,17 @@ namespace strata::gfx {
 			SurfaceHandle(SurfaceHandle&& other) noexcept;
 			SurfaceHandle& operator=(SurfaceHandle&& other) noexcept;
 
-			[[nodiscard]] VkSurfaceKHR get() const noexcept { return handle; }
-			[[nodiscard]] bool valid() const noexcept { return handle != nullptr; }
+			[[nodiscard]] VkSurfaceKHR get() const noexcept { return handle_; }
+			[[nodiscard]] bool valid() const noexcept { return handle_ != nullptr; }
 
 		private:
-			VkInstance instance{ nullptr };
-			VkSurfaceKHR handle{ nullptr };
+			VkInstance instance_{ nullptr };
+			VkSurfaceKHR handle_{ nullptr };
 		};
 
 		struct DeviceHandle {
 			DeviceHandle() = default;
-			explicit DeviceHandle(VkDevice d) : handle(d) {}
+			explicit DeviceHandle(VkDevice d) : handle_(d) {}
 
 			~DeviceHandle();
 
@@ -94,10 +96,10 @@ namespace strata::gfx {
 			DeviceHandle(DeviceHandle&& other) noexcept;
 			DeviceHandle& operator=(DeviceHandle&& other) noexcept;
 
-			[[nodiscard]] VkDevice get() const noexcept { return handle; }
-			[[nodiscard]] bool valid() const noexcept { return handle != nullptr; }
+			[[nodiscard]] VkDevice get() const noexcept { return handle_; }
+			[[nodiscard]] bool valid() const noexcept { return handle_ != nullptr; }
 		private:
-			VkDevice handle{ nullptr };
+			VkDevice handle_{ nullptr };
 		};
 
 		InstanceHandle instance_{};
