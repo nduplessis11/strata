@@ -159,14 +159,14 @@ namespace strata::gfx {
 		// Basic sanity check: if any of the core pieces are missing, bail out.
 		// In normal usage this shouldn't happen, but it makes the function robust
 		// against partially constructed / torn-down state.
-		if (!device || !cmd || !ctx || !swapchain) {
+		if (!device || !cmd || !ctx || !swapchain->valid()) {
 			return FrameResult::Error;
 		}
 
-		using u64 = std::uint32_t;
+		using u64 = std::uint64_t;
 
 		// Timeout used both for vkWaitForFences and vkAcquireNextImageKHR.
-		constexpr u64 kTimeout = std::numeric_limits<u64>::infinity();
+		constexpr u64 kTimeout = std::numeric_limits<u64>::max();
 
 		// ---------------------------------------------------------------------
 		// 1) Wait for GPU to finish the previous frame
@@ -179,7 +179,12 @@ namespace strata::gfx {
 		//
 		// After the wait, we reset the fence back to the "unsignaled" state so
 		// it can be used again for the next vkQueueSubmit.
-		vkWaitForFences(device, 1, &in_flight, VK_TRUE, kTimeout);
+		VkResult waitRes{ vkWaitForFences(device, 1, &in_flight, VK_TRUE, kTimeout) };
+		if (waitRes != VK_SUCCESS) {
+			// VK_TIMEOUT shouldn't happen with "infinite" timeout, but be defensive.
+			std::println(stderr, "vkWaitForFences failed: {}", static_cast<int>(waitRes));
+			return FrameResult::Error;
+		}
 		vkResetFences(device, 1, &in_flight);
 
 		// ---------------------------------------------------------------------

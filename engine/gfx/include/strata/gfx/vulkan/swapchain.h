@@ -76,6 +76,7 @@ namespace strata::gfx {
         [[nodiscard]] std::span<const VkImage> images() const noexcept { return handle_.images(); }
 
         [[nodiscard]] VkSwapchainKHR handle() const noexcept { return handle_.get(); }
+        [[nodiscard]] bool valid() const noexcept { return handle_.valid(); }
 
     private:
         // Rule of Zero: no user-declared dtor/ctor/move/copy.

@@ -44,8 +44,12 @@ int main() {
 
 	auto [width, height] = win.framebuffer_size();
 	Swapchain swapchain = Swapchain::create(ctx, Extent2d{ width, height });
-
+	if (!swapchain.valid()) {
+		std::println(stderr, "Failed to create initial swapchain");
+		return 5;
+	}
 	Renderer2d renderer{ ctx, swapchain };
+
 
 	// Main loop: pump events until the user closes the window.
 	while (!win.should_close()) {
@@ -58,7 +62,24 @@ int main() {
 
 			// 2) Recreate swapchain for new framebuffer size.
 			auto [nw, nh] = win.framebuffer_size();
-			swapchain = Swapchain::create(ctx, Extent2d{ nw, nh });
+
+			// If the window is minimized, framebuffer size can be 0x0.
+			// In that case, just skip rendering until we get a non-zero size.
+			if (nw == 0 || nh == 0) {
+				std::this_thread::sleep_for(std::chrono::milliseconds(16));
+				continue;
+			}
+
+			// Create a *temporary* swapchain first.
+			Swapchain new_swapchain = Swapchain::create(ctx, Extent2d{ nw, nh });
+			if (!new_swapchain.valid()) {
+				std::println(stderr, "Swapchain recreation failed; will retry");
+				// Keep the old swapchain alive; try again next frame.
+				continue;
+			}
+
+			// Now safe to replace the old swapchain.
+			swapchain = std::move(new_swapchain);
 
 			// 3) Recreate renderer so it sees the new swapchain.
 			renderer = Renderer2d{ ctx, swapchain };
