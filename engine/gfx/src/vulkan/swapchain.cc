@@ -248,8 +248,6 @@ namespace strata::gfx {
 			static_cast<int>(extent.width),
 			static_cast<int>(extent.height)
 		};
-
 		return sc;
 	}
-
 }

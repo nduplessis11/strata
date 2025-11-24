@@ -1,4 +1,4 @@
-// -----------------------------------------------------------------------------
+ï»¿// -----------------------------------------------------------------------------
 // engine/gfx/include/strata/gfx/renderer2d.h
 //
 // Purpose:
@@ -7,15 +7,15 @@
 //   lifetime details in the public header.
 //
 // Design Notes:
-//   • PIMPL:
+//   â€¢ pImpl:
 //       Renderer2d owns a std::unique_ptr<Impl>. All Vulkan handles
 //       (command pool, command buffer, semaphores, fence) live in Impl,
 //       defined in renderer2d.cc. This keeps compile-time dependencies low
 //       and the ABI stable.
-//   • Lifetime:
+//   â€¢ Lifetime:
 //       Renderer2d does *not* own the VulkanContext or Swapchain; it holds
 //       non-owning pointers to them. They must outlive the renderer.
-//   • Rule of Zero in the header:
+//   â€¢ Rule of Zero in the header:
 //       The only special members we declare are the move operations; the
 //       destructor and everything else are defaulted in the source.
 // -----------------------------------------------------------------------------
