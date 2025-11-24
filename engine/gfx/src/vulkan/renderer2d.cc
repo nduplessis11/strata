@@ -427,4 +427,50 @@ namespace strata::gfx {
 		return FrameResult::Ok;
 	}
 
+	FrameResult draw_frame_and_handle_resize(const VulkanContext& ctx, Swapchain& swapchain, Renderer2d& renderer, Extent2d framebuffer_size) {
+		// 0) If window is minimized (0x0), don't do *any* Vulkan work.
+		//    This avoids swapchain creation with invalid extents and keeps things sane.
+		if (framebuffer_size.width == 0 || framebuffer_size.height == 0) {
+			return FrameResult::Ok; // "nothing to do this frame"
+		}
+
+		// 1) Draw one frame.
+		FrameResult result{ renderer.draw_frame() };
+		if (result == FrameResult::Ok) {
+			return FrameResult::Ok;
+		}
+		if (result == FrameResult::Error) {
+			return FrameResult::Error;
+		}
+
+		// -----------------------------------------------------------------
+		// 2) Swapchain is out of date – handle resize / mode change.
+		// -----------------------------------------------------------------
+		// At this point result == FrameResult::SwapchainOutOfDate.
+
+		// Make sure GPU is idle before we tear down / replace swapchain.
+		vkDeviceWaitIdle(ctx.device());
+
+		// Recreate swapchain for the current framebuffer size.
+		// Use old swapchain handle so WSI knows we’re replacing it.
+		VkSwapchainKHR old_handle{ swapchain.handle() };
+
+		Swapchain new_swapchain{ Swapchain::create(ctx, framebuffer_size, old_handle) };
+
+		if (!new_swapchain.valid()) {
+			std::println(stderr,
+				"draw_frame_and_handle_resize: swapchain recreation failed; will retry");
+			// Old swapchain is still valid; we just skip this frame.
+			return FrameResult::Ok;
+		}
+
+		// Move-assign: RAII destroys the old VkSwapchainKHR, image views, etc.
+		swapchain = std::move(new_swapchain);
+
+		// Recreate renderer so its internal pointers refer to the new swapchain.
+		renderer = Renderer2d{ ctx, swapchain };
+
+		// We didn’t present anything this frame, but we recovered.
+		return FrameResult::Ok;
+	}
 } // namespace strata::gfx

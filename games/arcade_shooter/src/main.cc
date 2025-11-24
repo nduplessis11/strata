@@ -7,8 +7,6 @@
 #include <chrono>
 #include <thread>
 #include <print>
-#include <type_traits>
-#include <vulkan/vulkan_core.h>
 
 int main() {
 	using namespace strata::platform;
@@ -29,18 +27,9 @@ int main() {
 
 	VulkanContextDesc ctx_desc{};
 	VulkanContext ctx = VulkanContext::create(wsi, ctx_desc);
-	if (!ctx.valid()) {
-		std::println(stderr, "Failed to create Vulkan instance");
-		return 2;
-	}
-	if (!ctx.has_surface()) {
-		std::println(stderr, "Failed to create Vulkan surface");
-		return 3;
-	}
-	if (!ctx.has_device()) {
-		std::println(stderr, "Failed to create Vulkan device");
-		return 4;
-	}
+	if (!ctx.valid()) { std::println(stderr, "Failed to create Vulkan instance"); return 2; }
+	if (!ctx.has_surface()) { std::println(stderr, "Failed to create Vulkan surface");  return 3; }
+	if (!ctx.has_device()) { std::println(stderr, "Failed to create Vulkan device");   return 4; }
 
 	auto [width, height] = win.framebuffer_size();
 	Swapchain swapchain = Swapchain::create(ctx, Extent2d{ width, height });
@@ -48,46 +37,18 @@ int main() {
 		std::println(stderr, "Failed to create initial swapchain");
 		return 5;
 	}
-	Renderer2d renderer{ ctx, swapchain };
 
+	Renderer2d renderer{ ctx, swapchain };
 
 	// Main loop: pump events until the user closes the window.
 	while (!win.should_close()) {
 		win.poll_events();
-		
-		FrameResult result = renderer.draw_frame();
-		if (result == FrameResult::SwapchainOutOfDate) {
-			// 1) Wait until GPU is idle before tearing down swapchain-dependent stuff.
-			vkDeviceWaitIdle(ctx.device());
 
-			// 2) Recreate swapchain for new framebuffer size.
-			auto [nw, nh] = win.framebuffer_size();
+		auto [w, h] { win.framebuffer_size() };
+		FrameResult result{ draw_frame_and_handle_resize(ctx, swapchain, renderer, Extent2d{ w, h }) };
 
-			// If the window is minimized, framebuffer size can be 0x0.
-			// In that case, just skip rendering until we get a non-zero size.
-			if (nw == 0 || nh == 0) {
-				std::this_thread::sleep_for(std::chrono::milliseconds(16));
-				continue;
-			}
-
-			// Keep the old swapchain alive while creating the new one.
-			VkSwapchainKHR old_handle{ swapchain.handle() };
-
-			// Create a *temporary* swapchain first.
-			Swapchain new_swapchain = Swapchain::create(ctx, Extent2d{ nw, nh }, old_handle);
-			if (!new_swapchain.valid()) {
-				std::println(stderr, "Swapchain recreation failed; will retry");
-				continue; // old swapchain is still valid; keep using it
-			}
-
-			// Move-assign: this destroys the *old* VkSwapchainKHR internally
-			swapchain = std::move(new_swapchain);
-
-			// 3) Recreate renderer so it sees the new swapchain.
-			renderer = Renderer2d{ ctx, swapchain };
-		}
-		else if (result == FrameResult::Error) {
-			// For now: break out; later you might want more nuanced handling.
+		if (result == FrameResult::Error) {
+			// For now: bail. Later we might want more nuanced handling.
 			break;
 		}
 
