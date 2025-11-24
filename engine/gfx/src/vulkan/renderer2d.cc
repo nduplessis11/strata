@@ -158,10 +158,10 @@ namespace strata::gfx {
 			return;
 		}
 
-		using u32 = std::uint32_t;
+		using u64 = std::uint32_t;
 
 		// Timeout used both for vkWaitForFences and vkAcquireNextImageKHR.
-		constexpr u32 kTimeout = std::numeric_limits<u32>::infinity();
+		constexpr u64 kTimeout = std::numeric_limits<u64>::infinity();
 
 		// ---------------------------------------------------------------------
 		// 1) Wait for GPU to finish the previous frame
