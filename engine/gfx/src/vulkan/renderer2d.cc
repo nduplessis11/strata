@@ -2,12 +2,18 @@
 // engine/gfx/src/vulkan/renderer2d.cc
 //
 // pImpl implementation of Renderer2d.
-// Owns per-frame Vulkan resources (command pool, command buffer, sync objects)
-// and uses the existing VulkanContext + Swapchain to drive rendering.
+// Owns per-frame Vulkan resources (command pool, primary command buffer, and
+// synchronization objects) and uses the existing VulkanContext + Swapchain to
+// drive rendering.
 //
-// For now, draw_frame() will be a skeleton we can expand with dynamic
-// rendering (vkCmdBeginRendering / vkCmdEndRendering) in the next step.
+// draw_frame() records and submits a minimal frame using Vulkan dynamic
+// rendering:
+//   - waits for the previous frame to finish (fence)
+//   - acquires a swapchain image (image_available semaphore)
+//   - clears it to a solid color with vkCmdBeginRendering / vkCmdEndRendering
+//   - transitions the image to PRESENT_SRC_KHR and queues it for presentation
 // -----------------------------------------------------------------------------
+
 
 #include "strata/gfx/renderer2d.h"
 
@@ -144,21 +150,265 @@ namespace strata::gfx {
 
 	// ----- Impl::draw_frame skeleton -------------------------------------------
 
-	void Renderer2d::Impl::draw_frame() {
-		if (!device || !cmd || !ctx || !swapchain) {
-			return;
-		}
+    void Renderer2d::Impl::draw_frame() {
+        // Basic sanity check: if any of the core pieces are missing, bail out.
+        // In normal usage this shouldn't happen, but it makes the function robust
+        // against partially constructed / torn-down state.
+        if (!device || !cmd || !ctx || !swapchain) {
+            return;
+        }
 
-		// This is where we will:
-		//  1) wait on in_flight fence
-		//  2) acquire a swapchain image
-		//  3) reset + record cmd buffer with vkCmdBeginRendering / vkCmdEndRendering
-		//  4) submit and present
-		//
-		// We'll fill this in next, once Swapchain exposes:
-		//   - swapchain_handle()   → VkSwapchainKHR
-		//   - extent()
-		//   - image_views()
-	}
+        using u32 = std::uint32_t;
+
+        // Timeout used both for vkWaitForFences and vkAcquireNextImageKHR.
+        constexpr u32 kTimeout = std::numeric_limits<u32>::infinity();
+
+        // ---------------------------------------------------------------------
+        // 1) Wait for GPU to finish the previous frame
+        // ---------------------------------------------------------------------
+        //
+        // The fence 'in_flight' is signaled by vkQueueSubmit at the end of this
+        // function. Waiting on it here guarantees:
+        //   - the command buffer is no longer in use by the GPU
+        //   - the swapchain image we used last frame is considered done
+        //
+        // After the wait, we reset the fence back to the "unsignaled" state so
+        // it can be used again for the next vkQueueSubmit.
+        vkWaitForFences(device, 1, &in_flight, VK_TRUE, kTimeout);
+        vkResetFences(device, 1, &in_flight);
+
+        // ---------------------------------------------------------------------
+        // 2) Acquire next image from the swapchain
+        // ---------------------------------------------------------------------
+        //
+        // vkAcquireNextImageKHR:
+        //   - picks which swapchain image we should render into this frame
+        //   - signals 'image_available' when that image is ready for use
+        //
+        // We don't use a fence here; we rely on the semaphore for GPU-GPU sync.
+        uint32_t image_index = 0;
+        VkResult acquire_result = vkAcquireNextImageKHR(
+            device,
+            swapchain->handle(),   // VkSwapchainKHR
+            kTimeout,              // timeout (ns)
+            image_available,       // signaled when the image is ready
+            VK_NULL_HANDLE,        // optional fence (unused here)
+            &image_index           // out: which image index to render to
+        );
+
+        if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
+            // Window was resized or surface became incompatible with the swapchain.
+            // Proper handling would recreate the swapchain and associated resources.
+            return;
+        }
+        if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
+            std::println(stderr, "vkAcquireNextImageKHR failed: {}",
+                static_cast<int>(acquire_result));
+            return;
+        }
+
+        // ---------------------------------------------------------------------
+        // 3) Reset and begin command buffer recording
+        // ---------------------------------------------------------------------
+        //
+        // For simplicity we record a fresh command buffer every frame.
+        vkResetCommandBuffer(cmd, 0);
+
+        VkCommandBufferBeginInfo begin{};
+        begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin.flags = 0; // could be VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+
+        if (vkBeginCommandBuffer(cmd, &begin) != VK_SUCCESS) {
+            std::println(stderr, "vkBeginCommandBuffer failed");
+            return;
+        }
+
+        // Pull out swapchain image/view/extent for the image we just acquired.
+        auto    images = swapchain->images();
+        auto    views = swapchain->image_views();
+        Extent2d extent = swapchain->extent();
+
+        VkImage     image = images[image_index];
+        VkImageView view = views[image_index];
+
+        // ---------------------------------------------------------------------
+        // 4) Transition image from UNDEFINED/PRESENT to COLOR_ATTACHMENT_OPTIMAL
+        // ---------------------------------------------------------------------
+        //
+        // We want to use the image as a color attachment. That requires:
+        //   - transitioning its layout to VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+        //   - making sure writes to the color attachment are properly synchronized
+        //
+        // Because we're going to CLEAR the image (and don't care about old
+        // contents), we can safely pretend the old layout is UNDEFINED here.
+        VkImageMemoryBarrier pre{};
+        pre.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        pre.srcAccessMask = 0; // nothing to wait on before this (top-of-pipe)
+        pre.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        pre.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED; // previous contents discarded
+        pre.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        pre.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        pre.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        pre.image = image;
+        pre.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        pre.subresourceRange.baseMipLevel = 0;
+        pre.subresourceRange.levelCount = 1;
+        pre.subresourceRange.baseArrayLayer = 0;
+        pre.subresourceRange.layerCount = 1;
+
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,            // before: nothing is running yet
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // after: color attachment writes
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &pre
+        );
+
+        // ---------------------------------------------------------------------
+        // 5) Begin dynamic rendering with a single color attachment
+        // ---------------------------------------------------------------------
+        //
+        // Dynamic rendering replaces the classic "render pass + framebuffer" setup.
+        // Here we say:
+        //   - which image view we render into
+        //   - what layout it is in
+        //   - how to load/store it
+        //   - what region (renderArea) we care about
+        //
+        // This frame just clears to a solid "debug" color, but the same rendering
+        // region would be used for actual draw calls later.
+        VkClearValue clear{};
+        clear.color = { { 0.6f, 0.4f, 0.8f, 1.0f } }; // soft light purple
+
+        VkRenderingAttachmentInfo color_attach{};
+        color_attach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        color_attach.imageView = view;                              // target image view
+        color_attach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        color_attach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;       // clear at start
+        color_attach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;      // keep result for present
+        color_attach.clearValue = clear;                             // clear color
+        color_attach.resolveMode = VK_RESOLVE_MODE_NONE;              // no MSAA resolve
+        color_attach.resolveImageView = VK_NULL_HANDLE;
+        color_attach.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        VkRenderingInfo render_info{};
+        render_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+        render_info.renderArea.offset = { 0, 0 };
+        render_info.renderArea.extent = VkExtent2D{
+            static_cast<uint32_t>(extent.width),
+            static_cast<uint32_t>(extent.height)
+        };
+        render_info.layerCount = 1;
+        render_info.colorAttachmentCount = 1;
+        render_info.pColorAttachments = &color_attach;
+        render_info.pDepthAttachment = nullptr;
+        render_info.pStencilAttachment = nullptr;
+
+        // "Start" dynamic rendering. From here until vkCmdEndRendering, any
+        // draw calls that write to color attachments will target 'color_attach'.
+        vkCmdBeginRendering(cmd, &render_info);
+
+        // TODO: later:
+        //   - bind graphics pipeline
+        //   - bind descriptor sets / vertex buffers
+        //   - issue vkCmdDraw* calls for actual 2D content
+
+        vkCmdEndRendering(cmd);
+
+        // ---------------------------------------------------------------------
+        // 6) Transition image to PRESENT_SRC_KHR for presentation
+        // ---------------------------------------------------------------------
+        //
+        // After rendering, the image is in COLOR_ATTACHMENT_OPTIMAL. The present
+        // engine expects PRESENT_SRC_KHR. This barrier makes that transition and
+        // ensures all color writes are finished before presentation.
+        VkImageMemoryBarrier post{};
+        post.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        post.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; // finish all color writes
+        post.dstAccessMask = 0;                                   // presentation doesn't need a memory access mask
+        post.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        post.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        post.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        post.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        post.image = image;
+        post.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        post.subresourceRange.baseMipLevel = 0;
+        post.subresourceRange.levelCount = 1;
+        post.subresourceRange.baseArrayLayer = 0;
+        post.subresourceRange.layerCount = 1;
+
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // after color output
+            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,          // before "end of pipe"
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &post
+        );
+
+        // ---------------------------------------------------------------------
+        // 7) End command buffer recording
+        // ---------------------------------------------------------------------
+        if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
+            std::println(stderr, "vkEndCommandBuffer failed");
+            return;
+        }
+
+        // ---------------------------------------------------------------------
+        // 8) Submit to the graphics queue
+        // ---------------------------------------------------------------------
+        //
+        // We submit:
+        //   - wait on 'image_available' so we don't render before the image is ready
+        //   - execute our command buffer
+        //   - signal 'render_finished' when rendering is complete
+        //   - associate the submission with 'in_flight' fence so the CPU can wait
+        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+        VkSubmitInfo submit{};
+        submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit.waitSemaphoreCount = 1;
+        submit.pWaitSemaphores = &image_available;
+        submit.pWaitDstStageMask = &wait_stage;
+        submit.commandBufferCount = 1;
+        submit.pCommandBuffers = &cmd;
+        submit.signalSemaphoreCount = 1;
+        submit.pSignalSemaphores = &render_finished;
+
+        if (vkQueueSubmit(ctx->graphics_queue(), 1, &submit, in_flight) != VK_SUCCESS) {
+            std::println(stderr, "vkQueueSubmit failed");
+            return;
+        }
+
+        // ---------------------------------------------------------------------
+        // 9) Present the rendered image to the surface
+        // ---------------------------------------------------------------------
+        //
+        // Presentation waits on 'render_finished' so the present engine doesn't
+        // read from the image until rendering is complete.
+        VkSwapchainKHR sw = swapchain->handle();
+
+        VkPresentInfoKHR present{};
+        present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        present.waitSemaphoreCount = 1;
+        present.pWaitSemaphores = &render_finished;
+        present.swapchainCount = 1;
+        present.pSwapchains = &sw;
+        present.pImageIndices = &image_index;
+        present.pResults = nullptr; // per-swapchain results (optional)
+
+        VkResult pres = vkQueuePresentKHR(ctx->present_queue(), &present);
+        if (pres == VK_ERROR_OUT_OF_DATE_KHR || pres == VK_SUBOPTIMAL_KHR) {
+            // Again, in a full engine you'd trigger swapchain recreation here.
+            return;
+        }
+        else if (pres != VK_SUCCESS) {
+            std::println(stderr, "vkQueuePresentKHR failed: {}", static_cast<int>(pres));
+            return;
+        }
+    }
 
 } // namespace strata::gfx

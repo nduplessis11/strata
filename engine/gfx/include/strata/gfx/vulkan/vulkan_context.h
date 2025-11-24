@@ -42,6 +42,9 @@ namespace strata::gfx {
 		[[nodiscard]] std::uint32_t        graphics_family_index() const noexcept { return graphics_family_; }
 		[[nodiscard]] std::uint32_t        present_family_index()  const noexcept { return present_family_; }
 
+		[[nodiscard]] VkQueue			   graphics_queue()		   const noexcept { return graphics_queue_; }
+		[[nodiscard]] VkQueue			   present_queue()		   const noexcept { return present_queue_; }
+
 	private:
 		VulkanContext() = default;
 		// Small RAII type that owns a VkInstance.

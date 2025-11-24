@@ -2,6 +2,7 @@
 #include "strata/gfx/vulkan/vulkan_context.h"
 #include "strata/gfx/vulkan/wsi_bridge.h"
 #include "strata/gfx/vulkan/swapchain.h"
+#include "strata/gfx/renderer2d.h"
 
 #include <chrono>
 #include <thread>
@@ -41,12 +42,16 @@ int main() {
 	}
 
 	auto [width, height] = win.framebuffer_size();
-	Swapchain sc = Swapchain::create(ctx, Extent2d{ width, height });
+	Swapchain swapchain = Swapchain::create(ctx, Extent2d{ width, height });
+
+	Renderer2d renderer{ ctx, swapchain };
 
 	// Main loop: pump events until the user closes the window.
 	while (!win.should_close()) {
 		win.poll_events();
-		// Keep CPU reasonable for a no-render loop.
+		renderer.draw_frame();
+
+		// Keep CPU reasonable for a light render loop.
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 
