@@ -17,6 +17,7 @@
 #include "strata/gfx/vulkan/swapchain.h"
 #include <vulkan/vulkan.h>
 #include <algorithm>
+#include <print>
 
 namespace strata::gfx {
 	namespace {
@@ -137,7 +138,7 @@ namespace strata::gfx {
 		return *this;
 	}
 
-	Swapchain Swapchain::create(const VulkanContext& ctx, Extent2d window_size) {
+	Swapchain Swapchain::create(const VulkanContext& ctx, Extent2d window_size, VkSwapchainKHR old_swapchain) {
 		Swapchain sc{};
 
 		VkDevice         device = ctx.device();
@@ -190,13 +191,14 @@ namespace strata::gfx {
 		ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 		ci.presentMode = present_mode;
 		ci.clipped = VK_TRUE;
-		ci.oldSwapchain = VK_NULL_HANDLE;
+		ci.oldSwapchain = old_swapchain;
 
 		// 4) Create the swapchain
 		VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 		VkResult result = vkCreateSwapchainKHR(device, &ci, nullptr, &swapchain);
 		if (result != VK_SUCCESS) {
 			// creation failed; return an "empty" Swapchain (handle_.valid() == false)
+			std::println(stderr, "vkCreateSwapchainKHR failed: {}", static_cast<int>(result));
 			return sc;
 		}
 

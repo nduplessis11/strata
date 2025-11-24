@@ -70,15 +70,17 @@ int main() {
 				continue;
 			}
 
+			// Keep the old swapchain alive while creating the new one.
+			VkSwapchainKHR old_handle{ swapchain.handle() };
+
 			// Create a *temporary* swapchain first.
-			Swapchain new_swapchain = Swapchain::create(ctx, Extent2d{ nw, nh });
+			Swapchain new_swapchain = Swapchain::create(ctx, Extent2d{ nw, nh }, old_handle);
 			if (!new_swapchain.valid()) {
 				std::println(stderr, "Swapchain recreation failed; will retry");
-				// Keep the old swapchain alive; try again next frame.
-				continue;
+				continue; // old swapchain is still valid; keep using it
 			}
 
-			// Now safe to replace the old swapchain.
+			// Move-assign: this destroys the *old* VkSwapchainKHR internally
 			swapchain = std::move(new_swapchain);
 
 			// 3) Recreate renderer so it sees the new swapchain.

@@ -69,7 +69,7 @@ namespace strata::gfx {
 
     class Swapchain {
     public:
-        [[nodiscard]] static Swapchain create(const VulkanContext& ctx, Extent2d window_size);
+        [[nodiscard]] static Swapchain create(const VulkanContext& ctx, Extent2d window_size, VkSwapchainKHR old_swapchain = nullptr);
 
         [[nodiscard]] Extent2d extent() const noexcept { return extent_; }
         [[nodiscard]] std::span<const VkImageView> image_views() const noexcept { return handle_.views(); }
