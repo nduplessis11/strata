@@ -81,11 +81,10 @@ namespace strata::gfx {
 		}
 	} // anonymous namespace 
 
-	Swapchain::Handle::Handle(VkDevice d,
-		VkSwapchainKHR s,
-		std::vector<VkImageView> vs)
+	Swapchain::Handle::Handle(VkDevice d, VkSwapchainKHR s, std::vector<VkImage> imgs, std::vector<VkImageView> vs)
 		: device_(d)
 		, swapchain_(s)
+		, images_(std::move(imgs))
 		, image_views_(std::move(vs)) {
 	}
 
@@ -108,6 +107,7 @@ namespace strata::gfx {
 	Swapchain::Handle::Handle(Handle&& other) noexcept
 		: device_(other.device_)
 		, swapchain_(other.swapchain_)
+		, images_(std::move(other.images_))
 		, image_views_(std::move(other.image_views_)) {
 		other.device_ = nullptr;
 		other.swapchain_ = nullptr;
@@ -128,6 +128,7 @@ namespace strata::gfx {
 
 			device_ = other.device_;
 			swapchain_ = other.swapchain_;
+			images_ = std::move(other.images_);
 			image_views_ = std::move(other.image_views_);
 
 			other.device_ = nullptr;
@@ -242,6 +243,7 @@ namespace strata::gfx {
 		sc.handle_ = Swapchain::Handle{
 			device,
 			swapchain,
+			std::move(images),
 			std::move(views)
 		};
 		sc.extent_ = Extent2d{
