@@ -2,7 +2,7 @@ find_package(Vulkan REQUIRED)
 
 add_library(strata_gfx STATIC
   include/strata/gfx/vulkan/vulkan_context.h
-  include/strata/gfx/vulkan/renderer2d.h
+  include/strata/gfx/renderer2d.h
   include/strata/gfx/vulkan/wsi_bridge.h
   include/strata/gfx/vulkan/swapchain.h
   src/vulkan/vulkan_context.cc
