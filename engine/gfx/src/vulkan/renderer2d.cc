@@ -26,18 +26,21 @@ namespace strata::gfx {
 		const VulkanContext* ctx{ nullptr };   // non-owning
 		const Swapchain* swapchain{ nullptr }; // non-owning
 
-		VkDevice        device{ VK_NULL_HANDLE };
-		VkCommandPool   command_pool{ VK_NULL_HANDLE };
-		VkCommandBuffer cmd{ VK_NULL_HANDLE };
+		VkDevice        device{ VK_NULL_HANDLE };			// non-owning
+		VkCommandPool   command_pool{ VK_NULL_HANDLE };		// owning
+		VkCommandBuffer cmd{ VK_NULL_HANDLE };				// owning
 
-		VkSemaphore image_available{ VK_NULL_HANDLE };
-		VkSemaphore render_finished{ VK_NULL_HANDLE };
-		VkFence     in_flight{ VK_NULL_HANDLE };
+		VkSemaphore image_available{ VK_NULL_HANDLE };		// owning
+		VkSemaphore render_finished{ VK_NULL_HANDLE };		// owning
+		VkFence     in_flight{ VK_NULL_HANDLE };			// owning
 
-		Impl(const VulkanContext& c, const Swapchain& sc)
-			: ctx(&c)
-			, swapchain(&sc)
-			, device(c.device()) {
+		VkPipelineLayout pipeline_layout{ VK_NULL_HANDLE }; // owning
+		VkPipeline		 pipeline{ VK_NULL_HANDLE };		// owning
+
+		Impl(const VulkanContext& context, const Swapchain& swapchain)
+			: ctx(&context)
+			, swapchain(&swapchain)
+			, device(context.device()) {
 
 			// VkCommandBuffer
 			//   - A recorded list of GPU commands (draws, clears, pipeline binds, etc.).
@@ -119,16 +122,17 @@ namespace strata::gfx {
 		~Impl() {
 			if (!device) return;
 
+			if (pipeline)		  vkDestroyPipeline(device, pipeline, nullptr);
+			if (pipeline_layout)  vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
+
 			if (in_flight)        vkDestroyFence(device, in_flight, nullptr);
 			if (image_available)  vkDestroySemaphore(device, image_available, nullptr);
 			if (render_finished)  vkDestroySemaphore(device, render_finished, nullptr);
 
-			if (command_pool) {
-				vkDestroyCommandPool(device, command_pool, nullptr);
-			}
+			if (command_pool)	  vkDestroyCommandPool(device, command_pool, nullptr);
 		}
 
-		void draw_frame();
+		FrameResult draw_frame();
 	};
 
 	// ----- Renderer2d forwarding -----------------------------------------------
@@ -142,20 +146,21 @@ namespace strata::gfx {
 	Renderer2d::Renderer2d(Renderer2d&&) noexcept = default;
 	Renderer2d& Renderer2d::operator=(Renderer2d&&) noexcept = default;
 
-	void Renderer2d::draw_frame() {
-		if (p_) {
-			p_->draw_frame();
+	FrameResult Renderer2d::draw_frame() {
+		if (!p_) {
+			return FrameResult::Error;
 		}
+		return p_->draw_frame();
 	}
 
-	// ----- Impl::draw_frame skeleton -------------------------------------------
+	// ----- Renderer2d::Impl -------------------------------------------
 
-	void Renderer2d::Impl::draw_frame() {
+	FrameResult Renderer2d::Impl::draw_frame() {
 		// Basic sanity check: if any of the core pieces are missing, bail out.
 		// In normal usage this shouldn't happen, but it makes the function robust
 		// against partially constructed / torn-down state.
 		if (!device || !cmd || !ctx || !swapchain) {
-			return;
+			return FrameResult::Error;
 		}
 
 		using u64 = std::uint32_t;
@@ -198,13 +203,12 @@ namespace strata::gfx {
 
 		if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
 			// Window was resized or surface became incompatible with the swapchain.
-			// Proper handling would recreate the swapchain and associated resources.
-			return;
+			return FrameResult::SwapchainOutOfDate;
 		}
 		if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
 			std::println(stderr, "vkAcquireNextImageKHR failed: {}",
 				static_cast<int>(acquire_result));
-			return;
+			return FrameResult::Error;
 		}
 
 		// ---------------------------------------------------------------------
@@ -220,7 +224,7 @@ namespace strata::gfx {
 
 		if (vkBeginCommandBuffer(cmd, &begin) != VK_SUCCESS) {
 			std::println(stderr, "vkBeginCommandBuffer failed");
-			return;
+			return FrameResult::Error;
 		}
 
 		// Pull out swapchain image/view/extent for the image we just acquired.
@@ -360,7 +364,7 @@ namespace strata::gfx {
 		// ---------------------------------------------------------------------
 		if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
 			std::println(stderr, "vkEndCommandBuffer failed");
-			return;
+			return FrameResult::Error;
 		}
 
 		// ---------------------------------------------------------------------
@@ -386,7 +390,7 @@ namespace strata::gfx {
 
 		if (vkQueueSubmit(ctx->graphics_queue(), 1, &submit, in_flight) != VK_SUCCESS) {
 			std::println(stderr, "vkQueueSubmit failed");
-			return;
+			return FrameResult::Error;
 		}
 
 		// ---------------------------------------------------------------------
@@ -408,13 +412,14 @@ namespace strata::gfx {
 
 		VkResult pres = vkQueuePresentKHR(ctx->present_queue(), &present);
 		if (pres == VK_ERROR_OUT_OF_DATE_KHR || pres == VK_SUBOPTIMAL_KHR) {
-			// In a full engine we trigger swapchain recreation here.
-			return;
+			// The swapchain is no longer optimal/valid for this surface.
+			return FrameResult::SwapchainOutOfDate;
 		}
 		else if (pres != VK_SUCCESS) {
 			std::println(stderr, "vkQueuePresentKHR failed: {}", static_cast<int>(pres));
-			return;
+			return FrameResult::Error;
 		}
+		return FrameResult::Ok;
 	}
 
 } // namespace strata::gfx

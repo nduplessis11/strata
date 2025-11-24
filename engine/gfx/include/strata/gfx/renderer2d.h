@@ -28,6 +28,12 @@
 
 namespace strata::gfx {
 
+    enum class FrameResult {
+        Ok,                 // frame rendered & presented
+        SwapchainOutOfDate, // need to recreate swapchain (resize, etc.)
+        Error               // unrecoverable for now
+    };
+
     class Renderer2d {
     public:
         // Construct a renderer bound to an existing VulkanContext + Swapchain.
@@ -41,9 +47,9 @@ namespace strata::gfx {
         Renderer2d(const Renderer2d&) = delete;
         Renderer2d& operator=(const Renderer2d&) = delete;
 
-        // Issue one frame: acquire swapchain image, record dynamic rendering
-        // commands to clear the screen (for now), submit and present.
-        void draw_frame();
+        // Issue one frame: acquire, render, present.
+        // Returns a status so callers can react (e.g., recreate swapchain).
+        [[nodiscard]] FrameResult draw_frame();
 
     private:
         struct Impl;

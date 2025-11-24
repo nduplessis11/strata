@@ -8,6 +8,7 @@
 #include <thread>
 #include <print>
 #include <type_traits>
+#include <vulkan/vulkan_core.h>
 
 int main() {
 	using namespace strata::platform;
@@ -49,7 +50,23 @@ int main() {
 	// Main loop: pump events until the user closes the window.
 	while (!win.should_close()) {
 		win.poll_events();
-		renderer.draw_frame();
+		
+		FrameResult result = renderer.draw_frame();
+		if (result == FrameResult::SwapchainOutOfDate) {
+			// 1) Wait until GPU is idle before tearing down swapchain-dependent stuff.
+			vkDeviceWaitIdle(ctx.device());
+
+			// 2) Recreate swapchain for new framebuffer size.
+			auto [nw, nh] = win.framebuffer_size();
+			swapchain = Swapchain::create(ctx, Extent2d{ nw, nh });
+
+			// 3) Recreate renderer so it sees the new swapchain.
+			renderer = Renderer2d{ ctx, swapchain };
+		}
+		else if (result == FrameResult::Error) {
+			// For now: break out; later you might want more nuanced handling.
+			break;
+		}
 
 		// Keep CPU reasonable for a light render loop.
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
