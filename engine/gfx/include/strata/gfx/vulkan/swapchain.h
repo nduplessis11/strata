@@ -54,24 +54,28 @@
 #include "strata/platform/window.h"
 
 #include <vector>
+#include <span>
 
 struct VkSwapchainKHR_T;
 struct VkImageView_T;
+struct VkImage_T;
 
 using VkSwapchainKHR = VkSwapchainKHR_T*;
 using VkImageView = VkImageView_T*;
+using VkImage = VkImage_T*;
 
 namespace strata::gfx {
     using strata::platform::Extent2d;
 
     class Swapchain {
     public:
-        [[nodiscard]] static Swapchain create(const VulkanContext& ctx,
-            Extent2d window_size);
+        [[nodiscard]] static Swapchain create(const VulkanContext& ctx, Extent2d window_size);
 
-        // Maybe add lightweight accessors later, e.g.:
-        // [[nodiscard]] Extent2d extent() const noexcept { return extent_; }
-        // [[nodiscard]] std::span<const VkImageView> image_views() const noexcept { return handle_.views(); }
+        [[nodiscard]] Extent2d extent() const noexcept { return extent_; }
+        [[nodiscard]] std::span<const VkImageView> image_views() const noexcept { return handle_.views(); }
+        [[nodiscard]] std::span<const VkImage> images() const noexcept { return handle_.images(); }
+
+        [[nodiscard]] VkSwapchainKHR handle() const noexcept { return handle_.get(); }
 
     private:
         // Rule of Zero: no user-declared dtor/ctor/move/copy.
@@ -80,9 +84,7 @@ namespace strata::gfx {
         // Small RAII type that owns the Vulkan swapchain + its image views.
         struct Handle {
             Handle() = default;
-            Handle(VkDevice device,
-                VkSwapchainKHR swapchain,
-                std::vector<VkImageView> views);
+            Handle(VkDevice device, VkSwapchainKHR swapchain, std::vector<VkImage> images, std::vector<VkImageView> views);
 
             ~Handle();
 
@@ -96,11 +98,13 @@ namespace strata::gfx {
             [[nodiscard]] VkSwapchainKHR                  get()    const noexcept { return swapchain_; }
             [[nodiscard]] VkDevice                        device() const noexcept { return device_; }
             [[nodiscard]] const std::vector<VkImageView>& views()  const noexcept { return image_views_; }
+            [[nodiscard]] const std::vector<VkImage>&     images() const noexcept { return images_; }
 
         private:
             VkDevice       device_{ nullptr };      // non-owning: used for destruction
             VkSwapchainKHR swapchain_{ nullptr };   // owning
-            std::vector<VkImageView> image_views_;  // owning
+            std::vector<VkImage> images_;           // non-owning handles (owned by swapchain)
+            std::vector<VkImageView> image_views_;  // owning (we create/destroy)
         };
 
         Handle  handle_{};  // RAII; Swapchain doesn't need its own destructor

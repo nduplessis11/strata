@@ -126,6 +126,21 @@ namespace strata::gfx {
 				});
 		}
 
+		bool supports_dynamic_rendering(VkPhysicalDevice physical) {
+			// Query features via the "features2" path.
+			VkPhysicalDeviceVulkan13Features features13{};
+			features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+
+			VkPhysicalDeviceFeatures2 features2{};
+			features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+			features2.pNext = &features13;
+
+			vkGetPhysicalDeviceFeatures2(physical, &features2);
+
+			// If the implementation doesn't know about Vulkan 1.3 features, this will stay VK_FALSE.
+			return features13.dynamicRendering == VK_TRUE;
+		}
+
 	}
 
 	VulkanContext::InstanceHandle::~InstanceHandle() {
@@ -226,7 +241,7 @@ namespace strata::gfx {
 		app.applicationVersion = VK_MAKE_API_VERSION(0, 0, 1, 0);
 		app.pEngineName = "strata";
 		app.engineVersion = VK_MAKE_API_VERSION(0, 0, 1, 0);
-		app.apiVersion = VK_API_VERSION_1_2;
+		app.apiVersion = VK_API_VERSION_1_3;
 
 		VkInstanceCreateInfo ci{};
 		ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -262,6 +277,13 @@ namespace strata::gfx {
 			return ctx; // instance + surface valid, but no device
 		}
 
+		// Check dynamic rendering support
+		if (!supports_dynamic_rendering(selection.physical)) {
+			std::println(stderr, "Selected physical device does not support Vulkan 1.3 dynamic rendering.");
+			// For now we just fail; later we could fall back to legacy render passes.
+			return ctx;
+		}
+
 		// Create logical device + queues
 		// We need to create infos for the unique families (graphics + present).
 		std::vector<VkDeviceQueueCreateInfo> queue_infos;
@@ -289,15 +311,18 @@ namespace strata::gfx {
 			dev_ext_cstrs.push_back(sv.data());
 		}
 
-		VkPhysicalDeviceFeatures features{}; // for now, default (all zero)
+		VkPhysicalDeviceVulkan13Features features13{};
+		features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+		features13.dynamicRendering = VK_TRUE;
 
 		VkDeviceCreateInfo dci{};
 		dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+		dci.pNext = &features13;
 		dci.queueCreateInfoCount = static_cast<u32>(queue_infos.size());
 		dci.pQueueCreateInfos = queue_infos.data();
 		dci.enabledExtensionCount = static_cast<u32>(dev_ext_cstrs.size());
 		dci.ppEnabledExtensionNames = dev_ext_cstrs.data();
-		dci.pEnabledFeatures = &features;
+		dci.pEnabledFeatures = nullptr; // we're using the features13 struct instead
 
 		VkDevice device{ VK_NULL_HANDLE };
 		VkResult dres{ vkCreateDevice(selection.physical, &dci, nullptr, &device) };
