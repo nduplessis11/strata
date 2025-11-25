@@ -1,5 +1,5 @@
 ﻿// -----------------------------------------------------------------------------
-// engine/gfx/src/vulkan/renderer2d.cc
+// engine/gfx/src/vulkan/renderer2d_vulkan.cc
 //
 // pImpl implementation of Renderer2d.
 // Owns per-frame Vulkan resources (command pool, primary command buffer, and
@@ -15,7 +15,7 @@
 // -----------------------------------------------------------------------------
 
 
-#include "strata/gfx/renderer2d.h"
+#include "strata/gfx/renderer2d_vulkan.h"
 
 #include <vulkan/vulkan.h>
 #include <print>
@@ -23,6 +23,7 @@
 #include <vector>
 #include <cstdint>
 #include <limits>
+#include <utility>
 
 namespace {
 	std::vector<char> read_binary_file(const char* path) {
@@ -60,9 +61,9 @@ namespace {
 
 namespace strata::gfx {
 
-	struct Renderer2d::Impl {
-		const VulkanContext* ctx{ nullptr };   // non-owning
-		const Swapchain* swapchain{ nullptr }; // non-owning
+        struct Renderer2d::Impl {
+                const IRenderContext* ctx{ nullptr };   // non-owning
+                ISwapchain* swapchain{ nullptr };       // non-owning
 
 		VkDevice        device{ VK_NULL_HANDLE };			// non-owning
 		VkCommandPool   command_pool{ VK_NULL_HANDLE };		// owning
@@ -75,10 +76,10 @@ namespace strata::gfx {
 		VkPipelineLayout pipeline_layout{ VK_NULL_HANDLE }; // owning
 		VkPipeline		 pipeline{ VK_NULL_HANDLE };		// owning
 
-		Impl(const VulkanContext& context, const Swapchain& swapchain)
-			: ctx(&context)
-			, swapchain(&swapchain)
-			, device(context.device()) {
+                Impl(const IRenderContext& context, ISwapchain& swapchain)
+                        : ctx(&context)
+                        , swapchain(&swapchain)
+                        , device(context.device()) {
 
 			// VkCommandBuffer
 			//   - A recorded list of GPU commands (draws, clears, pipeline binds, etc.).
@@ -327,9 +328,9 @@ namespace strata::gfx {
 
 	// ----- Renderer2d forwarding -----------------------------------------------
 
-	Renderer2d::Renderer2d(const VulkanContext& ctx, const Swapchain& swapchain)
-		: p_(std::make_unique<Impl>(ctx, swapchain)) {
-	}
+        Renderer2d::Renderer2d(const Renderer2dDependencies& deps)
+                : p_(std::make_unique<Impl>(deps.context, deps.swapchain)) {
+        }
 
 	Renderer2d::~Renderer2d() = default;
 
@@ -621,10 +622,22 @@ namespace strata::gfx {
 		return FrameResult::Ok;
 	}
 
-	FrameResult draw_frame_and_handle_resize(const VulkanContext& ctx, Swapchain& swapchain, Renderer2d& renderer, Extent2d framebuffer_size) {
-		// 0) If window is minimized (0x0), don't do *any* Vulkan work.
-		//    This avoids swapchain creation with invalid extents and keeps things sane.
-		if (framebuffer_size.width == 0 || framebuffer_size.height == 0) {
+        bool VulkanSwapchain::recreate(Extent2d framebuffer_size) {
+                VkSwapchainKHR old_handle{ swapchain_.handle() };
+
+                Swapchain new_swapchain{ Swapchain::create(ctx_, framebuffer_size, old_handle) };
+                if (!new_swapchain.valid()) {
+                        return false;
+                }
+
+                swapchain_ = std::move(new_swapchain);
+                return true;
+        }
+
+        FrameResult draw_frame_and_handle_resize(Renderer2dDependencies& deps, Renderer2d& renderer, Extent2d framebuffer_size) {
+                // 0) If window is minimized (0x0), don't do *any* Vulkan work.
+                //    This avoids swapchain creation with invalid extents and keeps things sane.
+                if (framebuffer_size.width == 0 || framebuffer_size.height == 0) {
 			return FrameResult::Ok; // "nothing to do this frame"
 		}
 
@@ -637,32 +650,23 @@ namespace strata::gfx {
 			return FrameResult::Error;
 		}
 
-		// -----------------------------------------------------------------
-		// 2) Swapchain is out of date – handle resize / mode change.
-		// -----------------------------------------------------------------
-		// At this point result == FrameResult::SwapchainOutOfDate.
+                // -----------------------------------------------------------------
+                // 2) Swapchain is out of date – handle resize / mode change.
+                // -----------------------------------------------------------------
+                // At this point result == FrameResult::SwapchainOutOfDate.
 
-		// Make sure GPU is idle before we tear down / replace swapchain.
-		vkDeviceWaitIdle(ctx.device());
+                // Make sure GPU is idle before we tear down / replace swapchain.
+                vkDeviceWaitIdle(deps.context.device());
 
-		// Recreate swapchain for the current framebuffer size.
-		// Use old swapchain handle so WSI knows we’re replacing it.
-		VkSwapchainKHR old_handle{ swapchain.handle() };
+                if (!deps.swapchain.recreate(framebuffer_size)) {
+                        std::println(stderr,
+                                "draw_frame_and_handle_resize: swapchain recreation failed; will retry");
+                        // Old swapchain is still valid; we just skip this frame.
+                        return FrameResult::Ok;
+                }
 
-		Swapchain new_swapchain{ Swapchain::create(ctx, framebuffer_size, old_handle) };
-
-		if (!new_swapchain.valid()) {
-			std::println(stderr,
-				"draw_frame_and_handle_resize: swapchain recreation failed; will retry");
-			// Old swapchain is still valid; we just skip this frame.
-			return FrameResult::Ok;
-		}
-
-		// Move-assign: RAII destroys the old VkSwapchainKHR, image views, etc.
-		swapchain = std::move(new_swapchain);
-
-		// Recreate renderer so its internal pointers refer to the new swapchain.
-		renderer = Renderer2d{ ctx, swapchain };
+                // Recreate renderer so its internal pointers refer to the new swapchain.
+                renderer = Renderer2d{ deps };
 
 		// We didn’t present anything this frame, but we recovered.
 		return FrameResult::Ok;

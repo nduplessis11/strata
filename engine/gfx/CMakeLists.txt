@@ -4,11 +4,12 @@ find_package(Vulkan REQUIRED)
 add_library(strata_gfx STATIC
   include/strata/gfx/vulkan/vulkan_context.h
   include/strata/gfx/renderer2d.h
+  include/strata/gfx/renderer2d_vulkan.h
   include/strata/gfx/vulkan/wsi_bridge.h
   include/strata/gfx/vulkan/swapchain.h
   src/vulkan/vulkan_context.cc
   src/vulkan/swapchain.cc
-  src/vulkan/renderer2d.cc
+  src/vulkan/renderer2d_vulkan.cc
 
   $<$<PLATFORM_ID:Windows>:src/vulkan/wsi_bridge_win32.cc>
 )
