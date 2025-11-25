@@ -69,13 +69,20 @@ namespace strata::gfx {
 
     class Swapchain {
     public:
-        [[nodiscard]] static Swapchain create(const VulkanContext& ctx, Extent2d window_size);
+        [[nodiscard]] static Swapchain create(const VulkanContext& ctx, Extent2d window_size, VkSwapchainKHR old_swapchain = nullptr);
 
         [[nodiscard]] Extent2d extent() const noexcept { return extent_; }
+        
+        // Expose image format as an opaque integer
+        // Maybe later: helper to say "is SRGB?" etc.
+        [[nodiscard]] std::uint32_t color_format_bits() const noexcept { return color_format_bits_; }
+        
+
         [[nodiscard]] std::span<const VkImageView> image_views() const noexcept { return handle_.views(); }
         [[nodiscard]] std::span<const VkImage> images() const noexcept { return handle_.images(); }
 
         [[nodiscard]] VkSwapchainKHR handle() const noexcept { return handle_.get(); }
+        [[nodiscard]] bool valid() const noexcept { return handle_.valid(); }
 
     private:
         // Rule of Zero: no user-declared dtor/ctor/move/copy.
@@ -109,5 +116,7 @@ namespace strata::gfx {
 
         Handle  handle_{};  // RAII; Swapchain doesn't need its own destructor
         Extent2d extent_{}; // engine-side representation of size
+
+        std::uint32_t color_format_bits_{ 0 }; // stores static_cast<uint32_t>(VkFormat)
     };
 } // namespace strata::gfx

@@ -28,26 +28,42 @@
 
 namespace strata::gfx {
 
-    class Renderer2d {
-    public:
-        // Construct a renderer bound to an existing VulkanContext + Swapchain.
-        // Both ctx and swapchain must outlive this Renderer2d.
-        Renderer2d(const VulkanContext& ctx, const Swapchain& swapchain);
-        ~Renderer2d();
+	enum class FrameResult {
+		Ok,                 // frame rendered & presented
+		SwapchainOutOfDate, // need to recreate swapchain (resize, etc.)
+		Error               // unrecoverable for now
+	};
 
-        Renderer2d(Renderer2d&&) noexcept;
-        Renderer2d& operator=(Renderer2d&&) noexcept;
+	class Renderer2d {
+	public:
+		// Construct a renderer bound to an existing VulkanContext + Swapchain.
+		// Both ctx and swapchain must outlive this Renderer2d.
+		Renderer2d(const VulkanContext& ctx, const Swapchain& swapchain);
+		~Renderer2d();
 
-        Renderer2d(const Renderer2d&) = delete;
-        Renderer2d& operator=(const Renderer2d&) = delete;
+		Renderer2d(Renderer2d&&) noexcept;
+		Renderer2d& operator=(Renderer2d&&) noexcept;
 
-        // Issue one frame: acquire swapchain image, record dynamic rendering
-        // commands to clear the screen (for now), submit and present.
-        void draw_frame();
+		Renderer2d(const Renderer2d&) = delete;
+		Renderer2d& operator=(const Renderer2d&) = delete;
 
-    private:
-        struct Impl;
-        std::unique_ptr<Impl> p_;
-    };
+		// Issue one frame: acquire, render, present.
+		// Returns a status so callers can react (e.g., recreate swapchain).
+		[[nodiscard]] FrameResult draw_frame();
+
+	private:
+		struct Impl;
+		std::unique_ptr<Impl> p_;
+	};
+
+	// High-level frame tick:
+	//  - draws one frame
+	//  - if swapchain is out-of-date, recreates it (and the renderer)
+	//  - gracefully skips rendering when the window is minimized
+	//
+	// Returns:
+	//   FrameResult::Ok    – frame was rendered or safely skipped
+	//   FrameResult::Error – unrecoverable error, caller should bail
+	[[nodiscard]] FrameResult draw_frame_and_handle_resize(const VulkanContext& ctx, Swapchain& swapchain, Renderer2d& renderer, Extent2d framebuffer_size);
 
 } // namespace strata::gfx

@@ -19,6 +19,44 @@
 
 #include <vulkan/vulkan.h>
 #include <print>
+#include <fstream>
+#include <vector>
+#include <cstdint>
+#include <limits>
+
+namespace {
+	std::vector<char> read_binary_file(const char* path) {
+		std::ifstream file(path, std::ios::binary | std::ios::ate);
+		if (!file) {
+			return {};
+		}
+
+		const std::streamsize size = file.tellg();
+		if (size <= 0) {
+			return {};
+		}
+		file.seekg(0, std::ios::beg);
+
+		std::vector<char> buffer(static_cast<std::size_t>(size));
+		if (!file.read(buffer.data(), size)) {
+			return {};
+		}
+		return buffer;
+	}
+
+	VkShaderModule create_shader_module(VkDevice device, std::span<const char> code) {
+		VkShaderModuleCreateInfo ci{};
+		ci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		ci.codeSize = code.size();
+		ci.pCode = reinterpret_cast<const std::uint32_t*>(code.data());
+
+		VkShaderModule module = VK_NULL_HANDLE;
+		if (vkCreateShaderModule(device, &ci, nullptr, &module) != VK_SUCCESS) {
+			return VK_NULL_HANDLE;
+		}
+		return module;
+	}
+}
 
 namespace strata::gfx {
 
@@ -26,18 +64,21 @@ namespace strata::gfx {
 		const VulkanContext* ctx{ nullptr };   // non-owning
 		const Swapchain* swapchain{ nullptr }; // non-owning
 
-		VkDevice        device{ VK_NULL_HANDLE };
-		VkCommandPool   command_pool{ VK_NULL_HANDLE };
-		VkCommandBuffer cmd{ VK_NULL_HANDLE };
+		VkDevice        device{ VK_NULL_HANDLE };			// non-owning
+		VkCommandPool   command_pool{ VK_NULL_HANDLE };		// owning
+		VkCommandBuffer cmd{ VK_NULL_HANDLE };				// owning
 
-		VkSemaphore image_available{ VK_NULL_HANDLE };
-		VkSemaphore render_finished{ VK_NULL_HANDLE };
-		VkFence     in_flight{ VK_NULL_HANDLE };
+		VkSemaphore image_available{ VK_NULL_HANDLE };		// owning
+		VkSemaphore render_finished{ VK_NULL_HANDLE };		// owning
+		VkFence     in_flight{ VK_NULL_HANDLE };			// owning
 
-		Impl(const VulkanContext& c, const Swapchain& sc)
-			: ctx(&c)
-			, swapchain(&sc)
-			, device(c.device()) {
+		VkPipelineLayout pipeline_layout{ VK_NULL_HANDLE }; // owning
+		VkPipeline		 pipeline{ VK_NULL_HANDLE };		// owning
+
+		Impl(const VulkanContext& context, const Swapchain& swapchain)
+			: ctx(&context)
+			, swapchain(&swapchain)
+			, device(context.device()) {
 
 			// VkCommandBuffer
 			//   - A recorded list of GPU commands (draws, clears, pipeline binds, etc.).
@@ -114,21 +155,174 @@ namespace strata::gfx {
 				std::println(stderr, "Renderer2d: failed to create sync objects");
 				// In a robust engine, we would handle partial failure more carefully.
 			}
+
+			auto vert_bytes{ read_binary_file("../../engine/gfx/shaders/fullscreen_triangle.vert.spv") };
+			auto frag_bytes{ read_binary_file("../../engine/gfx/shaders/flat_color.frag.spv") };
+
+			if (vert_bytes.empty() || frag_bytes.empty()) {
+				std::println(stderr, "Renderer2d: failed to load shader SPIR-V");
+				return;
+			}
+
+			VkShaderModule vert_module{ create_shader_module(device, vert_bytes) };
+			VkShaderModule frag_module{ create_shader_module(device, frag_bytes) };
+
+			if (!vert_module || !frag_module) {
+				std::println(stderr, "Renderer2d: failed to create shader modules");
+				if (vert_module) vkDestroyShaderModule(device, vert_module, nullptr);
+				if (frag_module) vkDestroyShaderModule(device, frag_module, nullptr);
+				return;
+			}
+
+			// Describe shader stages
+			VkPipelineShaderStageCreateInfo vert_stage{};
+			vert_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			vert_stage.stage = VK_SHADER_STAGE_VERTEX_BIT;
+			vert_stage.module = vert_module;
+			vert_stage.pName = "main";
+
+			VkPipelineShaderStageCreateInfo frag_stage{};
+			frag_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			frag_stage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+			frag_stage.module = frag_module;
+			frag_stage.pName = "main";
+
+			VkPipelineShaderStageCreateInfo stages[] = { vert_stage, frag_stage };
+
+			// No vertex buffers: everything is generated from gl_VertexIndex
+			VkPipelineVertexInputStateCreateInfo vertex_input{};
+			vertex_input.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+			vertex_input.vertexBindingDescriptionCount = 0;
+			vertex_input.pVertexBindingDescriptions = nullptr;
+			vertex_input.vertexAttributeDescriptionCount = 0;
+			vertex_input.pVertexAttributeDescriptions = nullptr;
+
+			VkPipelineInputAssemblyStateCreateInfo input_assembly{};
+			input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+			input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+			input_assembly.primitiveRestartEnable = VK_FALSE;
+
+			// Viewport/scissor: we can bake the initial extent here; on resize we recreate.
+			Extent2d extent{ swapchain.extent() };
+
+			VkViewport viewport{};
+			viewport.x = 0.0f;
+			viewport.y = 0.0f;
+			viewport.width = static_cast<float>(extent.width);
+			viewport.height = static_cast<float>(extent.height);
+			viewport.minDepth = 0.0f;
+			viewport.maxDepth = 1.0f;
+
+			VkRect2D scissor{};
+			scissor.offset = { 0, 0 };
+			scissor.extent = VkExtent2D{
+				static_cast<std::uint32_t>(extent.width),
+				static_cast<std::uint32_t>(extent.height)
+			};
+
+			VkPipelineViewportStateCreateInfo viewport_state{};
+			viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+			viewport_state.viewportCount = 1;
+			viewport_state.pViewports = &viewport;
+			viewport_state.scissorCount = 1;
+			viewport_state.pScissors = &scissor;
+
+			VkPipelineRasterizationStateCreateInfo raster{};
+			raster.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+			raster.depthClampEnable = VK_FALSE;
+			raster.rasterizerDiscardEnable = VK_FALSE;
+			raster.polygonMode = VK_POLYGON_MODE_FILL;
+			raster.cullMode = VK_CULL_MODE_BACK_BIT;
+			raster.frontFace = VK_FRONT_FACE_CLOCKWISE; // depends on your vertex order
+			raster.depthBiasEnable = VK_FALSE;
+			raster.lineWidth = 1.0f;
+
+			VkPipelineMultisampleStateCreateInfo msaa{};
+			msaa.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+			msaa.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+			msaa.sampleShadingEnable = VK_FALSE;
+
+			VkPipelineColorBlendAttachmentState blend_attach{};
+			blend_attach.colorWriteMask =
+				VK_COLOR_COMPONENT_R_BIT |
+				VK_COLOR_COMPONENT_G_BIT |
+				VK_COLOR_COMPONENT_B_BIT |
+				VK_COLOR_COMPONENT_A_BIT;
+			blend_attach.blendEnable = VK_FALSE;
+
+			VkPipelineColorBlendStateCreateInfo blend{};
+			blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+			blend.logicOpEnable = VK_FALSE;
+			blend.attachmentCount = 1;
+			blend.pAttachments = &blend_attach;
+
+			// No descriptor sets / push constants yet
+			VkPipelineLayoutCreateInfo layout_ci{};
+			layout_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+
+			if (vkCreatePipelineLayout(device, &layout_ci, nullptr, &pipeline_layout) != VK_SUCCESS) {
+				std::println(stderr, "Renderer2d: failed to create pipeline layout");
+				vkDestroyShaderModule(device, vert_module, nullptr);
+				vkDestroyShaderModule(device, frag_module, nullptr);
+				pipeline_layout = VK_NULL_HANDLE;
+				return;
+			}
+
+			// Dynamic rendering hook: tell the pipeline which color format it will render into.
+			VkFormat color_format = static_cast<VkFormat>(swapchain.color_format_bits());
+
+			VkPipelineRenderingCreateInfo rendering_ci{};
+			rendering_ci.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+			rendering_ci.colorAttachmentCount = 1;
+			rendering_ci.pColorAttachmentFormats = &color_format;
+
+			VkGraphicsPipelineCreateInfo gp_ci{};
+			gp_ci.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+			gp_ci.pNext = &rendering_ci;   // <--- key for dynamic rendering
+			gp_ci.stageCount = 2;
+			gp_ci.pStages = stages;
+			gp_ci.pVertexInputState = &vertex_input;
+			gp_ci.pInputAssemblyState = &input_assembly;
+			gp_ci.pViewportState = &viewport_state;
+			gp_ci.pRasterizationState = &raster;
+			gp_ci.pMultisampleState = &msaa;
+			gp_ci.pDepthStencilState = nullptr;        // no depth/stencil
+			gp_ci.pColorBlendState = &blend;
+			gp_ci.pDynamicState = nullptr;        // using static viewport/scissor
+			gp_ci.layout = pipeline_layout;
+			gp_ci.renderPass = VK_NULL_HANDLE; // dynamic rendering, no render pass
+			gp_ci.subpass = 0;
+			gp_ci.basePipelineHandle = VK_NULL_HANDLE;
+
+			if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &gp_ci, nullptr, &pipeline) != VK_SUCCESS) {
+				std::println(stderr, "Renderer2d: failed to create graphics pipeline");
+				vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
+				pipeline_layout = VK_NULL_HANDLE;
+				vkDestroyShaderModule(device, vert_module, nullptr);
+				vkDestroyShaderModule(device, frag_module, nullptr);
+				pipeline = VK_NULL_HANDLE;
+				return;
+			}
+
+			// Shader modules can be destroyed after pipeline creation
+			vkDestroyShaderModule(device, vert_module, nullptr);
+			vkDestroyShaderModule(device, frag_module, nullptr);
 		}
 
 		~Impl() {
 			if (!device) return;
 
+			if (pipeline)		  vkDestroyPipeline(device, pipeline, nullptr);
+			if (pipeline_layout)  vkDestroyPipelineLayout(device, pipeline_layout, nullptr);
+
 			if (in_flight)        vkDestroyFence(device, in_flight, nullptr);
 			if (image_available)  vkDestroySemaphore(device, image_available, nullptr);
 			if (render_finished)  vkDestroySemaphore(device, render_finished, nullptr);
 
-			if (command_pool) {
-				vkDestroyCommandPool(device, command_pool, nullptr);
-			}
+			if (command_pool)	  vkDestroyCommandPool(device, command_pool, nullptr);
 		}
 
-		void draw_frame();
+		FrameResult draw_frame();
 	};
 
 	// ----- Renderer2d forwarding -----------------------------------------------
@@ -142,26 +336,27 @@ namespace strata::gfx {
 	Renderer2d::Renderer2d(Renderer2d&&) noexcept = default;
 	Renderer2d& Renderer2d::operator=(Renderer2d&&) noexcept = default;
 
-	void Renderer2d::draw_frame() {
-		if (p_) {
-			p_->draw_frame();
+	FrameResult Renderer2d::draw_frame() {
+		if (!p_) {
+			return FrameResult::Error;
 		}
+		return p_->draw_frame();
 	}
 
-	// ----- Impl::draw_frame skeleton -------------------------------------------
+	// ----- Renderer2d::Impl -------------------------------------------
 
-	void Renderer2d::Impl::draw_frame() {
+	FrameResult Renderer2d::Impl::draw_frame() {
 		// Basic sanity check: if any of the core pieces are missing, bail out.
 		// In normal usage this shouldn't happen, but it makes the function robust
 		// against partially constructed / torn-down state.
-		if (!device || !cmd || !ctx || !swapchain) {
-			return;
+		if (!device || !cmd || !ctx || !swapchain->valid()) {
+			return FrameResult::Error;
 		}
 
-		using u32 = std::uint32_t;
+		using u64 = std::uint64_t;
 
 		// Timeout used both for vkWaitForFences and vkAcquireNextImageKHR.
-		constexpr u32 kTimeout = std::numeric_limits<u32>::infinity();
+		constexpr u64 kTimeout = std::numeric_limits<u64>::max();
 
 		// ---------------------------------------------------------------------
 		// 1) Wait for GPU to finish the previous frame
@@ -174,7 +369,12 @@ namespace strata::gfx {
 		//
 		// After the wait, we reset the fence back to the "unsignaled" state so
 		// it can be used again for the next vkQueueSubmit.
-		vkWaitForFences(device, 1, &in_flight, VK_TRUE, kTimeout);
+		VkResult waitRes{ vkWaitForFences(device, 1, &in_flight, VK_TRUE, kTimeout) };
+		if (waitRes != VK_SUCCESS) {
+			// VK_TIMEOUT shouldn't happen with "infinite" timeout, but be defensive.
+			std::println(stderr, "vkWaitForFences failed: {}", static_cast<int>(waitRes));
+			return FrameResult::Error;
+		}
 		vkResetFences(device, 1, &in_flight);
 
 		// ---------------------------------------------------------------------
@@ -198,13 +398,12 @@ namespace strata::gfx {
 
 		if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
 			// Window was resized or surface became incompatible with the swapchain.
-			// Proper handling would recreate the swapchain and associated resources.
-			return;
+			return FrameResult::SwapchainOutOfDate;
 		}
 		if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
 			std::println(stderr, "vkAcquireNextImageKHR failed: {}",
 				static_cast<int>(acquire_result));
-			return;
+			return FrameResult::Error;
 		}
 
 		// ---------------------------------------------------------------------
@@ -220,7 +419,7 @@ namespace strata::gfx {
 
 		if (vkBeginCommandBuffer(cmd, &begin) != VK_SUCCESS) {
 			std::println(stderr, "vkBeginCommandBuffer failed");
-			return;
+			return FrameResult::Error;
 		}
 
 		// Pull out swapchain image/view/extent for the image we just acquired.
@@ -316,10 +515,14 @@ namespace strata::gfx {
 		// draw calls that write to color attachments will target 'color_attach'.
 		vkCmdBeginRendering(cmd, &render_info);
 
+		// Bind our graphics pipeline
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+		// Fullscreen triangle: 3 vertices, 1 instance, firstVertex = 0, firstInstance = 0
+		vkCmdDraw(cmd, 3, 1, 0, 0);
+
 		// TODO: later:
-		//   - bind graphics pipeline
 		//   - bind descriptor sets / vertex buffers
-		//   - issue vkCmdDraw* calls for actual 2D content
 
 		vkCmdEndRendering(cmd);
 
@@ -360,7 +563,7 @@ namespace strata::gfx {
 		// ---------------------------------------------------------------------
 		if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
 			std::println(stderr, "vkEndCommandBuffer failed");
-			return;
+			return FrameResult::Error;
 		}
 
 		// ---------------------------------------------------------------------
@@ -386,7 +589,7 @@ namespace strata::gfx {
 
 		if (vkQueueSubmit(ctx->graphics_queue(), 1, &submit, in_flight) != VK_SUCCESS) {
 			std::println(stderr, "vkQueueSubmit failed");
-			return;
+			return FrameResult::Error;
 		}
 
 		// ---------------------------------------------------------------------
@@ -408,13 +611,60 @@ namespace strata::gfx {
 
 		VkResult pres = vkQueuePresentKHR(ctx->present_queue(), &present);
 		if (pres == VK_ERROR_OUT_OF_DATE_KHR || pres == VK_SUBOPTIMAL_KHR) {
-			// In a full engine we trigger swapchain recreation here.
-			return;
+			// The swapchain is no longer optimal/valid for this surface.
+			return FrameResult::SwapchainOutOfDate;
 		}
 		else if (pres != VK_SUCCESS) {
 			std::println(stderr, "vkQueuePresentKHR failed: {}", static_cast<int>(pres));
-			return;
+			return FrameResult::Error;
 		}
+		return FrameResult::Ok;
 	}
 
+	FrameResult draw_frame_and_handle_resize(const VulkanContext& ctx, Swapchain& swapchain, Renderer2d& renderer, Extent2d framebuffer_size) {
+		// 0) If window is minimized (0x0), don't do *any* Vulkan work.
+		//    This avoids swapchain creation with invalid extents and keeps things sane.
+		if (framebuffer_size.width == 0 || framebuffer_size.height == 0) {
+			return FrameResult::Ok; // "nothing to do this frame"
+		}
+
+		// 1) Draw one frame.
+		FrameResult result{ renderer.draw_frame() };
+		if (result == FrameResult::Ok) {
+			return FrameResult::Ok;
+		}
+		if (result == FrameResult::Error) {
+			return FrameResult::Error;
+		}
+
+		// -----------------------------------------------------------------
+		// 2) Swapchain is out of date – handle resize / mode change.
+		// -----------------------------------------------------------------
+		// At this point result == FrameResult::SwapchainOutOfDate.
+
+		// Make sure GPU is idle before we tear down / replace swapchain.
+		vkDeviceWaitIdle(ctx.device());
+
+		// Recreate swapchain for the current framebuffer size.
+		// Use old swapchain handle so WSI knows we’re replacing it.
+		VkSwapchainKHR old_handle{ swapchain.handle() };
+
+		Swapchain new_swapchain{ Swapchain::create(ctx, framebuffer_size, old_handle) };
+
+		if (!new_swapchain.valid()) {
+			std::println(stderr,
+				"draw_frame_and_handle_resize: swapchain recreation failed; will retry");
+			// Old swapchain is still valid; we just skip this frame.
+			return FrameResult::Ok;
+		}
+
+		// Move-assign: RAII destroys the old VkSwapchainKHR, image views, etc.
+		swapchain = std::move(new_swapchain);
+
+		// Recreate renderer so its internal pointers refer to the new swapchain.
+		renderer = Renderer2d{ ctx, swapchain };
+
+		// We didn’t present anything this frame, but we recovered.
+		return FrameResult::Ok;
+	}
 } // namespace strata::gfx

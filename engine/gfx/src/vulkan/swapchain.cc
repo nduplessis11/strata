@@ -17,6 +17,7 @@
 #include "strata/gfx/vulkan/swapchain.h"
 #include <vulkan/vulkan.h>
 #include <algorithm>
+#include <print>
 
 namespace strata::gfx {
 	namespace {
@@ -137,7 +138,7 @@ namespace strata::gfx {
 		return *this;
 	}
 
-	Swapchain Swapchain::create(const VulkanContext& ctx, Extent2d window_size) {
+	Swapchain Swapchain::create(const VulkanContext& ctx, Extent2d window_size, VkSwapchainKHR old_swapchain) {
 		Swapchain sc{};
 
 		VkDevice         device = ctx.device();
@@ -151,6 +152,8 @@ namespace strata::gfx {
 		VkSurfaceFormatKHR surface_format = choose_surface_format(physical, surface);
 		VkPresentModeKHR   present_mode = choose_present_mode(physical, surface);
 		VkExtent2D         extent = choose_extent(capabilities, window_size);
+
+		sc.color_format_bits_ = static_cast<std::uint32_t>(surface_format.format);
 
 		// 2) Decide how many images in the swapchain
 		u32 image_count = capabilities.minImageCount + 1;
@@ -190,13 +193,14 @@ namespace strata::gfx {
 		ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 		ci.presentMode = present_mode;
 		ci.clipped = VK_TRUE;
-		ci.oldSwapchain = VK_NULL_HANDLE;
+		ci.oldSwapchain = old_swapchain;
 
 		// 4) Create the swapchain
 		VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 		VkResult result = vkCreateSwapchainKHR(device, &ci, nullptr, &swapchain);
 		if (result != VK_SUCCESS) {
 			// creation failed; return an "empty" Swapchain (handle_.valid() == false)
+			std::println(stderr, "vkCreateSwapchainKHR failed: {}", static_cast<int>(result));
 			return sc;
 		}
 
