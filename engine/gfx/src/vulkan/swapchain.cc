@@ -153,6 +153,8 @@ namespace strata::gfx {
 		VkPresentModeKHR   present_mode = choose_present_mode(physical, surface);
 		VkExtent2D         extent = choose_extent(capabilities, window_size);
 
+		sc.color_format_bits_ = static_cast<std::uint32_t>(surface_format.format);
+
 		// 2) Decide how many images in the swapchain
 		u32 image_count = capabilities.minImageCount + 1;
 		if (capabilities.maxImageCount > 0 && image_count > capabilities.maxImageCount) {
