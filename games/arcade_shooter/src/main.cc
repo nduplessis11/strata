@@ -2,7 +2,7 @@
 #include "strata/gfx/vulkan/vulkan_context.h"
 #include "strata/gfx/vulkan/wsi_bridge.h"
 #include "strata/gfx/vulkan/swapchain.h"
-#include "strata/gfx/renderer2d.h"
+#include "strata/gfx/renderer2d_vulkan.h"
 
 #include <chrono>
 #include <thread>
@@ -38,14 +38,15 @@ int main() {
 		return 5;
 	}
 
-	Renderer2d renderer{ ctx, swapchain };
+        VulkanRenderer2dDependencies renderer_deps{ ctx, swapchain };
+        Renderer2d renderer{ renderer_deps };
 
 	// Main loop: pump events until the user closes the window.
 	while (!win.should_close()) {
 		win.poll_events();
 
-		auto [w, h] { win.framebuffer_size() };
-		FrameResult result{ draw_frame_and_handle_resize(ctx, swapchain, renderer, Extent2d{ w, h }) };
+                auto [w, h] { win.framebuffer_size() };
+                FrameResult result{ draw_frame_and_handle_resize(renderer_deps, renderer, Extent2d{ w, h }) };
 
 		if (result == FrameResult::Error) {
 			// For now: bail. Later we might want more nuanced handling.
