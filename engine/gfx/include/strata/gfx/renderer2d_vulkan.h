@@ -6,17 +6,21 @@
 
 #include <cstdint>
 #include <span>
+#include <vector>
 
 namespace strata::gfx {
+
+using Renderer2dNativeHandle = std::uintptr_t;
+using Renderer2dHandleSpan = std::span<const Renderer2dNativeHandle>;
 
 class IRenderContext {
 public:
         virtual ~IRenderContext() = default;
 
-        virtual VkDevice device() const = 0;
+        virtual Renderer2dNativeHandle device_handle() const = 0;
         virtual std::uint32_t graphics_family_index() const = 0;
-        virtual VkQueue graphics_queue() const = 0;
-        virtual VkQueue present_queue() const = 0;
+        virtual Renderer2dNativeHandle graphics_queue_handle() const = 0;
+        virtual Renderer2dNativeHandle present_queue_handle() const = 0;
 };
 
 class ISwapchain {
@@ -24,10 +28,10 @@ public:
         virtual ~ISwapchain() = default;
 
         virtual bool valid() const = 0;
-        virtual VkSwapchainKHR handle() const = 0;
+        virtual Renderer2dNativeHandle handle() const = 0;
         virtual Extent2d extent() const = 0;
-        virtual std::span<const VkImageView> image_views() const = 0;
-        virtual std::span<const VkImage> images() const = 0;
+        virtual Renderer2dHandleSpan image_views() const = 0;
+        virtual Renderer2dHandleSpan images() const = 0;
         virtual std::uint32_t color_format_bits() const = 0;
         virtual bool recreate(Extent2d framebuffer_size) = 0;
 };
@@ -41,10 +45,16 @@ class VulkanRenderContext final : public IRenderContext {
 public:
         explicit VulkanRenderContext(const VulkanContext& ctx) : ctx_(ctx) {}
 
-        VkDevice device() const override { return ctx_.device(); }
+        Renderer2dNativeHandle device_handle() const override {
+                return reinterpret_cast<Renderer2dNativeHandle>(ctx_.device());
+        }
         std::uint32_t graphics_family_index() const override { return ctx_.graphics_family_index(); }
-        VkQueue graphics_queue() const override { return ctx_.graphics_queue(); }
-        VkQueue present_queue() const override { return ctx_.present_queue(); }
+        Renderer2dNativeHandle graphics_queue_handle() const override {
+                return reinterpret_cast<Renderer2dNativeHandle>(ctx_.graphics_queue());
+        }
+        Renderer2dNativeHandle present_queue_handle() const override {
+                return reinterpret_cast<Renderer2dNativeHandle>(ctx_.present_queue());
+        }
 
         [[nodiscard]] const VulkanContext& vulkan_context() const noexcept { return ctx_; }
 
@@ -59,10 +69,12 @@ public:
                 , swapchain_(swapchain) {}
 
         bool valid() const override { return swapchain_.valid(); }
-        VkSwapchainKHR handle() const override { return swapchain_.handle(); }
+        Renderer2dNativeHandle handle() const override {
+                return reinterpret_cast<Renderer2dNativeHandle>(swapchain_.handle());
+        }
         Extent2d extent() const override { return swapchain_.extent(); }
-        std::span<const VkImageView> image_views() const override { return swapchain_.image_views(); }
-        std::span<const VkImage> images() const override { return swapchain_.images(); }
+        Renderer2dHandleSpan image_views() const override;
+        Renderer2dHandleSpan images() const override;
         std::uint32_t color_format_bits() const override { return swapchain_.color_format_bits(); }
 
         bool recreate(Extent2d framebuffer_size) override;
@@ -73,6 +85,10 @@ public:
 private:
         const VulkanContext& ctx_;
         Swapchain& swapchain_;
+
+        // Mutable because we repack Vulkan handles into generic handle spans on request.
+        mutable std::vector<Renderer2dNativeHandle> image_view_handles_{};
+        mutable std::vector<Renderer2dNativeHandle> image_handles_{};
 };
 
 struct VulkanRenderer2dDependencies : Renderer2dDependencies {

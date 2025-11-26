@@ -61,6 +61,26 @@ namespace {
 
 namespace strata::gfx {
 
+        namespace {
+                template <typename VkHandle>
+                std::vector<VkHandle> to_vk_handles(Renderer2dHandleSpan handles) {
+                        std::vector<VkHandle> out;
+                        out.reserve(handles.size());
+                        for (Renderer2dNativeHandle h : handles) {
+                                out.push_back(reinterpret_cast<VkHandle>(h));
+                        }
+                        return out;
+                }
+
+                VkQueue graphics_queue(const IRenderContext& ctx) {
+                        return reinterpret_cast<VkQueue>(ctx.graphics_queue_handle());
+                }
+
+                VkQueue present_queue(const IRenderContext& ctx) {
+                        return reinterpret_cast<VkQueue>(ctx.present_queue_handle());
+                }
+        } // namespace
+
         struct Renderer2d::Impl {
                 const IRenderContext* ctx{ nullptr };   // non-owning
                 ISwapchain* swapchain{ nullptr };       // non-owning
@@ -79,7 +99,7 @@ namespace strata::gfx {
                 Impl(const IRenderContext& context, ISwapchain& swapchain)
                         : ctx(&context)
                         , swapchain(&swapchain)
-                        , device(context.device()) {
+                        , device(reinterpret_cast<VkDevice>(context.device_handle())) {
 
 			// VkCommandBuffer
 			//   - A recorded list of GPU commands (draws, clears, pipeline binds, etc.).
@@ -424,9 +444,9 @@ namespace strata::gfx {
 		}
 
 		// Pull out swapchain image/view/extent for the image we just acquired.
-		auto    images = swapchain->images();
-		auto    views = swapchain->image_views();
-		Extent2d extent = swapchain->extent();
+                auto    images = to_vk_handles<VkImage>(swapchain->images());
+                auto    views = to_vk_handles<VkImageView>(swapchain->image_views());
+                Extent2d extent = swapchain->extent();
 
 		VkImage     image = images[image_index];
 		VkImageView view = views[image_index];
@@ -588,7 +608,7 @@ namespace strata::gfx {
 		submit.signalSemaphoreCount = 1;
 		submit.pSignalSemaphores = &render_finished;
 
-		if (vkQueueSubmit(ctx->graphics_queue(), 1, &submit, in_flight) != VK_SUCCESS) {
+                if (vkQueueSubmit(graphics_queue(*ctx), 1, &submit, in_flight) != VK_SUCCESS) {
 			std::println(stderr, "vkQueueSubmit failed");
 			return FrameResult::Error;
 		}
@@ -610,17 +630,39 @@ namespace strata::gfx {
 		present.pImageIndices = &image_index;
 		present.pResults = nullptr; // per-swapchain results (optional)
 
-		VkResult pres = vkQueuePresentKHR(ctx->present_queue(), &present);
+                VkResult pres = vkQueuePresentKHR(present_queue(*ctx), &present);
 		if (pres == VK_ERROR_OUT_OF_DATE_KHR || pres == VK_SUBOPTIMAL_KHR) {
 			// The swapchain is no longer optimal/valid for this surface.
 			return FrameResult::SwapchainOutOfDate;
 		}
-		else if (pres != VK_SUCCESS) {
-			std::println(stderr, "vkQueuePresentKHR failed: {}", static_cast<int>(pres));
-			return FrameResult::Error;
-		}
-		return FrameResult::Ok;
-	}
+                else if (pres != VK_SUCCESS) {
+                        std::println(stderr, "vkQueuePresentKHR failed: {}", static_cast<int>(pres));
+                        return FrameResult::Error;
+                }
+                return FrameResult::Ok;
+        }
+
+        Renderer2dHandleSpan VulkanSwapchain::image_views() const {
+                auto views = swapchain_.image_views();
+                image_view_handles_.clear();
+                image_view_handles_.reserve(views.size());
+
+                for (VkImageView view : views) {
+                        image_view_handles_.push_back(reinterpret_cast<Renderer2dNativeHandle>(view));
+                }
+                return image_view_handles_;
+        }
+
+        Renderer2dHandleSpan VulkanSwapchain::images() const {
+                auto images = swapchain_.images();
+                image_handles_.clear();
+                image_handles_.reserve(images.size());
+
+                for (VkImage image : images) {
+                        image_handles_.push_back(reinterpret_cast<Renderer2dNativeHandle>(image));
+                }
+                return image_handles_;
+        }
 
         bool VulkanSwapchain::recreate(Extent2d framebuffer_size) {
                 VkSwapchainKHR old_handle{ swapchain_.handle() };
@@ -631,6 +673,8 @@ namespace strata::gfx {
                 }
 
                 swapchain_ = std::move(new_swapchain);
+                image_view_handles_.clear();
+                image_handles_.clear();
                 return true;
         }
 
@@ -656,7 +700,7 @@ namespace strata::gfx {
                 // At this point result == FrameResult::SwapchainOutOfDate.
 
                 // Make sure GPU is idle before we tear down / replace swapchain.
-                vkDeviceWaitIdle(deps.context.device());
+                vkDeviceWaitIdle(reinterpret_cast<VkDevice>(deps.context.device_handle()));
 
                 if (!deps.swapchain.recreate(framebuffer_size)) {
                         std::println(stderr,
