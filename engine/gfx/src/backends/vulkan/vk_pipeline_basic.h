@@ -13,7 +13,7 @@
 // Forward declarations to avoid pulling Vulkan headers into dependent code.
 // These mirror the canonical Vulkan definitions:
 //   - Handles are opaque pointers to incomplete types.
-//   - VkExtent2D is a simple width/height struct passed by value.
+//   - VkExtent2D is declared but defined by the Vulkan headers; we only need a reference.
 struct VkDevice_T;
 struct VkPipelineLayout_T;
 struct VkPipeline_T;
@@ -34,11 +34,6 @@ enum VkFormat;      // Vulkan defines: "typedef enum VkFormat { ... } VkFormat;"
 #ifdef _MSC_VER
 #  pragma warning(pop)
 #endif
-
-struct VkExtent2D {
-    std::uint32_t width;
-    std::uint32_t height;
-};
 
 namespace strata::gfx::vk {
 
@@ -63,6 +58,6 @@ namespace strata::gfx::vk {
 
     // Build a pipeline that renders a fullscreen triangle using dynamic rendering.
     // Returns an invalid BasicPipeline on failure.
-    [[nodiscard]] BasicPipeline create_basic_pipeline(VkDevice device, VkFormat color_format, VkExtent2D extent);
+    [[nodiscard]] BasicPipeline create_basic_pipeline(VkDevice device, VkFormat color_format, const VkExtent2D& extent);
 
 } // namespace strata::gfx::vk
