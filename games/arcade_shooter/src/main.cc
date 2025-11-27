@@ -1,3 +1,11 @@
+// -----------------------------------------------------------------------------
+// games/arcade_shooter/src/main.cc
+//
+// Purpose:
+//   Entry point for the arcade_shooter sample. Bootstraps the platform window,
+//   initializes the Vulkan graphics device, and drives the Renderer2d loop.
+// -----------------------------------------------------------------------------
+
 #include "strata/platform/window.h"
 #include "strata/gfx/graphics_device.h"
 #include "strata/gfx/renderer2d.h"

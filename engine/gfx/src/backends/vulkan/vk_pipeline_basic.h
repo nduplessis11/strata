@@ -1,4 +1,11 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/src/backends/vulkan/vk_pipeline_basic.h
+//
+// Purpose:
+//   Declares a minimal Vulkan graphics pipeline wrapper used to render a
+//   fullscreen triangle via dynamic rendering.
+// -----------------------------------------------------------------------------
+
 #pragma once
 
 #include <vector>

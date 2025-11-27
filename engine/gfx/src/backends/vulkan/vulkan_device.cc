@@ -1,3 +1,11 @@
+// -----------------------------------------------------------------------------
+// engine/gfx/src/backends/vulkan/vulkan_device.cc
+//
+// Purpose:
+//   Implements the Vulkan GraphicsDevice backend, including swapchain,
+//   pipeline, and per-frame resource management.
+// -----------------------------------------------------------------------------
+
 #include "vulkan_device.h"
 
 #include <cstdint>

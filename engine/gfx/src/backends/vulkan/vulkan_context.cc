@@ -1,4 +1,11 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/src/backends/vulkan/vulkan_context.cc
+//
+// Purpose:
+//   Creates and owns core Vulkan objects required by the graphics backend,
+//   including the instance, surface, logical device, and command queues.
+// -----------------------------------------------------------------------------
+
 #include "strata/gfx/vulkan/vulkan_context.h"
 
 #include <vulkan/vulkan.h>

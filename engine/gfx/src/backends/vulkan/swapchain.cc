@@ -1,5 +1,11 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/src/backends/vulkan/swapchain.cc
-// 
+//
+// Purpose:
+//   Builds and manages Vulkan swapchains, including image acquisition, format
+//   selection, and image view creation for rendering and presentation.
+// -----------------------------------------------------------------------------
+//
 // Swapchain images vs. image views:
 //
 // vkGetSwapchainImagesKHR gives us VkImage handles representing the raw GPU

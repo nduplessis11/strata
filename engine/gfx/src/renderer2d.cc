@@ -1,3 +1,11 @@
+// -----------------------------------------------------------------------------
+// engine/gfx/src/renderer2d.cc
+//
+// Purpose:
+//   Implements the Renderer2d frontend, wiring frame submission to the active
+//   GraphicsDevice and handling swapchain recreation on resize.
+// -----------------------------------------------------------------------------
+
 #include "strata/gfx/renderer2d.h"
 
 #include <utility>

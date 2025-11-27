@@ -1,13 +1,11 @@
-﻿// engine/platform/src/win32/window_win32.cc
+// -----------------------------------------------------------------------------
+// engine/platform/src/win32/window_win32.cc
 //
-// Win32 window backend for strata::platform::Window.
-//
-// DESIGN NOTES
-// - This TU uses the "pImpl + static thunk" pattern to keep Win32 details
-//   OUT of public headers and to satisfy strict C++ access rules (/permissive-).
-// - The platform layer creates/owns the native window; gfx consumes a typed
-//   WsiHandle to build a Vulkan surface (no Vulkan here).
-// - The message pump is non-blocking (PeekMessageW) to suit a real-time game loop.
+// Purpose:
+//   Win32 backend implementation for strata::platform::Window. Creates and
+//   manages native windows, message dispatch, and WSI handles for the graphics
+//   layer.
+// -----------------------------------------------------------------------------
 
 #include <windows.h>
 #include <string>

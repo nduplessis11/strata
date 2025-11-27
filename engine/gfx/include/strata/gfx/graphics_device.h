@@ -1,3 +1,11 @@
+// -----------------------------------------------------------------------------
+// engine/gfx/include/strata/gfx/graphics_device.h
+//
+// Purpose:
+//   Public graphics abstraction for device, swapchain, and pipeline objects.
+//   Provides a backend-agnostic interface consumed by renderer frontends.
+// -----------------------------------------------------------------------------
+
 #pragma once
 
 #include <cstdint>

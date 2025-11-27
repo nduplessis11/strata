@@ -1,9 +1,10 @@
+// -----------------------------------------------------------------------------
 // engine/platform/include/strata/platform/window.h
-// 
-// The public RAII + pImpl window class. 
-// It owns the native window;
-// exposes portable operations; 
-// and can hand the renderer a WsiHandle.
+//
+// Purpose:
+//   Public RAII + pImpl window class. Owns the native window, exposes portable
+//   operations, and hands the renderer a WsiHandle for graphics integration.
+// -----------------------------------------------------------------------------
 
 #pragma once
 #include <memory>
