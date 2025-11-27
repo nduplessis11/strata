@@ -2,15 +2,19 @@
 find_package(Vulkan REQUIRED)
 
 add_library(strata_gfx STATIC
+  include/strata/gfx/graphics_device.h
   include/strata/gfx/vulkan/vulkan_context.h
   include/strata/gfx/renderer2d.h
   include/strata/gfx/vulkan/wsi_bridge.h
   include/strata/gfx/vulkan/swapchain.h
+  src/graphics_device.cc
+  src/renderer2d.cc
+  src/backends/vulkan/vulkan_device.h
+  src/backends/vulkan/vulkan_device.cc
   src/vulkan/vk_pipeline_basic.h
   src/vulkan/vk_pipeline_basic.cc
   src/vulkan/vulkan_context.cc
   src/vulkan/swapchain.cc
-  src/vulkan/renderer2d.cc
 
   $<$<PLATFORM_ID:Windows>:src/vulkan/wsi_bridge_win32.cc>
 )
