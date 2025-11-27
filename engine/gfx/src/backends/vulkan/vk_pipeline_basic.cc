@@ -134,7 +134,7 @@ namespace strata::gfx::vk {
         return *this;
     }
 
-    BasicPipeline create_basic_pipeline(VkDevice device, VkFormat color_format, const VkExtent2D& /*extent*/) {
+    BasicPipeline create_basic_pipeline(VkDevice device, VkFormat color_format) {
         BasicPipeline out{};
         out.device = device;
 

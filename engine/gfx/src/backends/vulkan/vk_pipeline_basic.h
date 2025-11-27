@@ -33,6 +33,6 @@ namespace strata::gfx::vk {
 
     // Build a pipeline that renders a fullscreen triangle using dynamic rendering.
     // Returns an invalid BasicPipeline on failure.
-    [[nodiscard]] BasicPipeline create_basic_pipeline(VkDevice device, VkFormat color_format, const VkExtent2D& extent);
+    [[nodiscard]] BasicPipeline create_basic_pipeline(VkDevice device, VkFormat color_format);
 
 } // namespace strata::gfx::vk

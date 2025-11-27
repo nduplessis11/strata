@@ -196,10 +196,8 @@ std::unique_ptr<GraphicsPipeline> VulkanDevice::create_pipeline(const GraphicsSw
     }
 
     VkFormat color_format = static_cast<VkFormat>(vk_swap->color_format());
-    VkExtent2D extent{ static_cast<uint32_t>(vk_swap->extent().width),
-                       static_cast<uint32_t>(vk_swap->extent().height) };
 
-    auto pipeline = vk::create_basic_pipeline(context_.device(), color_format, extent);
+    auto pipeline = vk::create_basic_pipeline(context_.device(), color_format);
     if (!pipeline.valid()) {
         std::println(stderr, "VulkanDevice: failed to create pipeline");
         return nullptr;
