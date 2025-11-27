@@ -1,4 +1,11 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/include/strata/gfx/vulkan/vulkan_context.h
+//
+// Purpose:
+//   Declares VulkanContext, a helper that owns the Vulkan instance, surface,
+//   logical device, and queues required by the Vulkan backend.
+// -----------------------------------------------------------------------------
+
 #pragma once
 
 #include "strata/platform/wsi_handle.h"

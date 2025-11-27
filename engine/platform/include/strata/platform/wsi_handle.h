@@ -1,7 +1,11 @@
+// -----------------------------------------------------------------------------
 // engine/platform/include/strata/platform/wsi_handle.h
 //
-// OS-agnostic description of the native windowing state needed to create a Vulkan surface.
-// Strongly-typed wrappers + std::variant. No OS or Vulkan headers here.
+// Purpose:
+//   OS-agnostic description of the native windowing state needed to create a
+//   Vulkan surface. Provides strongly typed wrappers and a std::variant without
+//   pulling in OS or Vulkan headers.
+// -----------------------------------------------------------------------------
 
 #pragma once
 

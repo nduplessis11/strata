@@ -1,3 +1,11 @@
+// -----------------------------------------------------------------------------
+// engine/gfx/src/backends/vulkan/vulkan_device.h
+//
+// Purpose:
+//   Declarations for the Vulkan implementation of GraphicsDevice, swapchain,
+//   and pipeline wrappers used by the renderer frontend.
+// -----------------------------------------------------------------------------
+
 #pragma once
 
 #include "strata/gfx/graphics_device.h"
