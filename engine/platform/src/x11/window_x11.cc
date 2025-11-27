@@ -107,7 +107,7 @@ namespace strata::platform {
                 evt.xclient.display = display;
                 evt.xclient.window = window;
                 evt.xclient.format = 32;
-                evt.xclient.data.l[0] = wm_delete;
+                evt.xclient.data.l[0] = static_cast<long>(wm_delete);
                 evt.xclient.data.l[1] = CurrentTime;
                 ::XSendEvent(display, window, False, NoEventMask, &evt);
                 ::XFlush(display);
