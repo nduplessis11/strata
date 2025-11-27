@@ -3,7 +3,7 @@
 #include "strata/gfx/graphics_device.h"
 #include "strata/gfx/vulkan/swapchain.h"
 #include "strata/gfx/vulkan/vulkan_context.h"
-#include "vulkan/vk_pipeline_basic.h"
+#include "backends/vulkan/vk_pipeline_basic.h"
 
 #include <cstdint>
 #include <memory>

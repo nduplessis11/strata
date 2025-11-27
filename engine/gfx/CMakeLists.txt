@@ -11,12 +11,12 @@ add_library(strata_gfx STATIC
   src/renderer2d.cc
   src/backends/vulkan/vulkan_device.h
   src/backends/vulkan/vulkan_device.cc
-  src/vulkan/vk_pipeline_basic.h
-  src/vulkan/vk_pipeline_basic.cc
-  src/vulkan/vulkan_context.cc
-  src/vulkan/swapchain.cc
+  src/backends/vulkan/vk_pipeline_basic.h
+  src/backends/vulkan/vk_pipeline_basic.cc
+  src/backends/vulkan/vulkan_context.cc
+  src/backends/vulkan/swapchain.cc
 
-  $<$<PLATFORM_ID:Windows>:src/vulkan/wsi_bridge_win32.cc>
+  $<$<PLATFORM_ID:Windows>:src/backends/vulkan/wsi_bridge_win32.cc>
 )
 
 target_include_directories(strata_gfx
