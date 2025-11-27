@@ -16,7 +16,7 @@
 
 
 #include "strata/gfx/renderer2d.h"
-#include "strata/gfx/vulkan/vk_pipeline_basic.h"
+#include "vulkan/vk_pipeline_basic.h"
 
 #include <vulkan/vulkan.h>
 #include <print>
@@ -24,6 +24,135 @@
 #include <vector>
 #include <cstdint>
 #include <limits>
+
+namespace {
+
+	struct CommandResources {
+		VkDevice        device{ VK_NULL_HANDLE };
+		VkCommandPool   pool{ VK_NULL_HANDLE };
+		VkCommandBuffer cmd{ VK_NULL_HANDLE };
+
+		CommandResources() = default;
+
+		CommandResources(VkDevice device, std::uint32_t queue_family)
+			: device(device)
+		{
+			VkCommandPoolCreateInfo pool_ci{};
+			pool_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+			pool_ci.queueFamilyIndex = queue_family;
+			pool_ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+			if (vkCreateCommandPool(device, &pool_ci, nullptr, &pool) != VK_SUCCESS) {
+				std::println(stderr, "Renderer2d: failed to create command pool");
+				pool = VK_NULL_HANDLE;
+				return;
+			}
+
+			VkCommandBufferAllocateInfo alloc{};
+			alloc.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			alloc.commandPool = pool;
+			alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			alloc.commandBufferCount = 1;
+
+			if (vkAllocateCommandBuffers(device, &alloc, &cmd) != VK_SUCCESS) {
+				std::println(stderr, "Renderer2d: failed to allocate command buffer");
+				cmd = VK_NULL_HANDLE;
+				// pool will be destroyed by destructor
+			}
+		}
+
+		~CommandResources() {
+			if (!device) return;
+
+			if (cmd != VK_NULL_HANDLE) {
+				vkFreeCommandBuffers(device, pool, 1, &cmd);
+			}
+			if (pool != VK_NULL_HANDLE) {
+				vkDestroyCommandPool(device, pool, nullptr);
+			}
+		}
+
+		CommandResources(CommandResources&& other) noexcept {
+			*this = std::move(other);
+		}
+
+		CommandResources& operator=(CommandResources&& other) noexcept {
+			if (this == &other) return *this;
+			this->~CommandResources();
+			device = other.device;
+			pool = other.pool;
+			cmd = other.cmd;
+			other.device = VK_NULL_HANDLE;
+			other.pool = VK_NULL_HANDLE;
+			other.cmd = VK_NULL_HANDLE;
+			return *this;
+		}
+
+		CommandResources(const CommandResources&) = delete;
+		CommandResources& operator=(const CommandResources&) = delete;
+	};
+
+	struct FrameSyncObjects {
+		VkDevice    device{ VK_NULL_HANDLE };
+		VkSemaphore image_available{ VK_NULL_HANDLE };
+		VkSemaphore render_finished{ VK_NULL_HANDLE };
+		VkFence     in_flight{ VK_NULL_HANDLE };
+
+		FrameSyncObjects() = default;
+
+		explicit FrameSyncObjects(VkDevice device)
+			: device(device)
+		{
+			VkSemaphoreCreateInfo sem_ci{};
+			sem_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+			if (vkCreateSemaphore(device, &sem_ci, nullptr, &image_available) != VK_SUCCESS ||
+				vkCreateSemaphore(device, &sem_ci, nullptr, &render_finished) != VK_SUCCESS) {
+				std::println(stderr, "Renderer2d: failed to create semaphores");
+			}
+
+			VkFenceCreateInfo fence_ci{};
+			fence_ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+			fence_ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+			if (vkCreateFence(device, &fence_ci, nullptr, &in_flight) != VK_SUCCESS) {
+				std::println(stderr, "Renderer2d: failed to create fence");
+			}
+		}
+
+		~FrameSyncObjects() {
+			if (!device) return;
+
+			if (in_flight != VK_NULL_HANDLE) vkDestroyFence(device, in_flight, nullptr);
+			if (image_available != VK_NULL_HANDLE) vkDestroySemaphore(device, image_available, nullptr);
+			if (render_finished != VK_NULL_HANDLE) vkDestroySemaphore(device, render_finished, nullptr);
+		}
+
+		FrameSyncObjects(FrameSyncObjects&& other) noexcept {
+			*this = std::move(other);
+		}
+
+		FrameSyncObjects& operator=(FrameSyncObjects&& other) noexcept {
+			if (this == &other) return *this;
+			this->~FrameSyncObjects();
+			device = other.device;
+			image_available = other.image_available;
+			render_finished = other.render_finished;
+			in_flight = other.in_flight;
+
+			other.device = VK_NULL_HANDLE;
+			other.image_available = VK_NULL_HANDLE;
+			other.render_finished = VK_NULL_HANDLE;
+			other.in_flight = VK_NULL_HANDLE;
+			return *this;
+		}
+
+		FrameSyncObjects(const FrameSyncObjects&) = delete;
+		FrameSyncObjects& operator=(const FrameSyncObjects&) = delete;
+	};
+
+} // namespace
+
 
 namespace {
 	std::vector<char> read_binary_file(const char* path) {

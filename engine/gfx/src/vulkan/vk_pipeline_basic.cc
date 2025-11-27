@@ -19,7 +19,7 @@
 //     reused across resizes by setting them at command-recording time.
 // -----------------------------------------------------------------------------
 
-#include "strata/gfx/vulkan/vk_pipeline_basic.h"
+#include "vulkan/vk_pipeline_basic.h"
 
 #include <vulkan/vulkan.h>
 

@@ -6,7 +6,7 @@ add_library(strata_gfx STATIC
   include/strata/gfx/renderer2d.h
   include/strata/gfx/vulkan/wsi_bridge.h
   include/strata/gfx/vulkan/swapchain.h
-  include/strata/gfx/vulkan/vk_pipeline_basic.h
+  src/vulkan/vk_pipeline_basic.h
   src/vulkan/vk_pipeline_basic.cc
   src/vulkan/vulkan_context.cc
   src/vulkan/swapchain.cc
@@ -15,7 +15,10 @@ add_library(strata_gfx STATIC
   $<$<PLATFORM_ID:Windows>:src/vulkan/wsi_bridge_win32.cc>
 )
 
-target_include_directories(strata_gfx PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(strata_gfx
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
 target_compile_features(strata_gfx PUBLIC cxx_std_23)
 enable_strict_warnings(strata_gfx)
 target_link_libraries(strata_gfx PUBLIC engine_options strata_platform Vulkan::Vulkan)
