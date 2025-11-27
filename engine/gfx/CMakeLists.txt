@@ -6,6 +6,8 @@ add_library(strata_gfx STATIC
   include/strata/gfx/renderer2d.h
   include/strata/gfx/vulkan/wsi_bridge.h
   include/strata/gfx/vulkan/swapchain.h
+  include/strata/gfx/vulkan/vk_pipeline_basic.h
+  src/vulkan/vk_pipeline_basic.cc
   src/vulkan/vulkan_context.cc
   src/vulkan/swapchain.cc
   src/vulkan/renderer2d.cc
