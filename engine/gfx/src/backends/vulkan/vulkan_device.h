@@ -27,7 +27,7 @@ namespace strata::gfx::vulkan {
         std::span<const VkImage> images() const { return swapchain_.images(); }
 
     private:
-        Swapchain swapchain_{};
+        Swapchain swapchain_;
     };
 
     class VulkanPipeline : public GraphicsPipeline {
@@ -54,7 +54,7 @@ namespace strata::gfx::vulkan {
         void wait_idle() override;
 
     private:
-        VulkanContext context_{};
+        VulkanContext context_;
 
         struct CommandResources {
             VkDevice        device{ VK_NULL_HANDLE };

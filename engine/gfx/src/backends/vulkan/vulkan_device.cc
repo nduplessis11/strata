@@ -135,10 +135,12 @@ VulkanDevice::FrameSyncObjects& VulkanDevice::FrameSyncObjects::operator=(FrameS
     return *this;
 }
 
-VulkanDevice::VulkanDevice(const strata::platform::WsiHandle& wsi, bool enable_validation) {
-    VulkanContextDesc ctx_desc{};
-    ctx_desc.enable_validation = enable_validation;
-    context_ = VulkanContext::create(wsi, ctx_desc);
+VulkanDevice::VulkanDevice(const strata::platform::WsiHandle& wsi, bool enable_validation)
+    : context_([&] {
+          VulkanContextDesc ctx_desc{};
+          ctx_desc.enable_validation = enable_validation;
+          return VulkanContext::create(wsi, ctx_desc);
+      }()) {
     if (!context_.valid() || !context_.has_device()) {
         std::println(stderr, "Failed to create VulkanDevice: invalid context");
         return;
