@@ -22,12 +22,23 @@ using VkDevice = VkDevice_T*;
 using VkPipelineLayout = VkPipelineLayout_T*;
 using VkPipeline = VkPipeline_T*;
 
+// Value types: declare the *tags* only, no fake typedefs:
+struct VkExtent2D;  // matches Vulkan's "struct VkExtent2D { ... }"
+
+// MSVC whines about this, so silence that one warning only:
+#ifdef _MSC_VER
+#  pragma warning(push)
+#  pragma warning(disable : 4471) // forward declaration of unscoped enum must have an underlying type
+#endif
+enum VkFormat;      // Vulkan defines: "typedef enum VkFormat { ... } VkFormat;"
+#ifdef _MSC_VER
+#  pragma warning(pop)
+#endif
+
 struct VkExtent2D {
     std::uint32_t width;
     std::uint32_t height;
 };
-
-enum VkFormat;
 
 namespace strata::gfx::vk {
 
