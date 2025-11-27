@@ -8,9 +8,26 @@
 
 #pragma once
 
-#include <vector>
 #include <cstdint>
-#include <vulkan/vulkan.h>
+
+// Forward declarations to avoid pulling Vulkan headers into dependent code.
+// These mirror the canonical Vulkan definitions:
+//   - Handles are opaque pointers to incomplete types.
+//   - VkExtent2D is a simple width/height struct passed by value.
+struct VkDevice_T;
+struct VkPipelineLayout_T;
+struct VkPipeline_T;
+
+using VkDevice = VkDevice_T*;
+using VkPipelineLayout = VkPipelineLayout_T*;
+using VkPipeline = VkPipeline_T*;
+
+struct VkExtent2D {
+    std::uint32_t width;
+    std::uint32_t height;
+};
+
+enum VkFormat;
 
 namespace strata::gfx::vk {
 
