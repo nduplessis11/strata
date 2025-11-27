@@ -195,58 +195,17 @@ namespace strata::gfx {
         const Swapchain* swapchain{ nullptr }; // non-owning
 
         VkDevice        device{ VK_NULL_HANDLE };           // non-owning
-        VkCommandPool   command_pool{ VK_NULL_HANDLE };     // owning
-        VkCommandBuffer cmd{ VK_NULL_HANDLE };              // owning
-
-        VkSemaphore image_available{ VK_NULL_HANDLE };      // owning
-        VkSemaphore render_finished{ VK_NULL_HANDLE };      // owning
-        VkFence     in_flight{ VK_NULL_HANDLE };            // owning
+        CommandResources commands{};                        // owning
+        FrameSyncObjects sync{};                            // owning
 
         vk::BasicPipeline pipeline{};               // owning
 
         Impl(const VulkanContext& context, const Swapchain& swapchain)
             : ctx(&context)
             , swapchain(&swapchain)
-            , device(context.device()) {
-
-            // VkCommandBuffer
-            //   - A recorded list of GPU commands (draws, clears, pipeline binds, etc.).
-            //
-            // VkCommandPool
-            //   - Allocates and manages the memory backing VkCommandBuffer objects.
-            //   - Typically created per-thread (command buffers from a pool must be used
-            //     from the same thread that owns the pool).
-            //
-            // Conceptually:
-            //   VkCommandPool (per-thread bucket of command memory)
-            //     ├── VkCommandBuffer A (records commands)
-            //     ├── VkCommandBuffer B (records commands)
-            //     └── VkCommandBuffer C (records commands)
-
-            // --- Command pool ---
-            VkCommandPoolCreateInfo pool_ci{};
-            pool_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-            pool_ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-            pool_ci.queueFamilyIndex = ctx->graphics_family_index();
-
-            if (vkCreateCommandPool(device, &pool_ci, nullptr, &command_pool) != VK_SUCCESS) {
-                std::println(stderr, "Renderer2d: failed to create command pool");
-                command_pool = VK_NULL_HANDLE;
-                return;
-            }
-
-            // --- Command buffer ---
-            VkCommandBufferAllocateInfo alloc{};
-            alloc.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-            alloc.commandPool = command_pool;
-            alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            alloc.commandBufferCount = 1;
-
-            if (vkAllocateCommandBuffers(device, &alloc, &cmd) != VK_SUCCESS) {
-                std::println(stderr, "Renderer2d: failed to allocate command buffer");
-                cmd = VK_NULL_HANDLE;
-                // we keep going; destructor will handle what was created
-            }
+            , device(context.device())
+            , commands(device, context.graphics_family_index())
+            , sync(device) {
 
             // --- Graphics pipeline (fullscreen triangle via dynamic rendering) ---
             VkFormat color_format = static_cast<VkFormat>(swapchain.color_format_bits());
@@ -259,54 +218,9 @@ namespace strata::gfx {
             if (!pipeline.valid()) {
                 std::println(stderr, "Renderer2d: failed to create fullscreen pipeline");
             }
-
-            // --- Synchronization objects ---
-            //
-            // VkSemaphore
-            //   - GPU → GPU synchronization.
-            //   - Used to order GPU operations across queues.
-            //   - The CPU does NOT wait on semaphores.
-            //   - Typical usage in a frame:
-            //       • image_available:  GPU waits until the swapchain image is ready.
-            //       • render_finished:  GPU waits until drawing is done before presenting.
-            //
-            //   Conceptually: "Don't start this GPU work until that GPU work is finished."
-            //
-            // VkFence
-            //   - GPU → CPU synchronization.
-            //   - The CPU *waits* on a fence (vkWaitForFences) to know when the GPU is done.
-            //   - We use this so we can safely reuse command buffers each frame.
-            //
-            //   Conceptually: "CPU, don't continue until the GPU raises this completion flag."
-            //
-            // Summary:
-            //   Semaphore → GPU waits
-            //   Fence     → CPU waits
-
-            VkSemaphoreCreateInfo sem_info{};
-            sem_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-            VkFenceCreateInfo fence_info{};
-            fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-            fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT; // start signaled
-
-            if (vkCreateSemaphore(device, &sem_info, nullptr, &image_available) != VK_SUCCESS ||
-                vkCreateSemaphore(device, &sem_info, nullptr, &render_finished) != VK_SUCCESS ||
-                vkCreateFence(device, &fence_info, nullptr, &in_flight) != VK_SUCCESS) {
-                std::println(stderr, "Renderer2d: failed to create sync objects");
-                // In a robust engine, we would handle partial failure more carefully.
-            }
         }
 
-        ~Impl() {
-            if (!device) return;
-
-            if (in_flight)        vkDestroyFence(device, in_flight, nullptr);
-            if (image_available)  vkDestroySemaphore(device, image_available, nullptr);
-            if (render_finished)  vkDestroySemaphore(device, render_finished, nullptr);
-
-            if (command_pool)     vkDestroyCommandPool(device, command_pool, nullptr);
-        }
+        ~Impl() = default;
 
         FrameResult draw_frame();
     };
@@ -335,7 +249,7 @@ namespace strata::gfx {
         // Basic sanity check: if any of the core pieces are missing, bail out.
         // In normal usage this shouldn't happen, but it makes the function robust
         // against partially constructed / torn-down state.
-        if (!device || !cmd || !ctx || !swapchain->valid() || !pipeline.valid()) {
+        if (!device || !commands.cmd || !ctx || !swapchain->valid() || !pipeline.valid()) {
             return FrameResult::Error;
         }
 
@@ -353,13 +267,13 @@ namespace strata::gfx {
         //
         // After the wait, we reset the fence back to the "unsignaled" state so
         // it can be used again for the next vkQueueSubmit.
-        VkResult waitRes{ vkWaitForFences(device, 1, &in_flight, VK_TRUE, kTimeout) };
+        VkResult waitRes{ vkWaitForFences(device, 1, &sync.in_flight, VK_TRUE, kTimeout) };
         if (waitRes != VK_SUCCESS) {
             // VK_TIMEOUT shouldn't happen with "infinite" timeout, but be defensive.
             std::println(stderr, "vkWaitForFences failed: {}", static_cast<int>(waitRes));
             return FrameResult::Error;
         }
-        vkResetFences(device, 1, &in_flight);
+        vkResetFences(device, 1, &sync.in_flight);
 
         // ---------------------------------------------------------------------
         // 2) Acquire next image from the swapchain
@@ -375,7 +289,7 @@ namespace strata::gfx {
             device,
             swapchain->handle(),   // VkSwapchainKHR
             kTimeout,              // timeout (ns)
-            image_available,       // signaled when the image is ready
+            sync.image_available,  // signaled when the image is ready
             VK_NULL_HANDLE,        // optional fence (unused here)
             &image_index           // out: which image index to render to
         );
@@ -395,13 +309,13 @@ namespace strata::gfx {
         // ---------------------------------------------------------------------
         //
         // For simplicity we record a fresh command buffer every frame.
-        vkResetCommandBuffer(cmd, 0);
+        vkResetCommandBuffer(commands.cmd, 0);
 
         VkCommandBufferBeginInfo begin{};
         begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         begin.flags = 0; // could be VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
 
-        if (vkBeginCommandBuffer(cmd, &begin) != VK_SUCCESS) {
+        if (vkBeginCommandBuffer(commands.cmd, &begin) != VK_SUCCESS) {
             std::println(stderr, "vkBeginCommandBuffer failed");
             return FrameResult::Error;
         }
@@ -446,7 +360,7 @@ namespace strata::gfx {
         pre.subresourceRange.layerCount = 1;
 
         vkCmdPipelineBarrier(
-            cmd,
+            commands.cmd,
             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,             // before: nothing is running yet
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // after: color attachment writes
             0,
@@ -497,10 +411,10 @@ namespace strata::gfx {
 
         // "Start" dynamic rendering. From here until vkCmdEndRendering, any
         // draw calls that write to color attachments will target 'color_attach'.
-        vkCmdBeginRendering(cmd, &render_info);
+        vkCmdBeginRendering(commands.cmd, &render_info);
 
         // Bind our graphics pipeline
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
+        vkCmdBindPipeline(commands.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
 
         // Set viewport & scissor dynamically to match the current extent
         VkViewport viewport{};
@@ -518,15 +432,15 @@ namespace strata::gfx {
             static_cast<uint32_t>(extent.height)
         };
 
-        vkCmdSetViewport(cmd, 0, 1, &viewport);
-        vkCmdSetScissor(cmd, 0, 1, &scissor);
+        vkCmdSetViewport(commands.cmd, 0, 1, &viewport);
+        vkCmdSetScissor(commands.cmd, 0, 1, &scissor);
         // Fullscreen triangle: 3 vertices, 1 instance, firstVertex = 0, firstInstance = 0
-        vkCmdDraw(cmd, 3, 1, 0, 0);
+        vkCmdDraw(commands.cmd, 3, 1, 0, 0);
 
         // TODO: later:
         //   - bind descriptor sets / vertex buffers
 
-        vkCmdEndRendering(cmd);
+        vkCmdEndRendering(commands.cmd);
 
         // ---------------------------------------------------------------------
         // 6) Transition image to PRESENT_SRC_KHR for presentation
@@ -551,7 +465,7 @@ namespace strata::gfx {
         post.subresourceRange.layerCount = 1;
 
         vkCmdPipelineBarrier(
-            cmd,
+            commands.cmd,
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // after color output
             VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,          // before "end of pipe"
             0,
@@ -563,7 +477,7 @@ namespace strata::gfx {
         // ---------------------------------------------------------------------
         // 7) End command buffer recording
         // ---------------------------------------------------------------------
-        if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
+        if (vkEndCommandBuffer(commands.cmd) != VK_SUCCESS) {
             std::println(stderr, "vkEndCommandBuffer failed");
             return FrameResult::Error;
         }
@@ -582,14 +496,14 @@ namespace strata::gfx {
         VkSubmitInfo submit{};
         submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submit.waitSemaphoreCount = 1;
-        submit.pWaitSemaphores = &image_available;
+        submit.pWaitSemaphores = &sync.image_available;
         submit.pWaitDstStageMask = &wait_stage;
         submit.commandBufferCount = 1;
-        submit.pCommandBuffers = &cmd;
+        submit.pCommandBuffers = &commands.cmd;
         submit.signalSemaphoreCount = 1;
-        submit.pSignalSemaphores = &render_finished;
+        submit.pSignalSemaphores = &sync.render_finished;
 
-        if (vkQueueSubmit(ctx->graphics_queue(), 1, &submit, in_flight) != VK_SUCCESS) {
+        if (vkQueueSubmit(ctx->graphics_queue(), 1, &submit, sync.in_flight) != VK_SUCCESS) {
             std::println(stderr, "vkQueueSubmit failed");
             return FrameResult::Error;
         }
@@ -605,7 +519,7 @@ namespace strata::gfx {
         VkPresentInfoKHR present{};
         present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         present.waitSemaphoreCount = 1;
-        present.pWaitSemaphores = &render_finished;
+        present.pWaitSemaphores = &sync.render_finished;
         present.swapchainCount = 1;
         present.pSwapchains = &sw;
         present.pImageIndices = &image_index;
