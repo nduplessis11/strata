@@ -61,31 +61,45 @@ namespace {
             }
         }
 
-        ~CommandResources() {
+        void reset() noexcept {
             if (!device) return;
 
             if (cmd != VK_NULL_HANDLE) {
                 vkFreeCommandBuffers(device, pool, 1, &cmd);
+                cmd = VK_NULL_HANDLE;
             }
             if (pool != VK_NULL_HANDLE) {
                 vkDestroyCommandPool(device, pool, nullptr);
+                pool = VK_NULL_HANDLE;
             }
+            device = VK_NULL_HANDLE;
         }
 
-        CommandResources(CommandResources&& other) noexcept {
-            *this = std::move(other);
+        ~CommandResources() {
+            reset();
         }
 
-        CommandResources& operator=(CommandResources&& other) noexcept {
-            if (this == &other) return *this;
-            this->~CommandResources();
-            device = other.device;
-            pool = other.pool;
-            cmd = other.cmd;
+        CommandResources(CommandResources&& other) noexcept
+            : device(other.device), pool(other.pool), cmd(other.cmd) {
             other.device = VK_NULL_HANDLE;
             other.pool = VK_NULL_HANDLE;
             other.cmd = VK_NULL_HANDLE;
-            return *this;
+        }
+
+        CommandResources& operator=(CommandResources&& other) noexcept {
+            if (this != &other) {
+                this->reset();
+
+                device = other.device;
+                pool = other.pool;
+                cmd = other.cmd;
+
+                other.device = VK_NULL_HANDLE;
+                other.pool = VK_NULL_HANDLE;
+                other.cmd = VK_NULL_HANDLE;
+
+                return *this;
+            }
         }
 
         CommandResources(const CommandResources&) = delete;
@@ -120,30 +134,56 @@ namespace {
             }
         }
 
-        ~FrameSyncObjects() {
+
+        void reset() noexcept {
             if (!device) return;
 
-            if (in_flight != VK_NULL_HANDLE) vkDestroyFence(device, in_flight, nullptr);
-            if (image_available != VK_NULL_HANDLE) vkDestroySemaphore(device, image_available, nullptr);
-            if (render_finished != VK_NULL_HANDLE) vkDestroySemaphore(device, render_finished, nullptr);
+            if (in_flight != VK_NULL_HANDLE) {
+                vkDestroyFence(device, in_flight, nullptr);
+                in_flight = VK_NULL_HANDLE;
+            }
+            if (image_available != VK_NULL_HANDLE) {
+                vkDestroySemaphore(device, image_available, nullptr);
+                image_available = VK_NULL_HANDLE;
+            }
+            if (render_finished != VK_NULL_HANDLE) {
+                vkDestroySemaphore(device, render_finished, nullptr);
+                render_finished = VK_NULL_HANDLE;
+            }
+
+            device = VK_NULL_HANDLE;
         }
 
-        FrameSyncObjects(FrameSyncObjects&& other) noexcept {
-            *this = std::move(other);
+        ~FrameSyncObjects() {
+            reset();
         }
 
-        FrameSyncObjects& operator=(FrameSyncObjects&& other) noexcept {
-            if (this == &other) return *this;
-            this->~FrameSyncObjects();
-            device = other.device;
-            image_available = other.image_available;
-            render_finished = other.render_finished;
-            in_flight = other.in_flight;
+        FrameSyncObjects(FrameSyncObjects&& other) noexcept
+            : device(other.device)
+            , image_available(other.image_available)
+            , render_finished(other.render_finished)
+            , in_flight(other.in_flight) {
 
             other.device = VK_NULL_HANDLE;
             other.image_available = VK_NULL_HANDLE;
             other.render_finished = VK_NULL_HANDLE;
             other.in_flight = VK_NULL_HANDLE;
+        }
+
+        FrameSyncObjects& operator=(FrameSyncObjects&& other) noexcept {
+            if (this != &other) {
+                reset();
+
+                device = other.device;
+                image_available = other.image_available;
+                render_finished = other.render_finished;
+                in_flight = other.in_flight;
+
+                other.device = VK_NULL_HANDLE;
+                other.image_available = VK_NULL_HANDLE;
+                other.render_finished = VK_NULL_HANDLE;
+                other.in_flight = VK_NULL_HANDLE;
+            }
             return *this;
         }
 
@@ -191,14 +231,14 @@ namespace {
 namespace strata::gfx {
 
     struct Renderer2d::Impl {
-        const VulkanContext* ctx{ nullptr };   // non-owning
-        const Swapchain* swapchain{ nullptr }; // non-owning
+        const VulkanContext* ctx{ nullptr };      // non-owning
+        const Swapchain* swapchain{ nullptr };    // non-owning
 
-        VkDevice        device{ VK_NULL_HANDLE };           // non-owning
-        CommandResources commands{};                        // owning
-        FrameSyncObjects sync{};                            // owning
+        VkDevice        device{ VK_NULL_HANDLE }; // non-owning
+        CommandResources commands{};              // owning
+        FrameSyncObjects sync{};                  // owning
 
-        vk::BasicPipeline pipeline{};               // owning
+        vk::BasicPipeline pipeline{};             // owning
 
         Impl(const VulkanContext& context, const Swapchain& swapchain)
             : ctx(&context)
@@ -224,8 +264,6 @@ namespace strata::gfx {
 
         FrameResult draw_frame();
     };
-
-    // ----- Renderer2d forwarding -----------------------------------------------
 
     Renderer2d::Renderer2d(const VulkanContext& ctx, const Swapchain& swapchain)
         : p_(std::make_unique<Impl>(ctx, swapchain)) {
