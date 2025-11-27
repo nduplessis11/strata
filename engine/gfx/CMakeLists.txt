@@ -17,6 +17,7 @@ add_library(strata_gfx STATIC
   src/backends/vulkan/swapchain.cc
 
   $<$<PLATFORM_ID:Windows>:src/backends/vulkan/wsi_bridge_win32.cc>
+  $<$<AND:$<PLATFORM_ID:Linux>,$<BOOL:${STRATA_USE_X11}>>:src/backends/vulkan/wsi_bridge_x11.cc>
 )
 
 target_include_directories(strata_gfx
