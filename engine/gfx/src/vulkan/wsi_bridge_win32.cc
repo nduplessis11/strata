@@ -22,7 +22,7 @@
 //       required_instance_extensions() returns std::span<const ExtensionName>,
 //       exposing a read-only std::string_view to the static extension list without
 //       copying or allocating memory. The lifetime is guaranteed because the array 
-//		 is static.
+//       is static.
 //
 //   • Variant Dispatch (std::visit):
 //       WsiHandle is a std::variant<Win32, X11, Wayland>. We use std::visit with
@@ -48,38 +48,38 @@ using strata::platform::WsiHandle;
 namespace wsi = strata::platform::wsi;
 
 namespace {
-	static constexpr std::array<std::string_view, 2> kExtViews = {
-	  VK_KHR_SURFACE_EXTENSION_NAME,
-	  VK_KHR_WIN32_SURFACE_EXTENSION_NAME
-	};
+    static constexpr std::array<std::string_view, 2> kExtViews = {
+      VK_KHR_SURFACE_EXTENSION_NAME,
+      VK_KHR_WIN32_SURFACE_EXTENSION_NAME
+    };
 } // namespace
 
 namespace strata::gfx::vk {
-	std::span<const ExtensionName> required_instance_extensions(const WsiHandle&) {
-		return std::span{ kExtViews };
-	}
+    std::span<const ExtensionName> required_instance_extensions(const WsiHandle&) {
+        return std::span{ kExtViews };
+    }
 
-	VkSurfaceKHR create_surface(VkInstance instance, const WsiHandle& h) {
-		return std::visit([&](auto const& alt) -> VkSurfaceKHR {
-			using T = std::decay_t<decltype(alt)>;
-			if constexpr (std::is_same_v<T, wsi::Win32>) {
-				VkSurfaceKHR surface = VK_NULL_HANDLE;
+    VkSurfaceKHR create_surface(VkInstance instance, const WsiHandle& h) {
+        return std::visit([&](auto const& alt) -> VkSurfaceKHR {
+            using T = std::decay_t<decltype(alt)>;
+            if constexpr (std::is_same_v<T, wsi::Win32>) {
+                VkSurfaceKHR surface = VK_NULL_HANDLE;
 
-				VkWin32SurfaceCreateInfoKHR ci{ };
-				ci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-				ci.hinstance = reinterpret_cast<HINSTANCE>(alt.instance.value);
-				ci.hwnd = reinterpret_cast<HWND>(alt.window.value);
+                VkWin32SurfaceCreateInfoKHR ci{ };
+                ci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+                ci.hinstance = reinterpret_cast<HINSTANCE>(alt.instance.value);
+                ci.hwnd = reinterpret_cast<HWND>(alt.window.value);
 
-				if (vkCreateWin32SurfaceKHR(instance, &ci, nullptr, &surface) != VK_SUCCESS) {
-					return VK_NULL_HANDLE;
-				}
-				return surface;
-			}
-			else {
-				// Wrong WSI passed to Win32 bridge
-				return VK_NULL_HANDLE;
-			}
-			}, h);
-	}
+                if (vkCreateWin32SurfaceKHR(instance, &ci, nullptr, &surface) != VK_SUCCESS) {
+                    return VK_NULL_HANDLE;
+                }
+                return surface;
+            }
+            else {
+                // Wrong WSI passed to Win32 bridge
+                return VK_NULL_HANDLE;
+            }
+            }, h);
+    }
 
 } // namespace strata::gfx::vk

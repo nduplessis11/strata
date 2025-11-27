@@ -27,646 +27,646 @@
 
 namespace {
 
-	struct CommandResources {
-		VkDevice        device{ VK_NULL_HANDLE };
-		VkCommandPool   pool{ VK_NULL_HANDLE };
-		VkCommandBuffer cmd{ VK_NULL_HANDLE };
+    struct CommandResources {
+        VkDevice        device{ VK_NULL_HANDLE };
+        VkCommandPool   pool{ VK_NULL_HANDLE };
+        VkCommandBuffer cmd{ VK_NULL_HANDLE };
 
-		CommandResources() = default;
+        CommandResources() = default;
 
-		CommandResources(VkDevice device, std::uint32_t queue_family)
-			: device(device)
-		{
-			VkCommandPoolCreateInfo pool_ci{};
-			pool_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-			pool_ci.queueFamilyIndex = queue_family;
-			pool_ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        CommandResources(VkDevice device, std::uint32_t queue_family)
+            : device(device)
+        {
+            VkCommandPoolCreateInfo pool_ci{};
+            pool_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            pool_ci.queueFamilyIndex = queue_family;
+            pool_ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-			if (vkCreateCommandPool(device, &pool_ci, nullptr, &pool) != VK_SUCCESS) {
-				std::println(stderr, "Renderer2d: failed to create command pool");
-				pool = VK_NULL_HANDLE;
-				return;
-			}
+            if (vkCreateCommandPool(device, &pool_ci, nullptr, &pool) != VK_SUCCESS) {
+                std::println(stderr, "Renderer2d: failed to create command pool");
+                pool = VK_NULL_HANDLE;
+                return;
+            }
 
-			VkCommandBufferAllocateInfo alloc{};
-			alloc.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-			alloc.commandPool = pool;
-			alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-			alloc.commandBufferCount = 1;
+            VkCommandBufferAllocateInfo alloc{};
+            alloc.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            alloc.commandPool = pool;
+            alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            alloc.commandBufferCount = 1;
 
-			if (vkAllocateCommandBuffers(device, &alloc, &cmd) != VK_SUCCESS) {
-				std::println(stderr, "Renderer2d: failed to allocate command buffer");
-				cmd = VK_NULL_HANDLE;
-				// pool will be destroyed by destructor
-			}
-		}
+            if (vkAllocateCommandBuffers(device, &alloc, &cmd) != VK_SUCCESS) {
+                std::println(stderr, "Renderer2d: failed to allocate command buffer");
+                cmd = VK_NULL_HANDLE;
+                // pool will be destroyed by destructor
+            }
+        }
 
-		~CommandResources() {
-			if (!device) return;
+        ~CommandResources() {
+            if (!device) return;
 
-			if (cmd != VK_NULL_HANDLE) {
-				vkFreeCommandBuffers(device, pool, 1, &cmd);
-			}
-			if (pool != VK_NULL_HANDLE) {
-				vkDestroyCommandPool(device, pool, nullptr);
-			}
-		}
+            if (cmd != VK_NULL_HANDLE) {
+                vkFreeCommandBuffers(device, pool, 1, &cmd);
+            }
+            if (pool != VK_NULL_HANDLE) {
+                vkDestroyCommandPool(device, pool, nullptr);
+            }
+        }
 
-		CommandResources(CommandResources&& other) noexcept {
-			*this = std::move(other);
-		}
+        CommandResources(CommandResources&& other) noexcept {
+            *this = std::move(other);
+        }
 
-		CommandResources& operator=(CommandResources&& other) noexcept {
-			if (this == &other) return *this;
-			this->~CommandResources();
-			device = other.device;
-			pool = other.pool;
-			cmd = other.cmd;
-			other.device = VK_NULL_HANDLE;
-			other.pool = VK_NULL_HANDLE;
-			other.cmd = VK_NULL_HANDLE;
-			return *this;
-		}
+        CommandResources& operator=(CommandResources&& other) noexcept {
+            if (this == &other) return *this;
+            this->~CommandResources();
+            device = other.device;
+            pool = other.pool;
+            cmd = other.cmd;
+            other.device = VK_NULL_HANDLE;
+            other.pool = VK_NULL_HANDLE;
+            other.cmd = VK_NULL_HANDLE;
+            return *this;
+        }
 
-		CommandResources(const CommandResources&) = delete;
-		CommandResources& operator=(const CommandResources&) = delete;
-	};
+        CommandResources(const CommandResources&) = delete;
+        CommandResources& operator=(const CommandResources&) = delete;
+    };
 
-	struct FrameSyncObjects {
-		VkDevice    device{ VK_NULL_HANDLE };
-		VkSemaphore image_available{ VK_NULL_HANDLE };
-		VkSemaphore render_finished{ VK_NULL_HANDLE };
-		VkFence     in_flight{ VK_NULL_HANDLE };
+    struct FrameSyncObjects {
+        VkDevice    device{ VK_NULL_HANDLE };
+        VkSemaphore image_available{ VK_NULL_HANDLE };
+        VkSemaphore render_finished{ VK_NULL_HANDLE };
+        VkFence     in_flight{ VK_NULL_HANDLE };
 
-		FrameSyncObjects() = default;
+        FrameSyncObjects() = default;
 
-		explicit FrameSyncObjects(VkDevice device)
-			: device(device)
-		{
-			VkSemaphoreCreateInfo sem_ci{};
-			sem_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        explicit FrameSyncObjects(VkDevice device)
+            : device(device)
+        {
+            VkSemaphoreCreateInfo sem_ci{};
+            sem_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-			if (vkCreateSemaphore(device, &sem_ci, nullptr, &image_available) != VK_SUCCESS ||
-				vkCreateSemaphore(device, &sem_ci, nullptr, &render_finished) != VK_SUCCESS) {
-				std::println(stderr, "Renderer2d: failed to create semaphores");
-			}
+            if (vkCreateSemaphore(device, &sem_ci, nullptr, &image_available) != VK_SUCCESS ||
+                vkCreateSemaphore(device, &sem_ci, nullptr, &render_finished) != VK_SUCCESS) {
+                std::println(stderr, "Renderer2d: failed to create semaphores");
+            }
 
-			VkFenceCreateInfo fence_ci{};
-			fence_ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-			fence_ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+            VkFenceCreateInfo fence_ci{};
+            fence_ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+            fence_ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-			if (vkCreateFence(device, &fence_ci, nullptr, &in_flight) != VK_SUCCESS) {
-				std::println(stderr, "Renderer2d: failed to create fence");
-			}
-		}
+            if (vkCreateFence(device, &fence_ci, nullptr, &in_flight) != VK_SUCCESS) {
+                std::println(stderr, "Renderer2d: failed to create fence");
+            }
+        }
 
-		~FrameSyncObjects() {
-			if (!device) return;
+        ~FrameSyncObjects() {
+            if (!device) return;
 
-			if (in_flight != VK_NULL_HANDLE) vkDestroyFence(device, in_flight, nullptr);
-			if (image_available != VK_NULL_HANDLE) vkDestroySemaphore(device, image_available, nullptr);
-			if (render_finished != VK_NULL_HANDLE) vkDestroySemaphore(device, render_finished, nullptr);
-		}
+            if (in_flight != VK_NULL_HANDLE) vkDestroyFence(device, in_flight, nullptr);
+            if (image_available != VK_NULL_HANDLE) vkDestroySemaphore(device, image_available, nullptr);
+            if (render_finished != VK_NULL_HANDLE) vkDestroySemaphore(device, render_finished, nullptr);
+        }
 
-		FrameSyncObjects(FrameSyncObjects&& other) noexcept {
-			*this = std::move(other);
-		}
+        FrameSyncObjects(FrameSyncObjects&& other) noexcept {
+            *this = std::move(other);
+        }
 
-		FrameSyncObjects& operator=(FrameSyncObjects&& other) noexcept {
-			if (this == &other) return *this;
-			this->~FrameSyncObjects();
-			device = other.device;
-			image_available = other.image_available;
-			render_finished = other.render_finished;
-			in_flight = other.in_flight;
+        FrameSyncObjects& operator=(FrameSyncObjects&& other) noexcept {
+            if (this == &other) return *this;
+            this->~FrameSyncObjects();
+            device = other.device;
+            image_available = other.image_available;
+            render_finished = other.render_finished;
+            in_flight = other.in_flight;
 
-			other.device = VK_NULL_HANDLE;
-			other.image_available = VK_NULL_HANDLE;
-			other.render_finished = VK_NULL_HANDLE;
-			other.in_flight = VK_NULL_HANDLE;
-			return *this;
-		}
+            other.device = VK_NULL_HANDLE;
+            other.image_available = VK_NULL_HANDLE;
+            other.render_finished = VK_NULL_HANDLE;
+            other.in_flight = VK_NULL_HANDLE;
+            return *this;
+        }
 
-		FrameSyncObjects(const FrameSyncObjects&) = delete;
-		FrameSyncObjects& operator=(const FrameSyncObjects&) = delete;
-	};
+        FrameSyncObjects(const FrameSyncObjects&) = delete;
+        FrameSyncObjects& operator=(const FrameSyncObjects&) = delete;
+    };
 
 } // namespace
 
 
 namespace {
-	std::vector<char> read_binary_file(const char* path) {
-		std::ifstream file(path, std::ios::binary | std::ios::ate);
-		if (!file) {
-			return {};
-		}
+    std::vector<char> read_binary_file(const char* path) {
+        std::ifstream file(path, std::ios::binary | std::ios::ate);
+        if (!file) {
+            return {};
+        }
 
-		const std::streamsize size = file.tellg();
-		if (size <= 0) {
-			return {};
-		}
-		file.seekg(0, std::ios::beg);
+        const std::streamsize size = file.tellg();
+        if (size <= 0) {
+            return {};
+        }
+        file.seekg(0, std::ios::beg);
 
-		std::vector<char> buffer(static_cast<std::size_t>(size));
-		if (!file.read(buffer.data(), size)) {
-			return {};
-		}
-		return buffer;
-	}
+        std::vector<char> buffer(static_cast<std::size_t>(size));
+        if (!file.read(buffer.data(), size)) {
+            return {};
+        }
+        return buffer;
+    }
 
-	VkShaderModule create_shader_module(VkDevice device, std::span<const char> code) {
-		VkShaderModuleCreateInfo ci{};
-		ci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-		ci.codeSize = code.size();
-		ci.pCode = reinterpret_cast<const std::uint32_t*>(code.data());
+    VkShaderModule create_shader_module(VkDevice device, std::span<const char> code) {
+        VkShaderModuleCreateInfo ci{};
+        ci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        ci.codeSize = code.size();
+        ci.pCode = reinterpret_cast<const std::uint32_t*>(code.data());
 
-		VkShaderModule module = VK_NULL_HANDLE;
-		if (vkCreateShaderModule(device, &ci, nullptr, &module) != VK_SUCCESS) {
-			return VK_NULL_HANDLE;
-		}
-		return module;
-	}
+        VkShaderModule module = VK_NULL_HANDLE;
+        if (vkCreateShaderModule(device, &ci, nullptr, &module) != VK_SUCCESS) {
+            return VK_NULL_HANDLE;
+        }
+        return module;
+    }
 }
 
 namespace strata::gfx {
 
-	struct Renderer2d::Impl {
-		const VulkanContext* ctx{ nullptr };   // non-owning
-		const Swapchain* swapchain{ nullptr }; // non-owning
-
-		VkDevice        device{ VK_NULL_HANDLE };			// non-owning
-		VkCommandPool   command_pool{ VK_NULL_HANDLE };		// owning
-		VkCommandBuffer cmd{ VK_NULL_HANDLE };				// owning
-
-		VkSemaphore image_available{ VK_NULL_HANDLE };		// owning
-		VkSemaphore render_finished{ VK_NULL_HANDLE };		// owning
-		VkFence     in_flight{ VK_NULL_HANDLE };			// owning
-
-		vk::BasicPipeline pipeline{};               // owning
-
-		Impl(const VulkanContext& context, const Swapchain& swapchain)
-			: ctx(&context)
-			, swapchain(&swapchain)
-			, device(context.device()) {
-
-			// VkCommandBuffer
-			//   - A recorded list of GPU commands (draws, clears, pipeline binds, etc.).
-			//
-			// VkCommandPool
-			//   - Allocates and manages the memory backing VkCommandBuffer objects.
-			//   - Typically created per-thread (command buffers from a pool must be used
-			//     from the same thread that owns the pool).
-			//
-			// Conceptually:
-			//   VkCommandPool (per-thread bucket of command memory)
-			//     ├── VkCommandBuffer A (records commands)
-			//     ├── VkCommandBuffer B (records commands)
-			//     └── VkCommandBuffer C (records commands)
-
-			// --- Command pool ---
-			VkCommandPoolCreateInfo pool_ci{};
-			pool_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-			pool_ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-			pool_ci.queueFamilyIndex = ctx->graphics_family_index();
-
-			if (vkCreateCommandPool(device, &pool_ci, nullptr, &command_pool) != VK_SUCCESS) {
-				std::println(stderr, "Renderer2d: failed to create command pool");
-				command_pool = VK_NULL_HANDLE;
-				return;
-			}
-
-			// --- Command buffer ---
-			VkCommandBufferAllocateInfo alloc{};
-			alloc.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-			alloc.commandPool = command_pool;
-			alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-			alloc.commandBufferCount = 1;
-
-			if (vkAllocateCommandBuffers(device, &alloc, &cmd) != VK_SUCCESS) {
-				std::println(stderr, "Renderer2d: failed to allocate command buffer");
-				cmd = VK_NULL_HANDLE;
-				// we keep going; destructor will handle what was created
-			}
-
-			// --- Graphics pipeline (fullscreen triangle via dynamic rendering) ---
-			VkFormat color_format = static_cast<VkFormat>(swapchain.color_format_bits());
-			VkExtent2D vk_extent{
-				static_cast<uint32_t>(swapchain.extent().width),
-				static_cast<uint32_t>(swapchain.extent().height)
-			};
-
-			pipeline = vk::create_basic_pipeline(device, color_format, vk_extent);
-			if (!pipeline.valid()) {
-				std::println(stderr, "Renderer2d: failed to create fullscreen pipeline");
-			}
-
-			// --- Synchronization objects ---
-			//
-			// VkSemaphore
-			//   - GPU → GPU synchronization.
-			//   - Used to order GPU operations across queues.
-			//   - The CPU does NOT wait on semaphores.
-			//   - Typical usage in a frame:
-			//       • image_available:  GPU waits until the swapchain image is ready.
-			//       • render_finished:  GPU waits until drawing is done before presenting.
-			//
-			//   Conceptually: "Don't start this GPU work until that GPU work is finished."
-			//
-			// VkFence
-			//   - GPU → CPU synchronization.
-			//   - The CPU *waits* on a fence (vkWaitForFences) to know when the GPU is done.
-			//   - We use this so we can safely reuse command buffers each frame.
-			//
-			//   Conceptually: "CPU, don't continue until the GPU raises this completion flag."
-			//
-			// Summary:
-			//   Semaphore → GPU waits
-			//   Fence     → CPU waits
-
-			VkSemaphoreCreateInfo sem_info{};
-			sem_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-			VkFenceCreateInfo fence_info{};
-			fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-			fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT; // start signaled
-
-			if (vkCreateSemaphore(device, &sem_info, nullptr, &image_available) != VK_SUCCESS ||
-				vkCreateSemaphore(device, &sem_info, nullptr, &render_finished) != VK_SUCCESS ||
-				vkCreateFence(device, &fence_info, nullptr, &in_flight) != VK_SUCCESS) {
-				std::println(stderr, "Renderer2d: failed to create sync objects");
-				// In a robust engine, we would handle partial failure more carefully.
-			}
-		}
-
-		~Impl() {
-			if (!device) return;
-
-			if (in_flight)        vkDestroyFence(device, in_flight, nullptr);
-			if (image_available)  vkDestroySemaphore(device, image_available, nullptr);
-			if (render_finished)  vkDestroySemaphore(device, render_finished, nullptr);
-
-			if (command_pool)	  vkDestroyCommandPool(device, command_pool, nullptr);
-		}
-
-		FrameResult draw_frame();
-	};
-
-	// ----- Renderer2d forwarding -----------------------------------------------
-
-	Renderer2d::Renderer2d(const VulkanContext& ctx, const Swapchain& swapchain)
-		: p_(std::make_unique<Impl>(ctx, swapchain)) {
-	}
-
-	Renderer2d::~Renderer2d() = default;
-
-	Renderer2d::Renderer2d(Renderer2d&&) noexcept = default;
-	Renderer2d& Renderer2d::operator=(Renderer2d&&) noexcept = default;
-
-	FrameResult Renderer2d::draw_frame() {
-		if (!p_) {
-			return FrameResult::Error;
-		}
-		return p_->draw_frame();
-	}
-
-	// ----- Renderer2d::Impl -------------------------------------------
-
-	FrameResult Renderer2d::Impl::draw_frame() {
-		// Basic sanity check: if any of the core pieces are missing, bail out.
-		// In normal usage this shouldn't happen, but it makes the function robust
-		// against partially constructed / torn-down state.
-		if (!device || !cmd || !ctx || !swapchain->valid() || !pipeline.valid()) {
-			return FrameResult::Error;
-		}
-
-		using u64 = std::uint64_t;
-		constexpr u64 kTimeout = std::numeric_limits<u64>::max();
-
-		// ---------------------------------------------------------------------
-		// 1) Wait for GPU to finish the previous frame
-		// ---------------------------------------------------------------------
-		//
-		// The fence 'in_flight' is signaled by vkQueueSubmit at the end of this
-		// function. Waiting on it here guarantees:
-		//   - the command buffer is no longer in use by the GPU
-		//   - the swapchain image we used last frame is considered done
-		//
-		// After the wait, we reset the fence back to the "unsignaled" state so
-		// it can be used again for the next vkQueueSubmit.
-		VkResult waitRes{ vkWaitForFences(device, 1, &in_flight, VK_TRUE, kTimeout) };
-		if (waitRes != VK_SUCCESS) {
-			// VK_TIMEOUT shouldn't happen with "infinite" timeout, but be defensive.
-			std::println(stderr, "vkWaitForFences failed: {}", static_cast<int>(waitRes));
-			return FrameResult::Error;
-		}
-		vkResetFences(device, 1, &in_flight);
-
-		// ---------------------------------------------------------------------
-		// 2) Acquire next image from the swapchain
-		// ---------------------------------------------------------------------
-		//
-		// vkAcquireNextImageKHR:
-		//   - picks which swapchain image we should render into this frame
-		//   - signals 'image_available' when that image is ready for use
-		//
-		// We don't use a fence here; we rely on the semaphore for GPU-GPU sync.
-		uint32_t image_index = 0;
-		VkResult acquire_result = vkAcquireNextImageKHR(
-			device,
-			swapchain->handle(),   // VkSwapchainKHR
-			kTimeout,              // timeout (ns)
-			image_available,       // signaled when the image is ready
-			VK_NULL_HANDLE,        // optional fence (unused here)
-			&image_index           // out: which image index to render to
-		);
-
-		if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
-			// Window was resized or surface became incompatible with the swapchain.
-			return FrameResult::SwapchainOutOfDate;
-		}
-		if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
-			std::println(stderr, "vkAcquireNextImageKHR failed: {}",
-				static_cast<int>(acquire_result));
-			return FrameResult::Error;
-		}
-
-		// ---------------------------------------------------------------------
-		// 3) Reset and begin command buffer recording
-		// ---------------------------------------------------------------------
-		//
-		// For simplicity we record a fresh command buffer every frame.
-		vkResetCommandBuffer(cmd, 0);
-
-		VkCommandBufferBeginInfo begin{};
-		begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		begin.flags = 0; // could be VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-
-		if (vkBeginCommandBuffer(cmd, &begin) != VK_SUCCESS) {
-			std::println(stderr, "vkBeginCommandBuffer failed");
-			return FrameResult::Error;
-		}
-
-		// Pull out swapchain image/view/extent for the image we just acquired.
-		auto    images = swapchain->images();
-		auto    views = swapchain->image_views();
-		Extent2d extent = swapchain->extent();
-
-		VkImage     image = images[image_index];
-		VkImageView view = views[image_index];
-
-		// ---------------------------------------------------------------------
-		// 4) Transition image from UNDEFINED/PRESENT to COLOR_ATTACHMENT_OPTIMAL
-		// ---------------------------------------------------------------------
-		//
-		// We want to use the image as a color attachment. That requires:
-		//   - transitioning its layout to VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-		//   - making sure writes to the color attachment are properly synchronized
-		//
-		// Because we're going to CLEAR the image (and don't care about old
-		// contents), we can safely pretend the old layout is UNDEFINED here.
-		//
-		// Layouts  = *roles* of an image
-		// Barriers = *safe switches* between roles
-		//
-		// These are the GPU's contract
-		// They prevent: tearing, undefined pixels, partially rendered frames, etc..
-		VkImageMemoryBarrier pre{};
-		pre.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		pre.srcAccessMask = 0;									  // nothing to wait on before this (top-of-pipe)
-		pre.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		pre.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;				  // previous contents discarded
-		pre.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		pre.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		pre.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		pre.image = image;
-		pre.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		pre.subresourceRange.baseMipLevel = 0;
-		pre.subresourceRange.levelCount = 1;
-		pre.subresourceRange.baseArrayLayer = 0;
-		pre.subresourceRange.layerCount = 1;
-
-		vkCmdPipelineBarrier(
-			cmd,
-			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,             // before: nothing is running yet
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // after: color attachment writes
-			0,
-			0, nullptr,
-			0, nullptr,
-			1, &pre
-		);
-
-		// ---------------------------------------------------------------------
-		// 5) Begin dynamic rendering with a single color attachment
-		// ---------------------------------------------------------------------
-		//
-		// Dynamic rendering replaces the classic "render pass + framebuffer" setup.
-		// Here we say:
-		//   - which image view we render into
-		//   - what layout it is in
-		//   - how to load/store it
-		//   - what region (renderArea) we care about
-		//
-		// This frame just clears to a solid "debug" color, but the same rendering
-		// region would be used for actual draw calls later.
-		VkClearValue clear{};
-		clear.color = { { 0.6f, 0.4f, 0.8f, 1.0f } }; // soft light purple
-
-		VkRenderingAttachmentInfo color_attach{};
-		color_attach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-		color_attach.imageView = view;                                       // target image view
-		color_attach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		color_attach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;                   // clear at start
-		color_attach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;                 // keep result for present
-		color_attach.clearValue = clear;                                     // clear color
-		color_attach.resolveMode = VK_RESOLVE_MODE_NONE;                     // no MSAA resolve
-		color_attach.resolveImageView = VK_NULL_HANDLE;
-		color_attach.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-		VkRenderingInfo render_info{};
-		render_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-		render_info.renderArea.offset = { 0, 0 };
-		render_info.renderArea.extent = VkExtent2D{
-			static_cast<uint32_t>(extent.width),
-			static_cast<uint32_t>(extent.height)
-		};
-		render_info.layerCount = 1;
-		render_info.colorAttachmentCount = 1;
-		render_info.pColorAttachments = &color_attach;
-		render_info.pDepthAttachment = nullptr;
-		render_info.pStencilAttachment = nullptr;
-
-		// "Start" dynamic rendering. From here until vkCmdEndRendering, any
-		// draw calls that write to color attachments will target 'color_attach'.
-		vkCmdBeginRendering(cmd, &render_info);
-
-		// Bind our graphics pipeline
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
-
-		// Set viewport & scissor dynamically to match the current extent
-		VkViewport viewport{};
-		viewport.x = 0.0f;
-		viewport.y = 0.0f;
-		viewport.width = static_cast<float>(extent.width);
-		viewport.height = static_cast<float>(extent.height);
-		viewport.minDepth = 0.0f;
-		viewport.maxDepth = 1.0f;
-
-		VkRect2D scissor{};
-		scissor.offset = { 0, 0 };
-		scissor.extent = VkExtent2D{
-			static_cast<uint32_t>(extent.width),
-			static_cast<uint32_t>(extent.height)
-		};
-
-		vkCmdSetViewport(cmd, 0, 1, &viewport);
-		vkCmdSetScissor(cmd, 0, 1, &scissor);
-		// Fullscreen triangle: 3 vertices, 1 instance, firstVertex = 0, firstInstance = 0
-		vkCmdDraw(cmd, 3, 1, 0, 0);
-
-		// TODO: later:
-		//   - bind descriptor sets / vertex buffers
-
-		vkCmdEndRendering(cmd);
-
-		// ---------------------------------------------------------------------
-		// 6) Transition image to PRESENT_SRC_KHR for presentation
-		// ---------------------------------------------------------------------
-		//
-		// After rendering, the image is in COLOR_ATTACHMENT_OPTIMAL. The present
-		// engine expects PRESENT_SRC_KHR. This barrier makes that transition and
-		// ensures all color writes are finished before presentation.
-		VkImageMemoryBarrier post{};
-		post.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-		post.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; // finish all color writes
-		post.dstAccessMask = 0;                                    // presentation doesn't need a memory access mask
-		post.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		post.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-		post.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		post.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		post.image = image;
-		post.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		post.subresourceRange.baseMipLevel = 0;
-		post.subresourceRange.levelCount = 1;
-		post.subresourceRange.baseArrayLayer = 0;
-		post.subresourceRange.layerCount = 1;
-
-		vkCmdPipelineBarrier(
-			cmd,
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // after color output
-			VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,          // before "end of pipe"
-			0,
-			0, nullptr,
-			0, nullptr,
-			1, &post
-		);
-
-		// ---------------------------------------------------------------------
-		// 7) End command buffer recording
-		// ---------------------------------------------------------------------
-		if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
-			std::println(stderr, "vkEndCommandBuffer failed");
-			return FrameResult::Error;
-		}
-
-		// ---------------------------------------------------------------------
-		// 8) Submit to the graphics queue
-		// ---------------------------------------------------------------------
-		//
-		// We submit:
-		//   - wait on 'image_available' so we don't render before the image is ready
-		//   - execute our command buffer
-		//   - signal 'render_finished' when rendering is complete
-		//   - associate the submission with 'in_flight' fence so the CPU can wait
-		VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-		VkSubmitInfo submit{};
-		submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submit.waitSemaphoreCount = 1;
-		submit.pWaitSemaphores = &image_available;
-		submit.pWaitDstStageMask = &wait_stage;
-		submit.commandBufferCount = 1;
-		submit.pCommandBuffers = &cmd;
-		submit.signalSemaphoreCount = 1;
-		submit.pSignalSemaphores = &render_finished;
-
-		if (vkQueueSubmit(ctx->graphics_queue(), 1, &submit, in_flight) != VK_SUCCESS) {
-			std::println(stderr, "vkQueueSubmit failed");
-			return FrameResult::Error;
-		}
-
-		// ---------------------------------------------------------------------
-		// 9) Present the rendered image to the surface
-		// ---------------------------------------------------------------------
-		//
-		// Presentation waits on 'render_finished' so the present engine doesn't
-		// read from the image until rendering is complete.
-		VkSwapchainKHR sw = swapchain->handle();
-
-		VkPresentInfoKHR present{};
-		present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-		present.waitSemaphoreCount = 1;
-		present.pWaitSemaphores = &render_finished;
-		present.swapchainCount = 1;
-		present.pSwapchains = &sw;
-		present.pImageIndices = &image_index;
-		present.pResults = nullptr; // per-swapchain results (optional)
-
-		VkResult pres = vkQueuePresentKHR(ctx->present_queue(), &present);
-		if (pres == VK_ERROR_OUT_OF_DATE_KHR || pres == VK_SUBOPTIMAL_KHR) {
-			// The swapchain is no longer optimal/valid for this surface.
-			return FrameResult::SwapchainOutOfDate;
-		}
-		else if (pres != VK_SUCCESS) {
-			std::println(stderr, "vkQueuePresentKHR failed: {}", static_cast<int>(pres));
-			return FrameResult::Error;
-		}
-		return FrameResult::Ok;
-	}
-
-	FrameResult draw_frame_and_handle_resize(const VulkanContext& ctx, Swapchain& swapchain, Renderer2d& renderer, Extent2d framebuffer_size) {
-		// 0) If window is minimized (0x0), don't do *any* Vulkan work.
-		//    This avoids swapchain creation with invalid extents and keeps things sane.
-		if (framebuffer_size.width == 0 || framebuffer_size.height == 0) {
-			return FrameResult::Ok; // "nothing to do this frame"
-		}
-
-		// 1) Draw one frame.
-		FrameResult result{ renderer.draw_frame() };
-		if (result == FrameResult::Ok) {
-			return FrameResult::Ok;
-		}
-		if (result == FrameResult::Error) {
-			return FrameResult::Error;
-		}
-
-		// -----------------------------------------------------------------
-		// 2) Swapchain is out of date – handle resize / mode change.
-		// -----------------------------------------------------------------
-		// At this point result == FrameResult::SwapchainOutOfDate.
-
-		// Make sure GPU is idle before we tear down / replace swapchain.
-		vkDeviceWaitIdle(ctx.device());
-
-		// Recreate swapchain for the current framebuffer size.
-		// Use old swapchain handle so WSI knows we’re replacing it.
-		VkSwapchainKHR old_handle{ swapchain.handle() };
-
-		Swapchain new_swapchain{ Swapchain::create(ctx, framebuffer_size, old_handle) };
-
-		if (!new_swapchain.valid()) {
-			std::println(stderr,
-				"draw_frame_and_handle_resize: swapchain recreation failed; will retry");
-			// Old swapchain is still valid; we just skip this frame.
-			return FrameResult::Ok;
-		}
-
-		// Move-assign: RAII destroys the old VkSwapchainKHR, image views, etc.
-		swapchain = std::move(new_swapchain);
-
-		// Recreate renderer so its internal pointers refer to the new swapchain.
-		renderer = Renderer2d{ ctx, swapchain };
-
-		// We didn’t present anything this frame, but we recovered.
-		return FrameResult::Ok;
-	}
+    struct Renderer2d::Impl {
+        const VulkanContext* ctx{ nullptr };   // non-owning
+        const Swapchain* swapchain{ nullptr }; // non-owning
+
+        VkDevice        device{ VK_NULL_HANDLE };           // non-owning
+        VkCommandPool   command_pool{ VK_NULL_HANDLE };     // owning
+        VkCommandBuffer cmd{ VK_NULL_HANDLE };              // owning
+
+        VkSemaphore image_available{ VK_NULL_HANDLE };      // owning
+        VkSemaphore render_finished{ VK_NULL_HANDLE };      // owning
+        VkFence     in_flight{ VK_NULL_HANDLE };            // owning
+
+        vk::BasicPipeline pipeline{};               // owning
+
+        Impl(const VulkanContext& context, const Swapchain& swapchain)
+            : ctx(&context)
+            , swapchain(&swapchain)
+            , device(context.device()) {
+
+            // VkCommandBuffer
+            //   - A recorded list of GPU commands (draws, clears, pipeline binds, etc.).
+            //
+            // VkCommandPool
+            //   - Allocates and manages the memory backing VkCommandBuffer objects.
+            //   - Typically created per-thread (command buffers from a pool must be used
+            //     from the same thread that owns the pool).
+            //
+            // Conceptually:
+            //   VkCommandPool (per-thread bucket of command memory)
+            //     ├── VkCommandBuffer A (records commands)
+            //     ├── VkCommandBuffer B (records commands)
+            //     └── VkCommandBuffer C (records commands)
+
+            // --- Command pool ---
+            VkCommandPoolCreateInfo pool_ci{};
+            pool_ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            pool_ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+            pool_ci.queueFamilyIndex = ctx->graphics_family_index();
+
+            if (vkCreateCommandPool(device, &pool_ci, nullptr, &command_pool) != VK_SUCCESS) {
+                std::println(stderr, "Renderer2d: failed to create command pool");
+                command_pool = VK_NULL_HANDLE;
+                return;
+            }
+
+            // --- Command buffer ---
+            VkCommandBufferAllocateInfo alloc{};
+            alloc.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            alloc.commandPool = command_pool;
+            alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            alloc.commandBufferCount = 1;
+
+            if (vkAllocateCommandBuffers(device, &alloc, &cmd) != VK_SUCCESS) {
+                std::println(stderr, "Renderer2d: failed to allocate command buffer");
+                cmd = VK_NULL_HANDLE;
+                // we keep going; destructor will handle what was created
+            }
+
+            // --- Graphics pipeline (fullscreen triangle via dynamic rendering) ---
+            VkFormat color_format = static_cast<VkFormat>(swapchain.color_format_bits());
+            VkExtent2D vk_extent{
+                static_cast<uint32_t>(swapchain.extent().width),
+                static_cast<uint32_t>(swapchain.extent().height)
+            };
+
+            pipeline = vk::create_basic_pipeline(device, color_format, vk_extent);
+            if (!pipeline.valid()) {
+                std::println(stderr, "Renderer2d: failed to create fullscreen pipeline");
+            }
+
+            // --- Synchronization objects ---
+            //
+            // VkSemaphore
+            //   - GPU → GPU synchronization.
+            //   - Used to order GPU operations across queues.
+            //   - The CPU does NOT wait on semaphores.
+            //   - Typical usage in a frame:
+            //       • image_available:  GPU waits until the swapchain image is ready.
+            //       • render_finished:  GPU waits until drawing is done before presenting.
+            //
+            //   Conceptually: "Don't start this GPU work until that GPU work is finished."
+            //
+            // VkFence
+            //   - GPU → CPU synchronization.
+            //   - The CPU *waits* on a fence (vkWaitForFences) to know when the GPU is done.
+            //   - We use this so we can safely reuse command buffers each frame.
+            //
+            //   Conceptually: "CPU, don't continue until the GPU raises this completion flag."
+            //
+            // Summary:
+            //   Semaphore → GPU waits
+            //   Fence     → CPU waits
+
+            VkSemaphoreCreateInfo sem_info{};
+            sem_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+            VkFenceCreateInfo fence_info{};
+            fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+            fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT; // start signaled
+
+            if (vkCreateSemaphore(device, &sem_info, nullptr, &image_available) != VK_SUCCESS ||
+                vkCreateSemaphore(device, &sem_info, nullptr, &render_finished) != VK_SUCCESS ||
+                vkCreateFence(device, &fence_info, nullptr, &in_flight) != VK_SUCCESS) {
+                std::println(stderr, "Renderer2d: failed to create sync objects");
+                // In a robust engine, we would handle partial failure more carefully.
+            }
+        }
+
+        ~Impl() {
+            if (!device) return;
+
+            if (in_flight)        vkDestroyFence(device, in_flight, nullptr);
+            if (image_available)  vkDestroySemaphore(device, image_available, nullptr);
+            if (render_finished)  vkDestroySemaphore(device, render_finished, nullptr);
+
+            if (command_pool)     vkDestroyCommandPool(device, command_pool, nullptr);
+        }
+
+        FrameResult draw_frame();
+    };
+
+    // ----- Renderer2d forwarding -----------------------------------------------
+
+    Renderer2d::Renderer2d(const VulkanContext& ctx, const Swapchain& swapchain)
+        : p_(std::make_unique<Impl>(ctx, swapchain)) {
+    }
+
+    Renderer2d::~Renderer2d() = default;
+
+    Renderer2d::Renderer2d(Renderer2d&&) noexcept = default;
+    Renderer2d& Renderer2d::operator=(Renderer2d&&) noexcept = default;
+
+    FrameResult Renderer2d::draw_frame() {
+        if (!p_) {
+            return FrameResult::Error;
+        }
+        return p_->draw_frame();
+    }
+
+    // ----- Renderer2d::Impl -------------------------------------------
+
+    FrameResult Renderer2d::Impl::draw_frame() {
+        // Basic sanity check: if any of the core pieces are missing, bail out.
+        // In normal usage this shouldn't happen, but it makes the function robust
+        // against partially constructed / torn-down state.
+        if (!device || !cmd || !ctx || !swapchain->valid() || !pipeline.valid()) {
+            return FrameResult::Error;
+        }
+
+        using u64 = std::uint64_t;
+        constexpr u64 kTimeout = std::numeric_limits<u64>::max();
+
+        // ---------------------------------------------------------------------
+        // 1) Wait for GPU to finish the previous frame
+        // ---------------------------------------------------------------------
+        //
+        // The fence 'in_flight' is signaled by vkQueueSubmit at the end of this
+        // function. Waiting on it here guarantees:
+        //   - the command buffer is no longer in use by the GPU
+        //   - the swapchain image we used last frame is considered done
+        //
+        // After the wait, we reset the fence back to the "unsignaled" state so
+        // it can be used again for the next vkQueueSubmit.
+        VkResult waitRes{ vkWaitForFences(device, 1, &in_flight, VK_TRUE, kTimeout) };
+        if (waitRes != VK_SUCCESS) {
+            // VK_TIMEOUT shouldn't happen with "infinite" timeout, but be defensive.
+            std::println(stderr, "vkWaitForFences failed: {}", static_cast<int>(waitRes));
+            return FrameResult::Error;
+        }
+        vkResetFences(device, 1, &in_flight);
+
+        // ---------------------------------------------------------------------
+        // 2) Acquire next image from the swapchain
+        // ---------------------------------------------------------------------
+        //
+        // vkAcquireNextImageKHR:
+        //   - picks which swapchain image we should render into this frame
+        //   - signals 'image_available' when that image is ready for use
+        //
+        // We don't use a fence here; we rely on the semaphore for GPU-GPU sync.
+        uint32_t image_index = 0;
+        VkResult acquire_result = vkAcquireNextImageKHR(
+            device,
+            swapchain->handle(),   // VkSwapchainKHR
+            kTimeout,              // timeout (ns)
+            image_available,       // signaled when the image is ready
+            VK_NULL_HANDLE,        // optional fence (unused here)
+            &image_index           // out: which image index to render to
+        );
+
+        if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
+            // Window was resized or surface became incompatible with the swapchain.
+            return FrameResult::SwapchainOutOfDate;
+        }
+        if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
+            std::println(stderr, "vkAcquireNextImageKHR failed: {}",
+                static_cast<int>(acquire_result));
+            return FrameResult::Error;
+        }
+
+        // ---------------------------------------------------------------------
+        // 3) Reset and begin command buffer recording
+        // ---------------------------------------------------------------------
+        //
+        // For simplicity we record a fresh command buffer every frame.
+        vkResetCommandBuffer(cmd, 0);
+
+        VkCommandBufferBeginInfo begin{};
+        begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin.flags = 0; // could be VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+
+        if (vkBeginCommandBuffer(cmd, &begin) != VK_SUCCESS) {
+            std::println(stderr, "vkBeginCommandBuffer failed");
+            return FrameResult::Error;
+        }
+
+        // Pull out swapchain image/view/extent for the image we just acquired.
+        auto    images = swapchain->images();
+        auto    views = swapchain->image_views();
+        Extent2d extent = swapchain->extent();
+
+        VkImage     image = images[image_index];
+        VkImageView view = views[image_index];
+
+        // ---------------------------------------------------------------------
+        // 4) Transition image from UNDEFINED/PRESENT to COLOR_ATTACHMENT_OPTIMAL
+        // ---------------------------------------------------------------------
+        //
+        // We want to use the image as a color attachment. That requires:
+        //   - transitioning its layout to VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+        //   - making sure writes to the color attachment are properly synchronized
+        //
+        // Because we're going to CLEAR the image (and don't care about old
+        // contents), we can safely pretend the old layout is UNDEFINED here.
+        //
+        // Layouts  = *roles* of an image
+        // Barriers = *safe switches* between roles
+        //
+        // These are the GPU's contract
+        // They prevent: tearing, undefined pixels, partially rendered frames, etc..
+        VkImageMemoryBarrier pre{};
+        pre.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        pre.srcAccessMask = 0;                                    // nothing to wait on before this (top-of-pipe)
+        pre.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        pre.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;                // previous contents discarded
+        pre.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        pre.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        pre.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        pre.image = image;
+        pre.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        pre.subresourceRange.baseMipLevel = 0;
+        pre.subresourceRange.levelCount = 1;
+        pre.subresourceRange.baseArrayLayer = 0;
+        pre.subresourceRange.layerCount = 1;
+
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,             // before: nothing is running yet
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // after: color attachment writes
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &pre
+        );
+
+        // ---------------------------------------------------------------------
+        // 5) Begin dynamic rendering with a single color attachment
+        // ---------------------------------------------------------------------
+        //
+        // Dynamic rendering replaces the classic "render pass + framebuffer" setup.
+        // Here we say:
+        //   - which image view we render into
+        //   - what layout it is in
+        //   - how to load/store it
+        //   - what region (renderArea) we care about
+        //
+        // This frame just clears to a solid "debug" color, but the same rendering
+        // region would be used for actual draw calls later.
+        VkClearValue clear{};
+        clear.color = { { 0.6f, 0.4f, 0.8f, 1.0f } }; // soft light purple
+
+        VkRenderingAttachmentInfo color_attach{};
+        color_attach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        color_attach.imageView = view;                                       // target image view
+        color_attach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        color_attach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;                   // clear at start
+        color_attach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;                 // keep result for present
+        color_attach.clearValue = clear;                                     // clear color
+        color_attach.resolveMode = VK_RESOLVE_MODE_NONE;                     // no MSAA resolve
+        color_attach.resolveImageView = VK_NULL_HANDLE;
+        color_attach.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        VkRenderingInfo render_info{};
+        render_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+        render_info.renderArea.offset = { 0, 0 };
+        render_info.renderArea.extent = VkExtent2D{
+            static_cast<uint32_t>(extent.width),
+            static_cast<uint32_t>(extent.height)
+        };
+        render_info.layerCount = 1;
+        render_info.colorAttachmentCount = 1;
+        render_info.pColorAttachments = &color_attach;
+        render_info.pDepthAttachment = nullptr;
+        render_info.pStencilAttachment = nullptr;
+
+        // "Start" dynamic rendering. From here until vkCmdEndRendering, any
+        // draw calls that write to color attachments will target 'color_attach'.
+        vkCmdBeginRendering(cmd, &render_info);
+
+        // Bind our graphics pipeline
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
+
+        // Set viewport & scissor dynamically to match the current extent
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(extent.width);
+        viewport.height = static_cast<float>(extent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+
+        VkRect2D scissor{};
+        scissor.offset = { 0, 0 };
+        scissor.extent = VkExtent2D{
+            static_cast<uint32_t>(extent.width),
+            static_cast<uint32_t>(extent.height)
+        };
+
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
+        // Fullscreen triangle: 3 vertices, 1 instance, firstVertex = 0, firstInstance = 0
+        vkCmdDraw(cmd, 3, 1, 0, 0);
+
+        // TODO: later:
+        //   - bind descriptor sets / vertex buffers
+
+        vkCmdEndRendering(cmd);
+
+        // ---------------------------------------------------------------------
+        // 6) Transition image to PRESENT_SRC_KHR for presentation
+        // ---------------------------------------------------------------------
+        //
+        // After rendering, the image is in COLOR_ATTACHMENT_OPTIMAL. The present
+        // engine expects PRESENT_SRC_KHR. This barrier makes that transition and
+        // ensures all color writes are finished before presentation.
+        VkImageMemoryBarrier post{};
+        post.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        post.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; // finish all color writes
+        post.dstAccessMask = 0;                                    // presentation doesn't need a memory access mask
+        post.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        post.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        post.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        post.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        post.image = image;
+        post.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        post.subresourceRange.baseMipLevel = 0;
+        post.subresourceRange.levelCount = 1;
+        post.subresourceRange.baseArrayLayer = 0;
+        post.subresourceRange.layerCount = 1;
+
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // after color output
+            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,          // before "end of pipe"
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &post
+        );
+
+        // ---------------------------------------------------------------------
+        // 7) End command buffer recording
+        // ---------------------------------------------------------------------
+        if (vkEndCommandBuffer(cmd) != VK_SUCCESS) {
+            std::println(stderr, "vkEndCommandBuffer failed");
+            return FrameResult::Error;
+        }
+
+        // ---------------------------------------------------------------------
+        // 8) Submit to the graphics queue
+        // ---------------------------------------------------------------------
+        //
+        // We submit:
+        //   - wait on 'image_available' so we don't render before the image is ready
+        //   - execute our command buffer
+        //   - signal 'render_finished' when rendering is complete
+        //   - associate the submission with 'in_flight' fence so the CPU can wait
+        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+        VkSubmitInfo submit{};
+        submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit.waitSemaphoreCount = 1;
+        submit.pWaitSemaphores = &image_available;
+        submit.pWaitDstStageMask = &wait_stage;
+        submit.commandBufferCount = 1;
+        submit.pCommandBuffers = &cmd;
+        submit.signalSemaphoreCount = 1;
+        submit.pSignalSemaphores = &render_finished;
+
+        if (vkQueueSubmit(ctx->graphics_queue(), 1, &submit, in_flight) != VK_SUCCESS) {
+            std::println(stderr, "vkQueueSubmit failed");
+            return FrameResult::Error;
+        }
+
+        // ---------------------------------------------------------------------
+        // 9) Present the rendered image to the surface
+        // ---------------------------------------------------------------------
+        //
+        // Presentation waits on 'render_finished' so the present engine doesn't
+        // read from the image until rendering is complete.
+        VkSwapchainKHR sw = swapchain->handle();
+
+        VkPresentInfoKHR present{};
+        present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        present.waitSemaphoreCount = 1;
+        present.pWaitSemaphores = &render_finished;
+        present.swapchainCount = 1;
+        present.pSwapchains = &sw;
+        present.pImageIndices = &image_index;
+        present.pResults = nullptr; // per-swapchain results (optional)
+
+        VkResult pres = vkQueuePresentKHR(ctx->present_queue(), &present);
+        if (pres == VK_ERROR_OUT_OF_DATE_KHR || pres == VK_SUBOPTIMAL_KHR) {
+            // The swapchain is no longer optimal/valid for this surface.
+            return FrameResult::SwapchainOutOfDate;
+        }
+        else if (pres != VK_SUCCESS) {
+            std::println(stderr, "vkQueuePresentKHR failed: {}", static_cast<int>(pres));
+            return FrameResult::Error;
+        }
+        return FrameResult::Ok;
+    }
+
+    FrameResult draw_frame_and_handle_resize(const VulkanContext& ctx, Swapchain& swapchain, Renderer2d& renderer, Extent2d framebuffer_size) {
+        // 0) If window is minimized (0x0), don't do *any* Vulkan work.
+        //    This avoids swapchain creation with invalid extents and keeps things sane.
+        if (framebuffer_size.width == 0 || framebuffer_size.height == 0) {
+            return FrameResult::Ok; // "nothing to do this frame"
+        }
+
+        // 1) Draw one frame.
+        FrameResult result{ renderer.draw_frame() };
+        if (result == FrameResult::Ok) {
+            return FrameResult::Ok;
+        }
+        if (result == FrameResult::Error) {
+            return FrameResult::Error;
+        }
+
+        // -----------------------------------------------------------------
+        // 2) Swapchain is out of date – handle resize / mode change.
+        // -----------------------------------------------------------------
+        // At this point result == FrameResult::SwapchainOutOfDate.
+
+        // Make sure GPU is idle before we tear down / replace swapchain.
+        vkDeviceWaitIdle(ctx.device());
+
+        // Recreate swapchain for the current framebuffer size.
+        // Use old swapchain handle so WSI knows we’re replacing it.
+        VkSwapchainKHR old_handle{ swapchain.handle() };
+
+        Swapchain new_swapchain{ Swapchain::create(ctx, framebuffer_size, old_handle) };
+
+        if (!new_swapchain.valid()) {
+            std::println(stderr,
+                "draw_frame_and_handle_resize: swapchain recreation failed; will retry");
+            // Old swapchain is still valid; we just skip this frame.
+            return FrameResult::Ok;
+        }
+
+        // Move-assign: RAII destroys the old VkSwapchainKHR, image views, etc.
+        swapchain = std::move(new_swapchain);
+
+        // Recreate renderer so its internal pointers refer to the new swapchain.
+        renderer = Renderer2d{ ctx, swapchain };
+
+        // We didn’t present anything this frame, but we recovered.
+        return FrameResult::Ok;
+    }
 } // namespace strata::gfx

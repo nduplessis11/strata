@@ -41,14 +41,14 @@ using VkInstance = VkInstance_T*;
 using VkSurfaceKHR = VkSurfaceKHR_T*;
 
 namespace strata::gfx::vk {
-	// A lightweight, read-only, non-owning view of a list of extension names.
-	using ExtensionName = std::string_view;
+    // A lightweight, read-only, non-owning view of a list of extension names.
+    using ExtensionName = std::string_view;
 
-	// Returns the minimal set of instance extensions required for this WSI
-	// e.g., { "VK_KHR_surface", "VK_KHR_win32_surface" } on Win32.
-	auto required_instance_extensions(const strata::platform::WsiHandle& wsi) -> std::span<const ExtensionName>;
+    // Returns the minimal set of instance extensions required for this WSI
+    // e.g., { "VK_KHR_surface", "VK_KHR_win32_surface" } on Win32.
+    auto required_instance_extensions(const strata::platform::WsiHandle& wsi) -> std::span<const ExtensionName>;
 
-	// Create a VkSurfaceKHR for the given WSI. Returns VK_NULL_HANDLE on failure.
-	// Implemented per-platform in separate .cc files.
-	auto create_surface(VkInstance instance, const strata::platform::WsiHandle& wsi) -> VkSurfaceKHR;
+    // Create a VkSurfaceKHR for the given WSI. Returns VK_NULL_HANDLE on failure.
+    // Implemented per-platform in separate .cc files.
+    auto create_surface(VkInstance instance, const strata::platform::WsiHandle& wsi) -> VkSurfaceKHR;
 } // namespace strata::gfx::vk
