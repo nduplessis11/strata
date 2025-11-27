@@ -30,7 +30,7 @@ struct VkExtent2D;  // matches Vulkan's "struct VkExtent2D { ... }"
 #  pragma warning(push)
 #  pragma warning(disable : 4471) // forward declaration of unscoped enum must have an underlying type
 #endif
-enum VkFormat : int; // Vulkan defines: "typedef enum VkFormat { ... } VkFormat;"
+enum VkFormat; // Vulkan defines: "typedef enum VkFormat { ... } VkFormat;"
 #ifdef _MSC_VER
 #  pragma warning(pop)
 #endif
