@@ -1,4 +1,4 @@
-// engine/gfx/include/strata/gfx/vulkan/vk_pipeline_basic.h
+// engine/gfx/src/backends/vulkan/vk_pipeline_basic.h
 #pragma once
 
 #include <vector>
