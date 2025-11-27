@@ -29,7 +29,7 @@ namespace strata::gfx {
         [[nodiscard]] FrameResult draw_frame();
 
     private:
-        GraphicsDevice* device_{ nullptr };    // non-owning
+        GraphicsDevice* device_{ nullptr };       // non-owning
         GraphicsSwapchain* swapchain_{ nullptr }; // non-owning
         std::unique_ptr<GraphicsPipeline> pipeline_{};
     };
