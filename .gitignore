@@ -25,6 +25,7 @@ x64/
 x86/
 [Ww][Ii][Nn]32/
 !platform/src/win32/
+!platform/win32/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 bld/
