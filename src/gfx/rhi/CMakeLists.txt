@@ -3,6 +3,12 @@ add_library(strata_rhi STATIC
     gpu_device.h gpu_device.cpp
 )
 
+# Vulkan headers are needed to build the Vulkan-backed factory in gpu_device.cpp.
+find_package(Vulkan QUIET)
+if (Vulkan_FOUND)
+    target_include_directories(strata_rhi PRIVATE ${Vulkan_INCLUDE_DIRS})
+endif()
+
 target_include_directories(strata_rhi
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}

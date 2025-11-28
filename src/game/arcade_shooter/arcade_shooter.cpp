@@ -42,7 +42,7 @@ int main() {
         window.poll_events();
 
         auto [fw, fh] = window.framebuffer_size();
-        rhi::Extent2D fb_size{
+        Extent2D fb_size{
             static_cast<std::uint32_t>(fw),
             static_cast<std::uint32_t>(fh)
         };
