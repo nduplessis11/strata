@@ -1,0 +1,5 @@
+add_subdirectory(platform)
+add_subdirectory(gfx/rhi)
+add_subdirectory(gfx/backend/vk)
+add_subdirectory(gfx/renderer)
+add_subdirectory(game/arcade_shooter)

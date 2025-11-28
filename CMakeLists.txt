@@ -36,3 +36,9 @@ add_subdirectory(engine/platform)
 add_subdirectory(engine/gfx)
 add_subdirectory(engine/core)
 add_subdirectory(games/arcade_shooter)
+
+option(STRATA_ENABLE_NEW_STACK "Build the experimental RHI/renderer layout" ON)
+
+if (STRATA_ENABLE_NEW_STACK)
+  add_subdirectory(src)
+endif()
