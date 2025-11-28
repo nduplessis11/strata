@@ -9,5 +9,9 @@ add_library(strata_platform_new STATIC
     wayland/window_wayland.cpp
 )
 
-target_include_directories(strata_platform_new PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(strata_platform_new
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/src
+)
 target_link_libraries(strata_platform_new PUBLIC engine_options)

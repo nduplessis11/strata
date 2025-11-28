@@ -14,7 +14,11 @@ add_library(strata_rhi_vk STATIC
     vk_pipeline_basic.h vk_pipeline_basic.cpp
 )
 
-target_include_directories(strata_rhi_vk PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(strata_rhi_vk
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/src
+)
 
 target_link_libraries(strata_rhi_vk
     PUBLIC

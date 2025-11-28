@@ -7,6 +7,11 @@ add_executable(strata_arcade_shooter
     arcade_shooter.cpp
 )
 
+target_include_directories(strata_arcade_shooter
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+)
+
 target_link_libraries(strata_arcade_shooter
     PRIVATE
         strata_platform_new
