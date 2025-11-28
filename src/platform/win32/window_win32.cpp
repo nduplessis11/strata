@@ -4,6 +4,7 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <string>
 
 #include "platform/wsi_handle.h"
@@ -79,9 +80,33 @@ namespace strata::platform {
                 PAINTSTRUCT ps{};
                 HDC dc{ ::BeginPaint(h, &ps) };
                 if (!clear_brush) {
-                    clear_brush = ::CreateSolidBrush(RGB(32, 32, 32));
+                    clear_brush = ::CreateSolidBrush(RGB(16, 16, 16));
                 }
-                ::FillRect(dc, &ps.rcPaint, clear_brush);
+
+                RECT client{};
+                ::GetClientRect(h, &client);
+                ::FillRect(dc, &client, clear_brush);
+
+                POINT tri[3];
+                const int w = client.right - client.left;
+                const int h_px = client.bottom - client.top;
+                const int cx = w / 2;
+                const int cy = h_px / 2;
+                const int half = static_cast<int>(0.35f * std::min(w, h_px));
+
+                tri[0] = POINT{ cx, cy - half };
+                tri[1] = POINT{ cx - half, cy + half };
+                tri[2] = POINT{ cx + half, cy + half };
+
+                HBRUSH tri_brush = ::CreateSolidBrush(RGB(229, 115, 57));
+                HPEN pen = ::CreatePen(PS_SOLID, 2, RGB(255, 196, 143));
+                HGDIOBJ old_brush = ::SelectObject(dc, tri_brush);
+                HGDIOBJ old_pen = ::SelectObject(dc, pen);
+                ::Polygon(dc, tri, 3);
+                ::SelectObject(dc, old_brush);
+                ::SelectObject(dc, old_pen);
+                ::DeleteObject(tri_brush);
+                ::DeleteObject(pen);
                 ::EndPaint(h, &ps);
                 return 0;
             }
