@@ -4,4 +4,4 @@ add_library(strata_rhi STATIC
 )
 
 target_include_directories(strata_rhi PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(strata_rhi PUBLIC engine_options strata_platform)
+target_link_libraries(strata_rhi PUBLIC engine_options strata_platform_new)

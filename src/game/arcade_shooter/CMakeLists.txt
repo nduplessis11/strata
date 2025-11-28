@@ -9,7 +9,7 @@ add_executable(strata_arcade_shooter
 
 target_link_libraries(strata_arcade_shooter
     PRIVATE
-        strata_platform
+        strata_platform_new
         strata_rhi
         strata_rhi_vk
         strata_renderer
