@@ -9,7 +9,7 @@
 
 #include "strata/gfx/renderer/render_2d.h"
 
-#include <utility> // for std::move if you ever need it
+#include <utility> // for std::move if we ever need it
 
 namespace strata::gfx::renderer {
 
@@ -25,7 +25,7 @@ namespace strata::gfx::renderer {
         , pipeline_{} {
 
         // Simple pipeline description: fullscreen triangle, flat color.
-        // You can evolve this later into a proper material/shader system.
+        // We can evolve this later into a proper material/shader system.
         PipelineDesc desc{};
         desc.vertex_shader_path = "shaders/fullscreen_triangle.vert.spv";
         desc.fragment_shader_path = "shaders/flat_color.frag.spv";
@@ -77,7 +77,7 @@ namespace strata::gfx::renderer {
         }
 
         // For now the device owns all low-level command recording.
-        // This is essentially the same contract as your current GraphicsDevice::
+        // This is essentially the same contract as our current GraphicsDevice::
         // draw_frame(swapchain, pipeline).
         return device_->draw_frame(swapchain_, pipeline_);
     }
