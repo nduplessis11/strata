@@ -11,9 +11,10 @@ add_library(strata_gfx_renderer STATIC
 target_include_directories(strata_gfx_renderer
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}   # expose renderer headers to the engine
+        ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
 
-# Renderer depends on platform + RHI, but RHI is PRIVATE so its includes don’t leak.
+# Renderer depends on platform + RHI, but RHI is PRIVATE so its includes donï¿½t leak.
 target_link_libraries(strata_gfx_renderer
     PUBLIC
         engine_options

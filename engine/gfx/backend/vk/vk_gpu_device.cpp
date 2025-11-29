@@ -1,6 +1,6 @@
 // engine/gfx/backend/vk/vk_gpu_device.cpp
 
-#include "gfx/rhi/gpu_device.h"
+#include "strata/gfx/rhi/gpu_device.h"
 #include "vk_gpu_device.h"
 
 namespace strata::gfx::rhi {

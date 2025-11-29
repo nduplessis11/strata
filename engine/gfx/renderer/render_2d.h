@@ -2,7 +2,7 @@
 #pragma once
 
 #include <memory>
-#include "gfx/rhi/gpu_device.h"
+#include "strata/gfx/rhi/gpu_device.h"
 
 namespace strata::gfx::renderer {
 

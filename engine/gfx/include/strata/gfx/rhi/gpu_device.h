@@ -4,7 +4,7 @@
 #include <memory>
 #include <span>
 
-#include "gpu_types.h"
+#include "strata/gfx/rhi/gpu_types.h"
 #include "strata/platform/wsi_handle.h"   // for surface creation
 
 namespace strata::gfx::rhi {

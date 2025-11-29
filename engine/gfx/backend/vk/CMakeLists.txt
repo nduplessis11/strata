@@ -15,8 +15,9 @@ add_library(strata_gfx_backend_vk STATIC
 )
 
 target_include_directories(strata_gfx_backend_vk
-    PRIVATE
+    PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../include
 )
 
 target_link_libraries(strata_gfx_backend_vk
