@@ -3,7 +3,6 @@
 add_library(strata_gfx_rhi STATIC
     gpu_types.h
     gpu_device.h
-    gpu_device.cpp
 )
 
 # This directory contains the headers (no "include/" nesting here for simplicity).

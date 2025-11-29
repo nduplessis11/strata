@@ -7,7 +7,7 @@
 //   device for swapchain recreation on resize.
 // -----------------------------------------------------------------------------
 
-#include "strata/gfx/renderer/render_2d.h"
+#include "render_2d.h"
 
 #include <utility> // for std::move if we ever need it
 
