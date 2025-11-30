@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// engine/gfx/src/renderer/render_2d.cpp
+// engine/gfx/renderer/render_2d.cpp
 //
 // Purpose:
 //   Implements the Render2D frontend on top of the RHI IGpuDevice interface.
@@ -31,7 +31,7 @@ namespace strata::gfx::renderer {
         desc.fragment_shader_path = "shaders/flat_color.frag.spv";
         desc.alpha_blend = false;
 
-        pipeline_ = device_->create_pipeline(desc, swapchain_);
+        pipeline_ = device_->create_pipeline(desc);
     }
 
     Render2D::~Render2D() {
@@ -79,7 +79,7 @@ namespace strata::gfx::renderer {
         // For now the device owns all low-level command recording.
         // This is essentially the same contract as our current GraphicsDevice::
         // draw_frame(swapchain, pipeline).
-        return device_->draw_frame(swapchain_, pipeline_);
+        return device_->present(swapchain_);
     }
 
     // -------------------------------------------------------------------------
@@ -105,25 +105,21 @@ namespace strata::gfx::renderer {
             return FrameResult::Error;
         }
 
-        // Any non-Ok, non-Error result is treated as "swapchain out of date".
-        // (Same pattern as your existing Renderer2d front-end.)
+        // Any non-Ok, non-Error result is treated as "swapchain needs resize".
         device.wait_idle();
 
         SwapchainDesc sc_desc{};
         sc_desc.size = framebuffer_size;
-        sc_desc.vsync = true; // or expose this as a parameter later
+        sc_desc.vsync = true; // or expose as parameter later
 
-        // Recreate swapchain, passing the old handle for possible reuse.
-        SwapchainHandle new_swapchain =
-            device.create_swapchain(sc_desc, swapchain);
-
-        if (!new_swapchain) {
-            // Failed to recreate; treat as non-fatal (no frame rendered).
+        // Resize existing swapchain in-place.
+        FrameResult resize_result = device.resize_swapchain(swapchain, sc_desc);
+        if (resize_result == FrameResult::Error) {
+            // Failed to resize; treat as non-fatal (no frame rendered).
             return FrameResult::Ok;
         }
 
-        // Swap in the new swapchain and rebuild the pipeline via a fresh Render2D.
-        swapchain = new_swapchain;
+        // Rebuild the pipeline via a fresh Render2D for the resized swapchain.
         renderer = Render2D{ device, swapchain };
 
         return FrameResult::Ok;

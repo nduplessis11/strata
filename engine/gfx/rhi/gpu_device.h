@@ -19,15 +19,12 @@ namespace strata::gfx::rhi {
         virtual ~IGpuDevice() = default;
 
         // --- Swapchain -----------------------------------------------------------
-        virtual SwapchainHandle create_swapchain(const SwapchainDesc& desc,
-            const strata::platform::WsiHandle& surface) = 0;
+        virtual SwapchainHandle create_swapchain(const SwapchainDesc& desc, const strata::platform::WsiHandle& surface) = 0;
         virtual FrameResult     present(SwapchainHandle swapchain) = 0;
-        virtual FrameResult     resize_swapchain(SwapchainHandle swapchain,
-            const SwapchainDesc& desc) = 0;
+        virtual FrameResult     resize_swapchain(SwapchainHandle swapchain,const SwapchainDesc& desc) = 0;
 
         // --- Buffers -------------------------------------------------------------
-        virtual BufferHandle create_buffer(const BufferDesc& desc,
-            std::span<const std::byte> initial_data = {}) = 0;
+        virtual BufferHandle create_buffer(const BufferDesc& desc, std::span<const std::byte> initial_data = {}) = 0;
         virtual void         destroy_buffer(BufferHandle handle) = 0;
 
         // --- Textures ------------------------------------------------------------
@@ -57,8 +54,6 @@ namespace strata::gfx::rhi {
         // Frames in flight, debugging flags, etc., can go here
     };
 
-    std::unique_ptr<IGpuDevice> create_device(
-        const DeviceCreateInfo& info,
-        const strata::platform::WsiHandle& surface);
+    std::unique_ptr<IGpuDevice> create_device(const DeviceCreateInfo& info, const strata::platform::WsiHandle& surface);
 
 } // namespace strata::gfx::rhi

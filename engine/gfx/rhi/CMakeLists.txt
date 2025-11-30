@@ -1,23 +1,19 @@
 # engine/gfx/rhi/CMakeLists.txt
 
-add_library(strata_gfx_rhi STATIC
-    gpu_types.h
-    gpu_device.h
-)
+# Header-only RHI: no .lib file, just usage requirements.
+add_library(strata_gfx_rhi INTERFACE)
 
-# This directory contains the headers (no "include/" nesting here for simplicity).
+# Expose the engine/ tree and this folder to any user of the RHI.
 target_include_directories(strata_gfx_rhi
-    PUBLIC
+    INTERFACE
+        ${CMAKE_SOURCE_DIR}/engine
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-# RHI depends on platform (for WsiHandle, Extent2d, etc.) and engine_options.
+# RHI depends on engine_options, platform, and backend.
 target_link_libraries(strata_gfx_rhi
-    PUBLIC
+    INTERFACE
         engine_options
         strata_platform
-    PRIVATE
-        strata_gfx_backend_vk   # backend is hidden behind the RHI
+        strata_gfx_backend_vk
 )
-
-enable_strict_warnings(strata_gfx_rhi)

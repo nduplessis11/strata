@@ -1,5 +1,5 @@
 ﻿// -----------------------------------------------------------------------------
-// engine/gfx/src/backends/vulkan/wsi_bridge_win32.cc
+// engine/gfx/backend/vk/vk_wsi_bridge_win32.cpp
 //
 // Purpose:
 //   Win32-specific implementation of the Vulkan WSI bridge. This file provides:

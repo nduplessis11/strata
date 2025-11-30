@@ -14,9 +14,12 @@ add_library(strata_gfx_backend_vk STATIC
     $<$<AND:$<PLATFORM_ID:Linux>,$<BOOL:${STRATA_USE_X11}>>:vk_wsi_bridge_x11.cpp>
 )
 
+# Headers use #include "gfx/rhi/gpu_device.h" and platform types.
 target_include_directories(strata_gfx_backend_vk
+    PUBLIC
+        ${CMAKE_SOURCE_DIR}/engine          # "gfx/rhi/..." from engine/gfx/rhi
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}         # vk_*.h in this directory
 )
 
 target_link_libraries(strata_gfx_backend_vk
@@ -40,7 +43,7 @@ elseif (UNIX AND NOT APPLE)
 endif()
 
 # Optional: shader compilation step, adapted from old strata_gfx target
-file(GLOB_RECURSE STRATA_GLSL "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.*")
+file(GLOB_RECURSE STRATA_GLSL "${CMAKE_CURRENT_SOURCE_DIR}/../../shaders/*.*")
 find_program(GLSLC glslc HINTS ENV VULKAN_SDK PATH_SUFFIXES Bin bin)
 if (GLSLC AND STRATA_GLSL)
   set(SPV_OUT "")

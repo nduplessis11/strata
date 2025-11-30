@@ -2,7 +2,7 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
-#include "platform/wsi_handle.h"
+#include "strata/platform/wsi_handle.h"
 
 namespace strata::gfx::vk {
 

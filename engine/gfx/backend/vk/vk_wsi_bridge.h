@@ -1,5 +1,5 @@
 ﻿// -----------------------------------------------------------------------------
-// engine/gfx/include/strata/gfx/vulkan/wsi_bridge.h
+// engine/gfx/backend/vk/vk_wsi_bridge.h
 // 
 // Purpose:
 //   Cross-platform bridge between the engine's platform layer (Win32/X11/Wayland)

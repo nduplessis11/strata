@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// engine/gfx/src/backends/vulkan/wsi_bridge_x11.cc
+// engine/gfx/backend/vk/vk_wsi_bridge_x11.cpp
 //
 // Purpose:
 //   X11-specific implementation of the Vulkan WSI bridge. Supplies the

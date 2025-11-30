@@ -33,7 +33,6 @@ namespace strata::gfx::vk {
 
     private:
         VkInstanceWrapper instance_;
-        VkDeviceWrapper   device_;
         // some arrays/vectors mapping rhi::BufferHandle to VkBuffer, etc.
     };
 
