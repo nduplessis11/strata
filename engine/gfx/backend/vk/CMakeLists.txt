@@ -46,13 +46,16 @@ endif()
 file(GLOB_RECURSE STRATA_GLSL "${CMAKE_CURRENT_SOURCE_DIR}/../../shaders/*.*")
 find_program(GLSLC glslc HINTS ENV VULKAN_SDK PATH_SUFFIXES Bin bin)
 if (GLSLC AND STRATA_GLSL)
+  # All compiled shaders go to a common engine/gfx/shaders directory in the build tree
+  set(STRATA_SHADER_OUT_DIR "${CMAKE_BINARY_DIR}/engine/gfx/shaders")
+
   set(SPV_OUT "")
   foreach(GLSL ${STRATA_GLSL})
     get_filename_component(NAME ${GLSL} NAME)
-    set(SPV "${CMAKE_CURRENT_BINARY_DIR}/shaders/${NAME}.spv")
+    set(SPV "${STRATA_SHADER_OUT_DIR}/${NAME}.spv")
     add_custom_command(
       OUTPUT ${SPV}
-      COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/shaders"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${STRATA_SHADER_OUT_DIR}"
       COMMAND ${GLSLC} -std=450 -o ${SPV} ${GLSL}
       DEPENDS ${GLSL}
       COMMENT "Compiling shader ${NAME}"

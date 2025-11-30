@@ -14,11 +14,16 @@ namespace strata::gfx::vk {
         VkInstanceWrapper(VkInstanceWrapper&&) noexcept;
         VkInstanceWrapper& operator=(VkInstanceWrapper&&) noexcept;
 
+        // For now this is a stub - it just "pretends" to succeed.
+        // Later create a real VkInstance + VkSurfaceKHR using vk_wsi_bridge.*
         bool init(const strata::platform::WsiHandle& wsi);
+
         VkInstance   instance() const noexcept { return instance_; }
         VkSurfaceKHR surface()  const noexcept { return surface_; }
 
     private:
+        void cleanup();
+
         VkInstance   instance_{ VK_NULL_HANDLE };
         VkSurfaceKHR surface_{ VK_NULL_HANDLE };
     };
