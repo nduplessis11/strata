@@ -1,6 +1,6 @@
 # games/arcade_shooter/CMakeLists.txt
 add_executable(strata_shooter
-  src/main.cc
+  src/main.cpp
 )
 
 target_compile_features(strata_shooter PRIVATE cxx_std_23)

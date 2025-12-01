@@ -1,7 +1,4 @@
 add_library(strata_core STATIC
-  include/strata/core/application.h
-  include/strata/core/action_map.h
-  include/strata/core/ecs_min.h
   src/application.cc
   src/action_map.cc
   src/ecs_min.cc
