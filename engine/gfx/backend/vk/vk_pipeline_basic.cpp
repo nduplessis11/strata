@@ -1,5 +1,5 @@
 ﻿// -----------------------------------------------------------------------------
-// engine/gfx/src/backends/vulkan/vk_pipeline_basic.cc
+// engine/gfx/backend/vk/vk_pipeline_basic.cpp
 //
 // Purpose:
 //   Build a simple graphics pipeline for drawing a fullscreen triangle using
@@ -19,7 +19,7 @@
 //     reused across resizes by setting them at command-recording time.
 // -----------------------------------------------------------------------------
 
-#include "backends/vulkan/vk_pipeline_basic.h"
+#include "vk_pipeline_basic.h"
 
 #include <vulkan/vulkan.h>
 

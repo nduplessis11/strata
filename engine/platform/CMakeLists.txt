@@ -1,6 +1,4 @@
 add_library(strata_platform STATIC
-  include/strata/platform/window.h
-  include/strata/platform/clock.h
   src/clock.cc
   src/filesystem.cc
   src/input_raw.cc

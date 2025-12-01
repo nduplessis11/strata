@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// engine/gfx/src/backends/vulkan/wsi_bridge_x11.cc
+// engine/gfx/backend/vk/vk_wsi_bridge_x11.cpp
 //
 // Purpose:
 //   X11-specific implementation of the Vulkan WSI bridge. Supplies the
@@ -7,7 +7,7 @@
 //   windows.
 // -----------------------------------------------------------------------------
 
-#include "strata/gfx/vulkan/wsi_bridge.h"
+#include "vk_wsi_bridge.h"
 #include <array>
 #include <type_traits>
 #include <vulkan/vulkan.h>
