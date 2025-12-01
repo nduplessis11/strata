@@ -199,9 +199,18 @@ namespace strata::gfx::vk {
     rhi::FrameResult VkGpuDevice::present(rhi::SwapchainHandle) {
         using rhi::FrameResult;
 
-        if (!swapchain_.valid() || !basic_pipeline_.valid() ||
+        if (!swapchain_.valid() ||
             primary_cmd_ == VK_NULL_HANDLE || !device_.device()) {
             return FrameResult::Error;
+        }
+
+        // If the pipeline was invalidated by a resize, rebuild it now.
+        if (!basic_pipeline_.valid()) {
+            basic_pipeline_ = create_basic_pipeline(device_.device(), swapchain_.image_format());
+            if (!basic_pipeline_.valid()) {
+                std::println(stderr, "VkGpuDevice: failed to (re)create basic pipeline in present()");
+                return FrameResult::Error;
+            }
         }
 
         VkDevice device = device_.device();
