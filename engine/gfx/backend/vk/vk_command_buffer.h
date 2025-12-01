@@ -2,8 +2,7 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
-
-#include "gfx/rhi/gpu_device.h"
+#include <cstdint>
 
 namespace strata::gfx::vk {
 
@@ -15,9 +14,11 @@ namespace strata::gfx::vk {
         VkCommandBufferPool(VkCommandBufferPool&&) noexcept;
         VkCommandBufferPool& operator=(VkCommandBufferPool&&) noexcept;
 
-        bool init(VkDevice device);
+        // Create a pool for a given queue family
+        bool init(VkDevice device, std::uint32_t queue_family_index);
         void cleanup(VkDevice device);
 
+        // Allocate a single primary command buffer from the pool
         VkCommandBuffer allocate(VkDevice device);
 
     private:

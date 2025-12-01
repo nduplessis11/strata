@@ -1,4 +1,5 @@
 // engine/gfx/backend/vk/vk_instance.h
+
 #pragma once
 
 #include <vulkan/vulkan.h>
@@ -14,8 +15,7 @@ namespace strata::gfx::vk {
         VkInstanceWrapper(VkInstanceWrapper&&) noexcept;
         VkInstanceWrapper& operator=(VkInstanceWrapper&&) noexcept;
 
-        // For now this is a stub - it just "pretends" to succeed.
-        // Later create a real VkInstance + VkSurfaceKHR using vk_wsi_bridge.*
+        // Create instance and surface for a given WSI handle.
         bool init(const strata::platform::WsiHandle& wsi);
 
         VkInstance   instance() const noexcept { return instance_; }
