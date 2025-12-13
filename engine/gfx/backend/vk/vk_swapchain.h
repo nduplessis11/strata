@@ -5,7 +5,7 @@
 
 #include <vector>
 
-#include "gfx/rhi/gpu_types.h"
+#include "strata/gfx/rhi/gpu_types.h"
 
 namespace strata::gfx::vk {
 

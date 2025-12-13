@@ -16,10 +16,9 @@ add_library(strata_gfx_backend_vk STATIC
 
 # Headers use #include "gfx/rhi/gpu_device.h" and platform types.
 target_include_directories(strata_gfx_backend_vk
-    PUBLIC
-        ${CMAKE_SOURCE_DIR}/engine          # "gfx/rhi/..." from engine/gfx/rhi
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}         # vk_*.h in this directory
+        ${CMAKE_SOURCE_DIR}/engine/gfx/include # "<strata/gfx/rhi/...>
+        ${CMAKE_CURRENT_SOURCE_DIR}            # vk_*.h in this directory
 )
 
 target_link_libraries(strata_gfx_backend_vk

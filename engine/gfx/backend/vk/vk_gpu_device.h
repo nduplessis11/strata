@@ -6,7 +6,7 @@
 
 #include <vulkan/vulkan.h>
 
-#include "gfx/rhi/gpu_device.h"
+#include "strata/gfx/rhi/gpu_device.h"
 #include "vk_instance.h"
 #include "vk_device.h"
 #include "vk_swapchain.h"
