@@ -70,7 +70,7 @@ namespace strata::gfx::vk {
             }
         }
 
-        VkFormat rhi_format_to_vk(rhi::Format fmt) {
+        [[maybe_unused]] VkFormat rhi_format_to_vk(rhi::Format fmt) {
             using F = rhi::Format;
             switch (fmt) {
             case F::B8G8R8A8_UNorm:

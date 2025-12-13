@@ -1,0 +1,24 @@
+# Directory containing compile_commands.json
+compilation_database_dir: build/debug
+
+# Where clang-uml will write the generated diagram text files (e.g., .puml)
+output_directory: diagrams
+
+diagrams:
+  strata_core:
+    type: class
+    glob:
+      - engine/**/*.h
+      - engine/**/*.hpp
+      - engine/**/*.cc
+      - engine/**/*.cpp
+
+    include:
+      namespaces:
+        - strata
+
+    exclude:
+      namespaces:
+        - std
+        - glm
+        - vk
