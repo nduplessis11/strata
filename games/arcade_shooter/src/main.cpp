@@ -7,8 +7,8 @@
 // -----------------------------------------------------------------------------
 
 #include "strata/platform/window.h"
-#include "gfx/rhi/gpu_device.h"
-#include "gfx/renderer/render_2d.h"
+#include "strata/gfx/rhi/gpu_device.h"
+#include "strata/gfx/renderer/render_2d.h"
 
 #include <chrono>
 #include <print>
