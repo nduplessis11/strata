@@ -366,3 +366,7 @@ FodyWeavers.xsd
 
 # Diagram Files
 diagrams/
+
+# CMake out-of-source builds
+/build/
+build/

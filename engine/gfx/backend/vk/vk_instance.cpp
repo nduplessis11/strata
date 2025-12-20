@@ -11,11 +11,7 @@
 namespace strata::gfx::vk {
     namespace {
 
-#if !defined(NDEBUG)
-        constexpr bool kEnableValidation = true;
-#else
-        constexpr bool kEnableValidation = false;
-#endif
+        inline constexpr bool kEnableValidation = (STRATA_VK_VALIDATION != 0);
 
         constexpr const char* kValidationLayers[] = {
             "VK_LAYER_KHRONOS_validation"

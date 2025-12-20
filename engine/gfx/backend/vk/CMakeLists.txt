@@ -3,15 +3,19 @@
 find_package(Vulkan REQUIRED)
 
 add_library(strata_gfx_backend_vk STATIC
-    vk_instance.h       vk_instance.cpp
-    vk_device.h         vk_device.cpp
-    vk_swapchain.h      vk_swapchain.cpp
-    vk_command_buffer.h vk_command_buffer.cpp
-    vk_gpu_device.h     vk_gpu_device.cpp
-    vk_pipeline_basic.h vk_pipeline_basic.cpp
-    vk_wsi_bridge.h
+    vk_instance.cpp
+    vk_device.cpp
+    vk_swapchain.cpp
+    vk_command_buffer.cpp
+    vk_gpu_device.cpp
+    vk_pipeline_basic.cpp
     $<$<PLATFORM_ID:Windows>:vk_wsi_bridge_win32.cpp>
     $<$<AND:$<PLATFORM_ID:Linux>,$<BOOL:${STRATA_USE_X11}>>:vk_wsi_bridge_x11.cpp>
+)
+
+# Toggle Vulkan validation layers in this backend.
+target_compile_definitions(strata_gfx_backend_vk PRIVATE
+  STRATA_VK_VALIDATION=$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>
 )
 
 # Headers use #include "gfx/rhi/gpu_device.h" and platform types.

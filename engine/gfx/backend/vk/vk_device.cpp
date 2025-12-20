@@ -3,13 +3,14 @@
 #include "vk_device.h"
 
 #include <vulkan/vulkan.h>
+
 #include <print>
 #include <vector>
 #include <array>
 #include <string_view>
 #include <span>
-#include <ranges>
-#include <algorithm>
+#include <cstdint>
+#include <limits>
 
 namespace strata::gfx::vk {
     namespace {
@@ -19,23 +20,21 @@ namespace strata::gfx::vk {
 
         struct QueueFamilySelection {
             VkPhysicalDevice physical{ VK_NULL_HANDLE };
-            u32 graphics_family = kInvalidIndex;
-            u32 present_family = kInvalidIndex;
+            u32 graphics_family{ kInvalidIndex };
+            u32 present_family{ kInvalidIndex };
 
-            bool complete() const noexcept {
+            [[nodiscard]] bool complete() const noexcept {
                 return graphics_family != kInvalidIndex && present_family != kInvalidIndex;
             }
         };
 
-        QueueFamilySelection find_queue_families(VkPhysicalDevice device, VkSurfaceKHR surface) {
+        [[nodiscard]] QueueFamilySelection find_queue_families(VkPhysicalDevice device, VkSurfaceKHR surface) {
             QueueFamilySelection result{};
             result.physical = device;
 
             u32 count = 0;
             vkGetPhysicalDeviceQueueFamilyProperties(device, &count, nullptr);
-            if (count == 0) {
-                return result;
-            }
+            if (count == 0) return result;
 
             std::vector<VkQueueFamilyProperties> families(count);
             vkGetPhysicalDeviceQueueFamilyProperties(device, &count, families.data());
@@ -43,108 +42,101 @@ namespace strata::gfx::vk {
             for (u32 i = 0; i < count; ++i) {
                 const auto& q = families[i];
 
-                // Graphics support
                 if (q.queueCount > 0 && (q.queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
                     result.graphics_family = i;
                 }
 
-                // Present support for this surface
                 VkBool32 present_supported = VK_FALSE;
                 vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &present_supported);
-                if (present_supported == VK_TRUE) {
+                if (present_supported) {
                     result.present_family = i;
                 }
 
-                if (result.complete()) {
-                    break;
-                }
+                if (result.complete()) break;
             }
 
             return result;
         }
 
-        using DeviceExtName = std::string_view;
-
-        constexpr std::array kDeviceExtensions{
-            DeviceExtName{VK_KHR_SWAPCHAIN_EXTENSION_NAME}
-            // add more device extensions here if needed
+        // Keep extensions as C-strings from the start (no string_view/span conversion).
+        inline constexpr std::array<const char*, 1> kDeviceExtensions = {
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME
         };
 
-        std::span<const DeviceExtName> required_device_extensions() noexcept {
-            return std::span{ kDeviceExtensions };
-        }
-
-        bool check_device_extension_support(VkPhysicalDevice device) {
+        [[nodiscard]] bool has_required_device_extensions(
+            VkPhysicalDevice device,
+            std::span<const char* const> required_exts)
+        {
             u32 ext_count = 0;
             vkEnumerateDeviceExtensionProperties(device, nullptr, &ext_count, nullptr);
-            if (ext_count == 0) return false;
+            if (ext_count == 0) return required_exts.empty();
 
             std::vector<VkExtensionProperties> available(ext_count);
             vkEnumerateDeviceExtensionProperties(device, nullptr, &ext_count, available.data());
 
-            std::vector<std::string_view> available_names;
-            available_names.reserve(available.size());
-            for (auto const& e : available) {
-                available_names.emplace_back(e.extensionName);
+            // Simple O(N*M) scan is fine here (device ext counts are small).
+            for (const char* req : required_exts) {
+                bool found = false;
+                for (const auto& e : available) {
+                    if (std::string_view{ e.extensionName } == req) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) return false;
             }
 
-            auto required = required_device_extensions();
-
-            return std::ranges::all_of(required, [&](std::string_view req) {
-                return std::ranges::contains(available_names, req);
-                });
+            return true;
         }
 
-        bool supports_dynamic_rendering(VkPhysicalDevice physical) {
-            // Query features via the "features2" path.
-            VkPhysicalDeviceVulkan13Features features13{};
-            features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+        struct Vulkan13Support {
+            VkPhysicalDeviceVulkan13Features f13{
+                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES
+            };
+
+            [[nodiscard]] bool dynamic_rendering() const noexcept { return f13.dynamicRendering == VK_TRUE; }
+            [[nodiscard]] bool synchronization2()  const noexcept { return f13.synchronization2 == VK_TRUE; }
+        };
+
+        [[nodiscard]] Vulkan13Support query_vulkan13_support(VkPhysicalDevice physical) {
+            Vulkan13Support out{};
 
             VkPhysicalDeviceFeatures2 features2{};
             features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-            features2.pNext = &features13;
+            features2.pNext = &out.f13;
 
             vkGetPhysicalDeviceFeatures2(physical, &features2);
-
-            // If the implementation doesn't know about Vulkan 1.3 features, this stays VK_FALSE.
-            return features13.dynamicRendering == VK_TRUE;
+            return out;
         }
 
-        QueueFamilySelection pick_physical_device_and_queues(VkInstance instance, VkSurfaceKHR surface) {
-            QueueFamilySelection result{};
-
-            // 1) Enumerate physical devices
+        [[nodiscard]] QueueFamilySelection pick_physical_device_and_queues(
+            VkInstance instance,
+            VkSurfaceKHR surface,
+            std::span<const char* const> required_exts)
+        {
             u32 count = 0;
             vkEnumeratePhysicalDevices(instance, &count, nullptr);
-            if (count == 0) {
-                return result;
-            }
+            if (count == 0) return {};
 
             std::vector<VkPhysicalDevice> devices(count);
             vkEnumeratePhysicalDevices(instance, &count, devices.data());
 
-            // 2) Loop over devices and select the first "suitable" one
             for (VkPhysicalDevice device : devices) {
-                // a) Queues that can do graphics + present
                 QueueFamilySelection q = find_queue_families(device, surface);
-                if (!q.complete()) {
-                    continue;
-                }
+                if (!q.complete()) continue;
 
-                // b) Device extensions (must support swapchain)
-                if (!check_device_extension_support(device)) {
-                    continue;
-                }
+                if (!has_required_device_extensions(device, required_exts)) continue;
 
-                // Maybe also inspect VkPhysicalDeviceProperties to prefer discrete GPUs.
+                // If you want: prefer discrete GPU here by checking VkPhysicalDeviceProperties.
 
-                return q; // first suitable device
+                return q;
             }
 
-            return {}; // no suitable device found
+            return {};
         }
 
-    } // anonymous namespace
+    } // namespace
+
 
     // --- RAII basics ------------------------------------------------------------
 
@@ -208,26 +200,37 @@ namespace strata::gfx::vk {
     bool VkDeviceWrapper::init(VkInstance instance, VkSurfaceKHR surface) {
         cleanup();
 
-        auto selection = pick_physical_device_and_queues(instance, surface);
+        auto selection = pick_physical_device_and_queues(instance, surface, kDeviceExtensions);
         if (!selection.complete()) {
             std::println(stderr, "VkDeviceWrapper: no suitable physical device found.");
             return false;
         }
 
-        if (!supports_dynamic_rendering(selection.physical)) {
+        auto support = query_vulkan13_support(selection.physical);
+
+        if (!support.dynamic_rendering()) {
             std::println(stderr, "Selected physical device does not support Vulkan 1.3 dynamic rendering.");
             return false;
         }
+        if (!support.synchronization2()) {
+            std::println(stderr, "Selected physical device does not support Vulkan 1.3 synchronization2.");
+            return false;
+        }
 
-        // Create logical device + queues
+        // Queues
         std::vector<VkDeviceQueueCreateInfo> queue_infos;
+
+        // We will create 1 queue per unique family (graphics, present)
         std::vector<u32> unique_families;
+        unique_families.reserve(2);
         unique_families.push_back(selection.graphics_family);
         if (selection.present_family != selection.graphics_family) {
             unique_families.push_back(selection.present_family);
         }
 
-        float queue_priority{ 1.0f };
+        queue_infos.reserve(unique_families.size());
+
+        float queue_priority = 1.0f;
         for (u32 family_index : unique_families) {
             VkDeviceQueueCreateInfo qci{};
             qci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -237,25 +240,20 @@ namespace strata::gfx::vk {
             queue_infos.push_back(qci);
         }
 
-        auto dev_ext_span = required_device_extensions();
-        std::vector<const char*> dev_ext_cstrs;
-        dev_ext_cstrs.reserve(dev_ext_span.size());
-        for (std::string_view sv : dev_ext_span) {
-            dev_ext_cstrs.push_back(sv.data());
-        }
-
-        VkPhysicalDeviceVulkan13Features features13{};
-        features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-        features13.dynamicRendering = VK_TRUE;
+        // Enable Vulkan 1.3 features (copy supported -> enable what you need)
+        VkPhysicalDeviceVulkan13Features enabled13{};
+        enabled13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+        enabled13.dynamicRendering = VK_TRUE;
+        enabled13.synchronization2 = VK_TRUE;
 
         VkDeviceCreateInfo dci{};
         dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        dci.pNext = &features13;
+        dci.pNext = &enabled13;
         dci.queueCreateInfoCount = static_cast<u32>(queue_infos.size());
         dci.pQueueCreateInfos = queue_infos.data();
-        dci.enabledExtensionCount = static_cast<u32>(dev_ext_cstrs.size());
-        dci.ppEnabledExtensionNames = dev_ext_cstrs.data();
-        dci.pEnabledFeatures = nullptr; // we rely on features13 instead
+        dci.enabledExtensionCount = static_cast<u32>(kDeviceExtensions.size());
+        dci.ppEnabledExtensionNames = kDeviceExtensions.data();
+        dci.pEnabledFeatures = nullptr;
 
         VkResult dres = vkCreateDevice(selection.physical, &dci, nullptr, &device_);
         if (dres != VK_SUCCESS) {
@@ -264,7 +262,6 @@ namespace strata::gfx::vk {
             return false;
         }
 
-        // Store non-owning GPU + queue info
         physical_ = selection.physical;
         graphics_family_ = selection.graphics_family;
         present_family_ = selection.present_family;
@@ -274,5 +271,6 @@ namespace strata::gfx::vk {
 
         return true;
     }
+
 
 } // namespace strata::gfx::vk
