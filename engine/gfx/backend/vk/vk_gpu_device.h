@@ -18,8 +18,8 @@ namespace strata::gfx::vk {
     namespace {
         struct FrameSync {
             VkSemaphore image_available{ VK_NULL_HANDLE };
-            VkSemaphore render_finished{ VK_NULL_HANDLE };
             VkFence     in_flight{ VK_NULL_HANDLE };
+            std::vector<VkSemaphore> render_finished_per_image;
         };
     }
 
@@ -75,6 +75,8 @@ namespace strata::gfx::vk {
         VkCommandBuffer      primary_cmd_{ VK_NULL_HANDLE };
         FrameSync            frame_sync_{};
         BasicPipeline        basic_pipeline_{};
+
+        std::vector<VkImageLayout> swapchain_image_layouts_;
 
         std::uint32_t next_buffer_{ 1 };
         std::uint32_t next_texture_{ 1 };
