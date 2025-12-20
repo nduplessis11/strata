@@ -26,6 +26,7 @@ namespace strata::gfx::vk {
 
         VkInstance   instance_{ VK_NULL_HANDLE };
         VkSurfaceKHR surface_{ VK_NULL_HANDLE };
+        VkDebugUtilsMessengerEXT debug_messenger_{ VK_NULL_HANDLE };
     };
 
 } // namespace strata::gfx::vk

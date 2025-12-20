@@ -6,8 +6,89 @@
 #include <vulkan/vulkan.h>
 #include <print>
 #include <vector>
+#include <algorithm>
 
 namespace strata::gfx::vk {
+    namespace {
+
+#if !defined(NDEBUG)
+        constexpr bool kEnableValidation = true;
+#else
+        constexpr bool kEnableValidation = false;
+#endif
+
+        constexpr const char* kValidationLayers[] = {
+            "VK_LAYER_KHRONOS_validation"
+        };
+
+        VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
+            [[maybe_unused]] VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+            [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT type,
+            const VkDebugUtilsMessengerCallbackDataEXT* callback_data,
+            void* /*user_data*/) {
+
+            // Filter severity/type here if needed.
+            std::println(
+                stderr,
+                "[vk] {}",
+                (callback_data && callback_data->pMessage) ? callback_data->pMessage : "(null)");
+
+            return VK_FALSE;
+        }
+
+        void populate_debug_messenger_ci(VkDebugUtilsMessengerCreateInfoEXT& ci) {
+            ci = {};
+            ci.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+            ci.messageSeverity =
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+            ci.messageType =
+                VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+            ci.pfnUserCallback = debug_callback;
+            ci.pUserData = nullptr;
+        }
+
+        bool has_layer_support() {
+            std::uint32_t count = 0;
+            vkEnumerateInstanceLayerProperties(&count, nullptr);
+            std::vector<VkLayerProperties> props(count);
+            vkEnumerateInstanceLayerProperties(&count, props.data());
+
+            for (const char* want : kValidationLayers) {
+                const bool found = std::any_of(props.begin(), props.end(),
+                    [&](const VkLayerProperties& p) { return std::strcmp(p.layerName, want) == 0; });
+                if (!found) return false;
+            }
+            return true;
+        }
+
+        VkResult CreateDebugUtilsMessengerEXT(
+            VkInstance instance,
+            const VkDebugUtilsMessengerCreateInfoEXT* create_info,
+            const VkAllocationCallbacks* allocator,
+            VkDebugUtilsMessengerEXT* out) {
+
+            auto fn = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+                vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
+            if (!fn) return VK_ERROR_EXTENSION_NOT_PRESENT;
+            return fn(instance, create_info, allocator, out);
+        }
+
+        void DestroyDebugUtilsMessengerEXT(
+            VkInstance instance,
+            VkDebugUtilsMessengerEXT messenger,
+            const VkAllocationCallbacks* allocator) {
+
+            auto fn = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+                vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
+            if (fn) fn(instance, messenger, allocator);
+        }
+
+    } // namespace
 
     VkInstanceWrapper::~VkInstanceWrapper() {
         cleanup();
@@ -15,9 +96,11 @@ namespace strata::gfx::vk {
 
     VkInstanceWrapper::VkInstanceWrapper(VkInstanceWrapper&& other) noexcept
         : instance_(other.instance_)
-        , surface_(other.surface_) {
+        , surface_(other.surface_)
+        , debug_messenger_(other.debug_messenger_) {
         other.instance_ = VK_NULL_HANDLE;
         other.surface_ = VK_NULL_HANDLE;
+        other.debug_messenger_ = VK_NULL_HANDLE;
     }
 
     VkInstanceWrapper&
@@ -26,8 +109,11 @@ namespace strata::gfx::vk {
             cleanup();
             instance_ = other.instance_;
             surface_ = other.surface_;
+            debug_messenger_ = other.debug_messenger_;
+
             other.instance_ = VK_NULL_HANDLE;
             other.surface_ = VK_NULL_HANDLE;
+            other.debug_messenger_ = VK_NULL_HANDLE;
         }
         return *this;
     }
@@ -39,9 +125,23 @@ namespace strata::gfx::vk {
         auto ext_span = required_instance_extensions(wsi);
         std::vector<const char*> exts;
         exts.reserve(ext_span.size());
+
         for (auto sv : ext_span) {
             // vk_wsi_bridge returns string_view; underlying data is static.
             exts.push_back(sv.data());
+        }
+
+        const bool want_validation = kEnableValidation;
+        const bool have_validation = (!want_validation) ? false : has_layer_support();
+        const bool enable_validation = want_validation && have_validation;
+
+        if (want_validation && !have_validation) {
+            std::println(stderr,
+                "[vk] Validation requested, but VK_LAYER_KHRONOS_validation not found. Continuing without layers.");
+        }
+
+        if (enable_validation) {
+            exts.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         }
 
         // --- Application info -----------------------------------------------
@@ -53,20 +153,46 @@ namespace strata::gfx::vk {
         app.engineVersion = VK_MAKE_API_VERSION(0, 0, 1, 0);
         app.apiVersion = VK_API_VERSION_1_3;
 
+        // Optional: allow validation messages during vkCreateInstance
+        VkDebugUtilsMessengerCreateInfoEXT debug_ci{};
+        if (enable_validation) {
+            populate_debug_messenger_ci(debug_ci);
+        }
+
         // --- Instance create info -------------------------------------------
         VkInstanceCreateInfo ci{};
         ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         ci.pApplicationInfo = &app;
         ci.enabledExtensionCount = static_cast<std::uint32_t>(exts.size());
         ci.ppEnabledExtensionNames = exts.data();
-        ci.enabledLayerCount = 0;
-        ci.ppEnabledLayerNames = nullptr;
+
+        if (enable_validation) {
+            ci.enabledLayerCount = static_cast<std::uint32_t>(std::size(kValidationLayers));
+            ci.ppEnabledLayerNames = kValidationLayers;
+            ci.pNext = &debug_ci; // hook messages from instance creation
+        }
+        else {
+            ci.enabledLayerCount = 0;
+            ci.ppEnabledLayerNames = nullptr;
+            ci.pNext = nullptr;
+        }
 
         VkResult res = vkCreateInstance(&ci, nullptr, &instance_);
         if (res != VK_SUCCESS) {
             std::println(stderr, "vkCreateInstance failed: {}", static_cast<int>(res));
             cleanup();
             return false;
+        }
+
+        // Create debug messenger AFTER instance creation
+        if (enable_validation) {
+            res = CreateDebugUtilsMessengerEXT(instance_, &debug_ci, nullptr, &debug_messenger_);
+            if (res != VK_SUCCESS) {
+                std::println(stderr,
+                    "[vk] vkCreateDebugUtilsMessengerEXT failed: {} (continuing without messenger)",
+                    static_cast<int>(res));
+                debug_messenger_ = VK_NULL_HANDLE;
+            }
         }
 
         // --- Surface via vk_wsi_bridge --------------------------------------
@@ -82,6 +208,12 @@ namespace strata::gfx::vk {
 
     void VkInstanceWrapper::cleanup() {
         if (instance_ != VK_NULL_HANDLE) {
+            // Destroy messenger first (it references the instance)
+            if (debug_messenger_ != VK_NULL_HANDLE) {
+                DestroyDebugUtilsMessengerEXT(instance_, debug_messenger_, nullptr);
+                debug_messenger_ = VK_NULL_HANDLE;
+            }
+
             if (surface_ != VK_NULL_HANDLE) {
                 vkDestroySurfaceKHR(instance_, surface_, nullptr);
                 surface_ = VK_NULL_HANDLE;
@@ -91,6 +223,7 @@ namespace strata::gfx::vk {
         }
         else {
             surface_ = VK_NULL_HANDLE;
+            debug_messenger_ = VK_NULL_HANDLE;
         }
     }
 
