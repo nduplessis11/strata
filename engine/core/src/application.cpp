@@ -105,7 +105,7 @@ namespace strata::core {
                 std::move(window),
                 surface,
                 std::move(device),
-                gfx::rhi::SwapchainHandle{},
+                swapchain,
                 std::move(renderer)
             }
         };
