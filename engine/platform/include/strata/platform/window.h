@@ -13,8 +13,8 @@
 
 namespace strata::platform {
     struct Extent2d {
-        int width{};
-        int height{};
+        std::int32_t width{};
+        std::int32_t height{};
     };
 
     struct WindowDesc {
@@ -42,8 +42,8 @@ namespace strata::platform {
         void set_title(std::string_view title);
 
         // size queries
-        [[nodiscard]] auto window_size() const noexcept -> std::pair<int, int>;
-        [[nodiscard]] auto framebuffer_size() const noexcept -> std::pair<int, int>;
+        [[nodiscard]] auto window_size() const noexcept -> std::pair<std::int32_t, std::int32_t>;
+        [[nodiscard]] auto framebuffer_size() const noexcept -> std::pair<std::int32_t, std::int32_t>;
 
         bool is_minimized() const noexcept;
         bool is_visible()  const noexcept;

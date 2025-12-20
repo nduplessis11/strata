@@ -278,7 +278,7 @@ namespace strata::platform {
     // Client area size (logical units). The render area equals client for now.
     // If you enable Per-Monitor DPI Awareness (PMv2), use GetDpiForWindow()
     // to compute true pixel framebuffer size in framebuffer_size().
-    auto Window::window_size() const noexcept -> std::pair<int, int> {
+    auto Window::window_size() const noexcept -> std::pair<std::int32_t, std::int32_t> {
         if (!p_->hwnd) return { 0, 0 };
         RECT rc{};
         ::GetClientRect(p_->hwnd, &rc);
@@ -287,7 +287,7 @@ namespace strata::platform {
         return { w, h };
     }
 
-    auto Window::framebuffer_size() const noexcept -> std::pair<int, int> {
+    auto Window::framebuffer_size() const noexcept -> std::pair<std::int32_t, std::int32_t> {
         // FIRST BRING-UP: assume client == framebuffer.
         // LATER: if DPI-aware, multiply by DPI/96 or use GetDpiForWindow().
         return window_size();
