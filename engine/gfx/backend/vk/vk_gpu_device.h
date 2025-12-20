@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <span>
+#include <vector>
 
 #include <vulkan/vulkan.h>
 
@@ -15,13 +16,11 @@
 
 namespace strata::gfx::vk {
 
-    namespace {
-        struct FrameSync {
-            VkSemaphore image_available{ VK_NULL_HANDLE };
-            VkFence     in_flight{ VK_NULL_HANDLE };
-            std::vector<VkSemaphore> render_finished_per_image;
-        };
-    }
+    struct FrameSync {
+        VkSemaphore image_available{ VK_NULL_HANDLE };
+        VkFence     in_flight{ VK_NULL_HANDLE };
+        std::vector<VkSemaphore> render_finished_per_image;
+    };
 
     class VkGpuDevice final : public rhi::IGpuDevice {
     public:
@@ -32,15 +31,12 @@ namespace strata::gfx::vk {
         ~VkGpuDevice() override;
 
         // --- Swapchain -------------------------------------------------------
-        rhi::SwapchainHandle create_swapchain(const rhi::SwapchainDesc& desc,
-            const strata::platform::WsiHandle& surface) override;
-        rhi::FrameResult      present(rhi::SwapchainHandle swapchain) override;
-        rhi::FrameResult      resize_swapchain(rhi::SwapchainHandle swapchain,
-            const rhi::SwapchainDesc& desc) override;
+        rhi::SwapchainHandle create_swapchain(const rhi::SwapchainDesc& desc, const strata::platform::WsiHandle& surface) override;
+        rhi::FrameResult     present(rhi::SwapchainHandle swapchain) override;
+        rhi::FrameResult     resize_swapchain(rhi::SwapchainHandle swapchain, const rhi::SwapchainDesc& desc) override;
 
         // --- Buffers ---------------------------------------------------------
-        rhi::BufferHandle create_buffer(const rhi::BufferDesc& desc,
-            std::span<const std::byte> initial_data) override;
+        rhi::BufferHandle create_buffer(const rhi::BufferDesc& desc, std::span<const std::byte> initial_data) override;
         void              destroy_buffer(rhi::BufferHandle handle) override;
 
         // --- Textures --------------------------------------------------------

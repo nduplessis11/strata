@@ -176,6 +176,7 @@ namespace strata::gfx::vk {
             return rhi::SwapchainHandle{};
         }
 
+        wait_idle();
         swapchain_.cleanup();
         swapchain_image_layouts_.clear();
 
@@ -207,6 +208,7 @@ namespace strata::gfx::vk {
             return rhi::FrameResult::Error;
         }
 
+        wait_idle();
         swapchain_.cleanup();
         swapchain_image_layouts_.clear();
 
@@ -316,30 +318,52 @@ namespace strata::gfx::vk {
 
         VkImageLayout old_layout = swapchain_image_layouts_[image_index];
 
-        // Transition image to COLOR_ATTACHMENT_OPTIMAL
-        VkImageMemoryBarrier pre{};
-        pre.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        pre.srcAccessMask = 0;
-        pre.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        pre.oldLayout = old_layout;
-        pre.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        pre.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        pre.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        pre.image = image;
-        pre.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        pre.subresourceRange.baseMipLevel = 0;
-        pre.subresourceRange.levelCount = 1;
-        pre.subresourceRange.baseArrayLayer = 0;
-        pre.subresourceRange.layerCount = 1;
+        VkPipelineStageFlags2 src_stage2 = 0;
+        VkAccessFlags2        src_access2 = 0;
 
-        vkCmdPipelineBarrier(
-            primary_cmd_,
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            0,
-            0, nullptr,
-            0, nullptr,
-            1, &pre);
+        if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED) {
+            // first use, discard previous contents
+            src_stage2 = VK_PIPELINE_STAGE_2_NONE;
+            src_access2 = 0;
+        }
+        else if (old_layout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
+            // coming from presentation engine
+            src_stage2 = VK_PIPELINE_STAGE_2_NONE;
+            src_access2 = 0;
+        }
+        else {
+            std::println(stderr, "VkGpuDevice: unexpected swapchain old_layout {}", (std::int32_t)old_layout);
+            old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+            src_stage2 = VK_PIPELINE_STAGE_2_NONE;
+            src_access2 = 0;
+        }
+
+        VkImageMemoryBarrier2 pre2{};
+        pre2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        pre2.srcStageMask = src_stage2;
+        pre2.srcAccessMask = src_access2;
+        pre2.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+        pre2.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+        pre2.oldLayout = old_layout;
+        pre2.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        pre2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        pre2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        pre2.image = image;
+        pre2.subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1
+        };
+
+        VkDependencyInfo dep_pre{};
+        dep_pre.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep_pre.imageMemoryBarrierCount = 1;
+        dep_pre.pImageMemoryBarriers = &pre2;
+
+        vkCmdPipelineBarrier2(primary_cmd_, &dep_pre);
+
 
         // Clear color & dynamic rendering setup
         VkClearValue clear{};
@@ -391,36 +415,36 @@ namespace strata::gfx::vk {
         vkCmdEndRendering(primary_cmd_);
 
         // Transition image to PRESENT_SRC_KHR
-        VkImageMemoryBarrier post{};
-        post.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        post.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        post.dstAccessMask = 0;
-        post.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        post.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        post.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        post.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        post.image = image;
-        post.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        post.subresourceRange.baseMipLevel = 0;
-        post.subresourceRange.levelCount = 1;
-        post.subresourceRange.baseArrayLayer = 0;
-        post.subresourceRange.layerCount = 1;
+        VkImageMemoryBarrier2 post2{};
+        post2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        post2.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+        post2.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+        post2.dstStageMask = VK_PIPELINE_STAGE_2_NONE;
+        post2.dstAccessMask = 0;
+        post2.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        post2.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        post2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        post2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        post2.image = image;
+        post2.subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1
+        };
 
-        vkCmdPipelineBarrier(
-            primary_cmd_,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-            0,
-            0, nullptr,
-            0, nullptr,
-            1, &post);
+        VkDependencyInfo dep_post{};
+        dep_post.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep_post.imageMemoryBarrierCount = 1;
+        dep_post.pImageMemoryBarriers = &post2;
+
+        vkCmdPipelineBarrier2(primary_cmd_, &dep_post);
 
         if (vkEndCommandBuffer(primary_cmd_) != VK_SUCCESS) {
             std::println(stderr, "vkEndCommandBuffer failed");
             return FrameResult::Error;
         }
-
-        swapchain_image_layouts_[image_index] = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
         // Submit to graphics queue
         VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -439,6 +463,9 @@ namespace strata::gfx::vk {
             std::println(stderr, "vkQueueSubmit failed");
             return FrameResult::Error;
         }
+
+        // From this point on, we know the command buffer is in-flight and will perform the post barrier
+        swapchain_image_layouts_[image_index] = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
         // Present
         VkSwapchainKHR sw = swapchain_.swapchain();
