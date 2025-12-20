@@ -5,10 +5,11 @@
 //   Engine-level Application wrapper. Owns platform window + graphics bring-up,
 //   and drives the main loop.
 //
-// Notes:
-//   - This is intentionally minimal: 1 window, 1 device, 1 swapchain, 1 renderer.
-//   - The game can supply a per-frame tick callback.
-//   - Rendering uses the existing Render2D frontend for now.
+// Design goals (C++23, safe-by-default):
+//   - No partially-initialized Application objects.
+//   - Creation returns std::expected<...> with a clear error.
+//   - Accessors return references (no nullable pointers).
+//   - Implementation hidden via PIMPL to reduce header dependencies.
 // -----------------------------------------------------------------------------
 
 #pragma once
@@ -50,6 +51,16 @@ namespace strata::core {
         SwapchainCreateFailed,
         RendererCreateFailed,
     };
+
+    [[nodiscard]] constexpr std::string_view to_string(ApplicationError e) noexcept {
+        switch (e) {
+        case ApplicationError::WindowCreateFailed:   return "WindowCreateFailed";
+        case ApplicationError::DeviceCreateFailed:   return "DeviceCreateFailed";
+        case ApplicationError::SwapchainCreateFailed:return "SwapchainCreateFailed";
+        case ApplicationError::RendererCreateFailed: return "RendererCreateFailed";
+        }
+        return "Unknown";
+    }
 
     class Application {
     public:

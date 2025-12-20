@@ -4,11 +4,11 @@
 
 int main() {
     strata::core::ApplicationConfig cfg{};
-    cfg.window.size = { 1280, 720 };
-    cfg.window.title = "strata - RHI renderer test";
+    cfg.window_desc.size = { 1280, 720 };
+    cfg.window_desc.title = "strata - RHI renderer test";
 
     cfg.device.backend = strata::gfx::rhi::BackendType::Vulkan;
-    cfg.swapchain.vsync = true;
+    cfg.swapchain_desc.vsync = true;
 
     cfg.throttle_cpu = true;
     cfg.throttle_sleep = std::chrono::milliseconds{ 1 };
