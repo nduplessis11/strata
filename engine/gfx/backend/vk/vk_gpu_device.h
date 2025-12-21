@@ -32,8 +32,9 @@ namespace strata::gfx::vk {
 
         // --- Swapchain -------------------------------------------------------
         rhi::SwapchainHandle create_swapchain(const rhi::SwapchainDesc& desc, const strata::platform::WsiHandle& surface) override;
-        rhi::FrameResult     present(rhi::SwapchainHandle swapchain) override;
         rhi::FrameResult     resize_swapchain(rhi::SwapchainHandle swapchain, const rhi::SwapchainDesc& desc) override;
+        rhi::FrameResult     present(rhi::SwapchainHandle swapchain, std::uint32_t image_index) override;
+        rhi::FrameResult     acquire_next_image(rhi::SwapchainHandle swapchain, rhi::AcquiredImage& out) override;
 
         // --- Buffers ---------------------------------------------------------
         rhi::BufferHandle create_buffer(const rhi::BufferDesc& desc, std::span<const std::byte> initial_data) override;
@@ -49,8 +50,17 @@ namespace strata::gfx::vk {
 
         // --- Commands & submission -------------------------------------------
         rhi::CommandBufferHandle begin_commands() override;
-        void                     end_commands(rhi::CommandBufferHandle cmd) override;
-        void                     submit(const rhi::SubmitDesc& submit) override;
+        rhi::FrameResult         end_commands(rhi::CommandBufferHandle cmd) override;
+        rhi::FrameResult         submit(const rhi::IGpuDevice::SubmitDesc& submit) override;
+
+        // --- Recording (explicit functions fine for now) -------------------------------------------------------------
+        // TODO: turn these into a CommandList/Encoder object later for nicer API
+
+        rhi::FrameResult cmd_begin_swapchain_pass(rhi::CommandBufferHandle cmd, rhi::SwapchainHandle swapchain, std::uint32_t image_index, const rhi::ClearColor& clear) override;
+        rhi::FrameResult cmd_end_swapchain_pass(rhi::CommandBufferHandle cmd, rhi::SwapchainHandle swapchain, std::uint32_t image_index) override;
+        rhi::FrameResult cmd_bind_pipeline(rhi::CommandBufferHandle cmd, rhi::PipelineHandle pipeline) override;
+        rhi::FrameResult cmd_set_viewport_scissor(rhi::CommandBufferHandle cmd, rhi::Extent2D extent) override;
+        rhi::FrameResult cmd_draw(rhi::CommandBufferHandle cmd, std::uint32_t vertex_count, std::uint32_t instance_count, std::uint32_t first_vertex, std::uint32_t first_instance) override;
 
         // --- Synchronization -------------------------------------------------
         void wait_idle() override;

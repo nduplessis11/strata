@@ -9,8 +9,6 @@
 
 #include "strata/gfx/renderer/render_2d.h"
 
-#include <utility> // for std::move if we ever need it
-
 namespace strata::gfx::renderer {
 
     using namespace strata::gfx::rhi;
@@ -72,14 +70,98 @@ namespace strata::gfx::renderer {
     }
 
     FrameResult Render2D::draw_frame() {
-        if (!device_ || !swapchain_ || !pipeline_) {
-            return FrameResult::Error;
+        if (!device_ || !swapchain_ || !pipeline_) return FrameResult::Error;
+
+        rhi::AcquiredImage img{};
+        FrameResult acquire = device_->acquire_next_image(swapchain_, img);
+
+        // If acquire says "Suboptimal", we should still render the frame,
+        // but bubble up Suboptimal afterward so the caller can choose to resize.
+        FrameResult hint = FrameResult::Ok;
+
+        if (acquire == FrameResult::Error || acquire == FrameResult::ResizeNeeded) {
+            return acquire;
+        }
+        if (acquire == FrameResult::Suboptimal) {
+            hint = FrameResult::Suboptimal;
         }
 
-        // For now the device owns all low-level command recording.
-        // This is essentially the same contract as our current GraphicsDevice::
-        // draw_frame(swapchain, pipeline).
-        return device_->present(swapchain_);
+        rhi::CommandBufferHandle cmd = device_->begin_commands();
+        if (!cmd) return FrameResult::Error;
+
+        bool pass_open = false;
+        FrameResult result = FrameResult::Error; // default unless we succeed
+
+        const rhi::ClearColor clear{ 0.6f, 0.4f, 0.8f, 1.0f };
+
+        // --- Record -------------------------------------------------------------
+        if (device_->cmd_begin_swapchain_pass(cmd, swapchain_, img.image_index, clear) != FrameResult::Ok) {
+            goto cleanup;
+        }
+        pass_open = true;
+
+        if (device_->cmd_bind_pipeline(cmd, pipeline_) != FrameResult::Ok) {
+            goto cleanup;
+        }
+
+        if (device_->cmd_set_viewport_scissor(cmd, img.extent) != FrameResult::Ok) {
+            goto cleanup;
+        }
+
+        if (device_->cmd_draw(cmd, 3, 1, 0, 0) != FrameResult::Ok) {
+            goto cleanup;
+        }
+
+        if (device_->cmd_end_swapchain_pass(cmd, swapchain_, img.image_index) != FrameResult::Ok) {
+            goto cleanup;
+        }
+        pass_open = false;
+
+        if (device_->end_commands(cmd) != FrameResult::Ok) {
+            result = FrameResult::Error;
+            goto cleanup_after_end; // don't call end_commands() again
+        }
+
+        // --- Submit -------------------------------------------------------------
+        {
+            rhi::IGpuDevice::SubmitDesc sd{};
+            sd.command_buffer = cmd;
+            sd.swapchain = swapchain_;
+            sd.image_index = img.image_index;
+            sd.frame_index = img.frame_index;
+
+            FrameResult sub = device_->submit(sd);
+            if (sub != FrameResult::Ok) {
+                result = sub;
+                goto cleanup_after_end; // command buffer already ended
+            }
+        }
+
+        // --- Present ------------------------------------------------------------
+        {
+            FrameResult pres = device_->present(swapchain_, img.image_index);
+            if (pres == FrameResult::Ok) {
+                // If acquire was Suboptimal, bubble it up so caller can decide to resize.
+                result = hint;
+            }
+            else {
+                result = pres;
+            }
+            return result;
+        }
+
+    cleanup:
+        // Best-effort: close rendering if we opened it.
+        if (pass_open) {
+            device_->cmd_end_swapchain_pass(cmd, swapchain_, img.image_index);
+            pass_open = false;
+        }
+
+        // Best-effort: end the command buffer so it can be reset next frame.
+        device_->end_commands(cmd);
+
+    cleanup_after_end:
+        return result;
     }
 
     // -------------------------------------------------------------------------

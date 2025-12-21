@@ -94,4 +94,14 @@ namespace strata::gfx::rhi {
         explicit constexpr operator bool() const noexcept { return value != 0; }
     };
 
+    struct ClearColor {
+        float r{ 0.f }, g{ 0.f }, b{ 0.f }, a{ 1.f };
+    };
+
+    struct AcquiredImage {
+        std::uint32_t image_index{ 0 };
+        Extent2D      extent{};
+        std::uint32_t frame_index{ 0 };
+    };
+
 } // namespace strata::gfx::rhi
