@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// engine/gfx/renderer/render_2d.cpp
+// engine/gfx/renderer/src/render_2d.cpp
 //
 // Purpose:
 //   Implements the Render2D frontend on top of the RHI IGpuDevice interface.

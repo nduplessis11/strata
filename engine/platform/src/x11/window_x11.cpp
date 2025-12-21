@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// engine/platform/src/x11/window_x11.cc
+// engine/platform/src/x11/window_x11.cpp
 //
 // Purpose:
 //   X11 backend implementation for strata::platform::Window. Creates a basic

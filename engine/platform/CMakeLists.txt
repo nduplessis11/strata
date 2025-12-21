@@ -1,9 +1,11 @@
+# engine/platform/CMakeLists.txt
+
 add_library(strata_platform STATIC
-  src/clock.cc
-  src/filesystem.cc
-  src/input_raw.cc
-  $<$<PLATFORM_ID:Windows>:src/win32/window_win32.cc>
-  $<$<PLATFORM_ID:Linux>:  src/x11/window_x11.cc>
+  src/clock.cpp
+  src/filesystem.cpp
+  src/input_raw.cpp
+  $<$<PLATFORM_ID:Windows>:src/win32/window_win32.cpp>
+  $<$<PLATFORM_ID:Linux>:  src/x11/window_x11.cpp>
 )
 
 target_include_directories(strata_platform PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -28,7 +30,7 @@ elseif (UNIX AND NOT APPLE)
     find_package(Threads REQUIRED)
     target_include_directories(strata_platform PRIVATE ${WAYLAND_CLIENT_INCLUDE_DIRS})
     target_link_libraries(strata_platform PUBLIC ${WAYLAND_CLIENT_LIBRARIES} Threads::Threads dl)
-    target_sources(strata_platform PRIVATE src/wayland/window_wayland.cc)  # if/when you add it
+    target_sources(strata_platform PRIVATE src/wayland/window_wayland.cpp)  # if/when you add it
   endif()
 endif()
 

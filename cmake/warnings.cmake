@@ -1,3 +1,5 @@
+# cmake/warnings.cmake
+
 function(enable_strict_warnings tgt)
   if (MSVC)
     target_compile_options(${tgt} PRIVATE /W4 /permissive- /Zc:__cplusplus /Zc:preprocessor /EHsc)
