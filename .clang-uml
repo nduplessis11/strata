@@ -2,7 +2,7 @@
 compilation_database_dir: build/debug
 
 # Where clang-uml will write the generated diagram text files (e.g., .puml)
-output_directory: diagrams
+output_directory: docs/diagrams
 
 diagrams:
   strata_core:
