@@ -29,12 +29,11 @@ Strata currently uses `IGpuDevice::wait_idle()` as the main safety lever:
 
 This is safe, simple, and predictable for early development.
 
-### Backend-owned frame recording
-`Render2D::draw_frame()` calls `device->present(swapchain)`.
-In Vulkan backend, `VkGpuDevice::present()` does:
-> acquire → record → submit → present
+### Renderer-owned frame recording
+`Render2D::draw_frame()` drives the full frame:
+> acquire → begin cmd → record → end cmd → submit → present
 
-So command buffer lifetimes and synchronization are primarily backend-owned right now.
+The Vulkan backend owns the actual `VkCommandBuffer` and sync primitives, but the renderer now owns **when** command recording happens in the frame.
 
 ---
 

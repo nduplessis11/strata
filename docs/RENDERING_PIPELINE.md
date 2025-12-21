@@ -2,7 +2,7 @@
 
 This document describes **how Strata renders a frame today**, from the game loop down to Vulkan calls.
 
-It is intentionally scoped to the **current** implementation (single pass, fullscreen triangle). As the engine grows (command recording in the renderer, multiple frames-in-flight, etc.), this doc should evolve alongside it.
+It is intentionally scoped to the **current** implementation (single pass, fullscreen triangle). As the engine grows (command buffers, multiple frames-in-flight, etc.), this doc should evolve alongside it.
 
 ---
 
@@ -12,10 +12,10 @@ Today’s frame path looks like this:
 
 1. `core::Application::run()` drives the loop and calls a helper:
    - `gfx::renderer::draw_frame_and_handle_resize(device, swapchain, renderer, framebuffer_size)`
-2. `Render2D::draw_frame()` is currently **“present-only”**:
-   - it delegates the entire frame to `IGpuDevice::present(swapchain)`
-3. The Vulkan backend (`vk::VkGpuDevice::present`) does everything:
-   - **wait fence → acquire image → record commands → submit → present**
+2. `Render2D::draw_frame()` now owns the frame:
+   - **acquire → begin cmd → record pass → end cmd → submit → present**
+3. The Vulkan backend (`vk::VkGpuDevice`) provides the building blocks:
+   - `acquire_next_image`, `begin_commands`, `cmd_*`, `end_commands`, `submit`, `present`
 4. If the swapchain is suboptimal/out-of-date:
    - the engine calls `device.wait_idle()`,
    - recreates the swapchain,
@@ -31,6 +31,7 @@ Today’s frame path looks like this:
 - Rendering uses **Vulkan 1.3 dynamic rendering** (`vkCmdBeginRendering`) and **dynamic viewport/scissor**.
 - Barriers use **Synchronization2** (`vkCmdPipelineBarrier2`).
 - The first “render pass” is a **fullscreen triangle** with a solid clear + draw.
+- `Render2D` now **records commands explicitly** via the RHI command interface.
 
 ---
 
@@ -90,12 +91,21 @@ and calls:
 - `pipeline_ = device_->create_pipeline(desc);`
 
 ### Frame rendering (`Render2D::draw_frame`)
-Today, `draw_frame()` is intentionally simple:
+`draw_frame()` now drives the full frame:
 - validates `device_`, `swapchain_`, `pipeline_`
-- delegates frame work to the backend:
-  - `return device_->present(swapchain_);`
+- `device_->acquire_next_image(...)`
+- `cmd = device_->begin_commands()`
+- record a swapchain pass via:
+  - `cmd_begin_swapchain_pass(...)`
+  - `cmd_bind_pipeline(...)`
+  - `cmd_set_viewport_scissor(...)`
+  - `cmd_draw(...)`
+  - `cmd_end_swapchain_pass(...)`
+- `device_->end_commands(cmd)`
+- `device_->submit({ cmd, swapchain, image_index, frame_index })`
+- `device_->present(swapchain, image_index)`
 
-In other words: **the backend owns command recording for now.**
+In other words: **the renderer owns command recording**, and the backend owns the Vulkan plumbing.
 
 ### Resize helper: `draw_frame_and_handle_resize`
 This helper implements the current resize policy:
@@ -118,17 +128,19 @@ Resize path:
 
 Swapchain-related:
 - `create_swapchain(desc, wsi) -> SwapchainHandle`
-- `present(swapchain) -> FrameResult`
 - `resize_swapchain(swapchain, desc) -> FrameResult`
+- `acquire_next_image(swapchain, out) -> FrameResult`
+- `present(swapchain, image_index) -> FrameResult`
 
 Pipeline-related:
 - `create_pipeline(desc) -> PipelineHandle`
 - `destroy_pipeline(handle)`
 
-Commands/submission (not used yet):
+Commands/submission:
 - `begin_commands() -> CommandBufferHandle`
 - `end_commands(cmd)`
 - `submit(SubmitDesc{ command_buffer })`
+- `cmd_begin_swapchain_pass(...)`, `cmd_bind_pipeline(...)`, `cmd_draw(...)`, ...
 
 ---
 
@@ -206,56 +218,44 @@ Resize mirrors creation:
 
 ---
 
-## The actual frame: `VkGpuDevice::present`
+## The actual frame: renderer + backend split
 
-`VkGpuDevice::present(...)` implements the current frame pipeline.
+`Render2D::draw_frame()` drives the frame while `VkGpuDevice` supplies the Vulkan-backed primitives.
 
 ### 0) Ensure pipeline exists
-If `basic_pipeline_` is invalid (e.g., after resize):
-- `basic_pipeline_ = create_basic_pipeline(device, swapchain_.image_format());`
+When `Render2D` is constructed (or rebuilt after resize), it calls:
+- `device_->create_pipeline(desc)`
 
-This is also created when the renderer calls `IGpuDevice::create_pipeline(...)`, but `present()` is allowed to rebuild lazily if needed.
+The Vulkan backend rebuilds its `basic_pipeline_` when this is called, and also invalidates it on resize.
 
-### 1) Wait previous frame
-Single fence model:
-- `vkWaitForFences(device, 1, &in_flight, VK_TRUE, timeout)`
-- `vkResetFences(device, 1, &in_flight)`
+### 1) Wait previous frame + acquire swapchain image
+`VkGpuDevice::acquire_next_image(...)`:
+- waits for `in_flight` fence
+- calls `vkAcquireNextImageKHR(..., image_available, ..., &image_index)`
+- maps `VK_ERROR_OUT_OF_DATE_KHR` → `ResizeNeeded`
+- returns `Suboptimal` but allows rendering
 
-### 2) Acquire swapchain image
-- `vkAcquireNextImageKHR(..., image_available, ..., &image_index)`
-- `VK_ERROR_OUT_OF_DATE_KHR` → `FrameResult::ResizeNeeded`
-- `VK_SUBOPTIMAL_KHR` → continue rendering and let caller decide
+### 2) Begin + record commands
+- `begin_commands()` resets/begins the single `primary_cmd_`
+- `cmd_begin_swapchain_pass(...)`:
+  - transitions swapchain image to `COLOR_ATTACHMENT_OPTIMAL`
+  - begins dynamic rendering with clear color
+- `cmd_bind_pipeline(...)`
+- `cmd_set_viewport_scissor(...)`
+- `cmd_draw(..., 3, 1, 0, 0)` (fullscreen triangle)
+- `cmd_end_swapchain_pass(...)`:
+  - ends dynamic rendering
+  - transitions swapchain image to `PRESENT_SRC_KHR`
+- `end_commands(cmd)` ends the command buffer
 
-### 3) Record commands into `primary_cmd_`
-- `vkResetCommandBuffer(primary_cmd_, 0)`
-- `vkBeginCommandBuffer(primary_cmd_, ...)`
+### 3) Submit
+`submit({ cmd, swapchain, image_index, frame_index })`:
+- waits on `image_available`
+- signals `render_finished_per_image[image_index]`
+- uses `in_flight` fence
 
-### 4) Transition swapchain image to color attachment (Synchronization2)
-Strata tracks per-image layout state in `swapchain_image_layouts_`.
-- old layout: `UNDEFINED` (first use) or `PRESENT_SRC_KHR` (normal)
-- barrier: `old_layout → COLOR_ATTACHMENT_OPTIMAL`
-- `vkCmdPipelineBarrier2(... VkImageMemoryBarrier2 ...)`
-
-### 5) Dynamic rendering pass (single color attachment)
-- clear color: `{ 0.6f, 0.4f, 0.8f, 1.0f }`
-- `vkCmdBeginRendering(...)` with one `VkRenderingAttachmentInfo`
-- bind `basic_pipeline_`
-- set dynamic viewport/scissor to swapchain extent
-- `vkCmdDraw(..., 3, 1, 0, 0)` (fullscreen triangle)
-
-### 6) Transition to present
-- barrier: `COLOR_ATTACHMENT_OPTIMAL → PRESENT_SRC_KHR`
-- update tracking:
-  - `swapchain_image_layouts_[image_index] = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR`
-
-### 7) Submit + present
-Submit:
-- wait semaphore: `image_available`
-- wait stage: `COLOR_ATTACHMENT_OUTPUT`
-- signal semaphore: `render_finished_per_image[image_index]`
-- fence: `in_flight`
-
-Present:
+### 4) Present
+`present(swapchain, image_index)`:
 - `vkQueuePresentKHR(..., wait = render_finished)`
 - map results:
   - `VK_ERROR_OUT_OF_DATE_KHR` → `ResizeNeeded`
@@ -307,27 +307,23 @@ Because the pipeline depends on swapchain format, it is recreated when the swapc
 - **One graphics pipeline** (fullscreen triangle).
 - **No vertex/index buffers** in the frame loop.
 - **No depth**, no MSAA, no post-processing.
-- **Renderer does not own command recording** (backend does).
+- **Renderer records commands explicitly**, but only for a single basic pass.
 - Swapchain recreation is done with `wait_idle()` (safe, not optimal).
 
 ---
 
 ## Planned evolution points
 
-1. **Move command recording out of `present()`**
-   - `Render2D` (or a frame-graph) should:
-     - `begin_commands()`
-     - record draw passes
-     - `end_commands()`
-     - `submit()`
-     - `present()`
-
-2. **Multiple frames-in-flight**
+1. **Multiple frames-in-flight**
    - Replace single fence with N-frame ring:
      - per-frame command buffers
      - per-frame fences
      - per-frame image-available semaphores
      - optional timeline semaphore
+
+2. **Command recording API ergonomics**
+   - Replace `cmd_*` functions with a command encoder/list object.
+   - Support secondary command buffers or parallel recording.
 
 3. **Pipeline lifetime rules**
    - Today: pipeline recreated on resize via a fresh `Render2D`, and backend can lazily rebuild.
@@ -365,4 +361,4 @@ Because the pipeline depends on swapchain format, it is recreated when the swapc
 | Device interface | `rhi::IGpuDevice` | `vk::VkGpuDevice` |
 | Swapchain handle | `rhi::SwapchainHandle` | `vk::VkSwapchainWrapper` |
 | Pipeline handle | `rhi::PipelineHandle` | `vk::BasicPipeline` |
-| Present | `IGpuDevice::present()` | acquire → record → submit → present |
+| Present | `IGpuDevice::present()` | queue present (waits on render-finished) |
