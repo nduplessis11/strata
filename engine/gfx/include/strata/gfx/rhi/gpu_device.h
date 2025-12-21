@@ -9,19 +9,15 @@
 
 namespace strata::gfx::rhi {
 
-    struct SubmitDesc {
-        // For now: 1 queue, single command buffer
-        CommandBufferHandle command_buffer{};
-    };
-
     class IGpuDevice {
     public:
         virtual ~IGpuDevice() = default;
 
         // --- Swapchain -----------------------------------------------------------
         virtual SwapchainHandle create_swapchain(const SwapchainDesc& desc, const strata::platform::WsiHandle& surface) = 0;
-        virtual FrameResult     present(SwapchainHandle swapchain) = 0;
         virtual FrameResult     resize_swapchain(SwapchainHandle swapchain,const SwapchainDesc& desc) = 0;
+        virtual FrameResult     acquire_next_image(SwapchainHandle swapchain, AcquiredImage& out) = 0;
+        virtual FrameResult     present(SwapchainHandle swapchain, std::uint32_t image_index) = 0;
 
         // --- Buffers -------------------------------------------------------------
         virtual BufferHandle create_buffer(const BufferDesc& desc, std::span<const std::byte> initial_data = {}) = 0;
@@ -37,8 +33,24 @@ namespace strata::gfx::rhi {
 
         // --- Commands & submission ----------------------------------------------
         virtual CommandBufferHandle begin_commands() = 0;
-        virtual void                end_commands(CommandBufferHandle cmd) = 0;
-        virtual void                submit(const SubmitDesc& submit) = 0;
+        virtual FrameResult         end_commands(CommandBufferHandle cmd) = 0;
+
+        struct SubmitDesc {
+            CommandBufferHandle command_buffer{};
+            SwapchainHandle     swapchain{};
+            std::uint32_t       image_index{};
+            std::uint32_t       frame_index{};
+        };
+        virtual FrameResult submit(const SubmitDesc& submit) = 0;
+
+        // --- Recording (explicit functions fine for now) -------------------------------------------------------------
+        // TODO: turn these into a CommandList/Encoder object later for nicer API
+
+        virtual FrameResult cmd_begin_swapchain_pass(CommandBufferHandle cmd, SwapchainHandle swapchain, std::uint32_t image_index, const ClearColor& clear) = 0;
+        virtual FrameResult cmd_end_swapchain_pass(CommandBufferHandle cmd, SwapchainHandle swapchain, std::uint32_t image_index) = 0;
+        virtual FrameResult cmd_bind_pipeline(CommandBufferHandle cmd, PipelineHandle pipeline) = 0;
+        virtual FrameResult cmd_set_viewport_scissor(CommandBufferHandle cmd, Extent2D extent) = 0;
+        virtual FrameResult cmd_draw(CommandBufferHandle cmd, std::uint32_t vertex_count, std::uint32_t instance_count, std::uint32_t first_vertex, std::uint32_t first_instance) = 0;
 
         virtual void wait_idle() = 0;
     };
