@@ -91,7 +91,23 @@ namespace strata::gfx::vk {
 
         struct Vulkan13Support {
             VkPhysicalDeviceVulkan13Features f13{
-                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES
+                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+                .pNext = VK_NULL_HANDLE,
+                .robustImageAccess = VK_FALSE,
+                .inlineUniformBlock = VK_FALSE,
+                .descriptorBindingInlineUniformBlockUpdateAfterBind = VK_FALSE,
+                .pipelineCreationCacheControl = VK_FALSE,
+                .privateData = VK_FALSE,
+                .shaderDemoteToHelperInvocation = VK_FALSE,
+                .shaderTerminateInvocation = VK_FALSE,
+                .subgroupSizeControl = VK_FALSE,
+                .computeFullSubgroups = VK_FALSE,
+                .synchronization2 = VK_FALSE,
+                .textureCompressionASTC_HDR = VK_FALSE,
+                .shaderZeroInitializeWorkgroupMemory = VK_FALSE,
+                .dynamicRendering = VK_FALSE,
+                .shaderIntegerDotProduct = VK_FALSE,
+                .maintenance4 = VK_FALSE
             };
 
             [[nodiscard]] bool dynamic_rendering() const noexcept { return f13.dynamicRendering == VK_TRUE; }
