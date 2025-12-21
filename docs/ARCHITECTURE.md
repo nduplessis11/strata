@@ -153,8 +153,8 @@ flowchart LR
   A --> R[gfx::renderer::Render2D]
 
   D -->|implemented by| VK[gfx::vk::VkGpuDevice]
-  VK --> VKI[VkInstanceWrapper\n(VkInstance + VkSurfaceKHR)]
-  VK --> VKD[VkDeviceWrapper\n(VkDevice + queues)]
+  VK --> VKI["VkInstanceWrapper(VkInstance + VkSurfaceKHR)"]
+  VK --> VKD["VkDeviceWrapper(VkDevice + queues)"]
   VK --> VKS[VkSwapchainWrapper]
   VK --> VKC[VkCommandBufferPool]
   VK --> VKP[BasicPipeline]
