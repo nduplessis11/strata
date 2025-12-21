@@ -1,8 +1,8 @@
 // -----------------------------------------------------------------------------
-// engine/platform/src/filesystem.cc
+// engine/platform/src/input_raw.cpp
 //
 // Purpose:
-//   Placeholder for platform filesystem helpers. File loading and path utilities
-//   will be implemented here.
+//   Placeholder source for low-level input handling. Platform-specific input
+//   event translation will be implemented here.
 // -----------------------------------------------------------------------------
 

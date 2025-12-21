@@ -1,4 +1,6 @@
-﻿cmake_minimum_required(VERSION 3.27)
+﻿# CMakeLists.txt
+
+cmake_minimum_required(VERSION 3.27)
 project(strata LANGUAGES CXX)
 
 # Global project settings (targets still carry their own flags)

@@ -1,8 +1,8 @@
 // -----------------------------------------------------------------------------
-// engine/platform/src/input_raw.cc
+// engine/platform/src/clock.cpp
 //
 // Purpose:
-//   Placeholder source for low-level input handling. Platform-specific input
-//   event translation will be implemented here.
+//   Placeholder for platform clock utilities. Timing and high-resolution clock
+//   helpers will be added here.
 // -----------------------------------------------------------------------------
 

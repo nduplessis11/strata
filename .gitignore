@@ -365,7 +365,9 @@ MigrationBackup/
 FodyWeavers.xsd
 
 # Diagram Files
-diagrams/
+docs/diagrams/plantuml.jar
+docs/diagrams/strata_core.svg
+docs/diagrams/strata_core.png
 
 # CMake out-of-source builds
 /build/

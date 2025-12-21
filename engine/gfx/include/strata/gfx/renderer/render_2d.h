@@ -1,4 +1,4 @@
-// engine/gfx/renderer/render_2d.h
+// engine/gfx/include/strata/gfx/renderer/render_2d.h
 #pragma once
 
 #include <memory>

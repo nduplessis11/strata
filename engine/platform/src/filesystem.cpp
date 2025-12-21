@@ -1,8 +1,8 @@
 // -----------------------------------------------------------------------------
-// engine/platform/src/clock.cc
+// engine/platform/src/filesystem.cpp
 //
 // Purpose:
-//   Placeholder for platform clock utilities. Timing and high-resolution clock
-//   helpers will be added here.
+//   Placeholder for platform filesystem helpers. File loading and path utilities
+//   will be implemented here.
 // -----------------------------------------------------------------------------
 

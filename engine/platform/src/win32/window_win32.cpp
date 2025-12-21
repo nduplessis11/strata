@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// engine/platform/src/win32/window_win32.cc
+// engine/platform/src/win32/window_win32.cpp
 //
 // Purpose:
 //   Win32 backend implementation for strata::platform::Window. Creates and

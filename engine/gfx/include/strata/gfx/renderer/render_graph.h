@@ -1,4 +1,4 @@
-// engine/gfx/renderer/render_graph.h
+// engine/gfx/include/strata/gfx/renderer/render_graph.h
 #pragma once
 #include "strata/gfx/rhi/gpu_device.h"
 

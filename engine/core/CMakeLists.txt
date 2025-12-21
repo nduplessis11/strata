@@ -1,3 +1,5 @@
+# engine/core/CMakeLists.txt
+
 add_library(strata_core STATIC
   src/application.cpp
   src/action_map.cpp
