@@ -7,31 +7,39 @@
 
 #pragma once
 
-#include <vulkan/vulkan.h>
 #include "strata/platform/wsi_handle.h"
+#include <vulkan/vulkan.h>
 
-namespace strata::gfx::vk {
+namespace strata::gfx::vk
+{
 
-    class VkInstanceWrapper {
-    public:
-        VkInstanceWrapper() = default;
-        ~VkInstanceWrapper();
+class VkInstanceWrapper
+{
+  public:
+    VkInstanceWrapper() = default;
+    ~VkInstanceWrapper();
 
-        VkInstanceWrapper(VkInstanceWrapper&&) noexcept;
-        VkInstanceWrapper& operator=(VkInstanceWrapper&&) noexcept;
+    VkInstanceWrapper(VkInstanceWrapper&&) noexcept;
+    VkInstanceWrapper& operator=(VkInstanceWrapper&&) noexcept;
 
-        // Create instance and surface for a given WSI handle.
-        bool init(const strata::platform::WsiHandle& wsi);
+    // Create instance and surface for a given WSI handle.
+    bool init(strata::platform::WsiHandle const& wsi);
 
-        VkInstance   instance() const noexcept { return instance_; }
-        VkSurfaceKHR surface()  const noexcept { return surface_; }
+    VkInstance instance() const noexcept
+    {
+        return instance_;
+    }
+    VkSurfaceKHR surface() const noexcept
+    {
+        return surface_;
+    }
 
-    private:
-        void cleanup();
+  private:
+    void cleanup();
 
-        VkInstance   instance_{ VK_NULL_HANDLE };
-        VkSurfaceKHR surface_{ VK_NULL_HANDLE };
-        VkDebugUtilsMessengerEXT debug_messenger_{ VK_NULL_HANDLE };
-    };
+    VkInstance               instance_{VK_NULL_HANDLE};
+    VkSurfaceKHR             surface_{VK_NULL_HANDLE};
+    VkDebugUtilsMessengerEXT debug_messenger_{VK_NULL_HANDLE};
+};
 
 } // namespace strata::gfx::vk

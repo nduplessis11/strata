@@ -4,4 +4,3 @@
 // Purpose:
 //   Placeholder source file for RenderGraph implementation.
 // -----------------------------------------------------------------------------
-

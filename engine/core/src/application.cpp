@@ -11,166 +11,210 @@
 #include <print>
 #include <thread>
 
-namespace strata::core {
+namespace strata::core
+{
 
-    using clock = std::chrono::steady_clock;
+using clock = std::chrono::steady_clock;
 
-    static gfx::rhi::Extent2D clamp_framebuffer(std::int32_t width, std::int32_t height) noexcept {
-        return gfx::rhi::Extent2D{
-            .width = static_cast<std::uint32_t>(std::max(0, width)),
-            .height = static_cast<std::uint32_t>(std::max(0, height)),
-        };
-    }
-
-    struct Application::Impl {
-        ApplicationConfig config{};
-        bool exit_requested{ false };
-
-        platform::Window window;
-        platform::WsiHandle surface{};
-
-        std::unique_ptr<gfx::rhi::IGpuDevice> device{};
-        gfx::rhi::SwapchainHandle swapchain{};
-
-        gfx::renderer::Render2D renderer;
-
-        std::uint64_t frame_index{ 0 };
-        clock::time_point last_frame{};
-
-        Impl(ApplicationConfig cfg,
-             platform::Window&& window,
-             platform::WsiHandle surface,
-             std::unique_ptr<gfx::rhi::IGpuDevice>&& device,
-             gfx::rhi::SwapchainHandle swapchain,
-             gfx::renderer::Render2D&& render)
-            : config(std::move(cfg)),
-              window(std::move(window)),
-              surface(surface),
-              device(std::move(device)),
-              swapchain(swapchain),
-              renderer(std::move(render)),
-              last_frame(clock::now()) {}
-
-        ~Impl() noexcept {
-            // Critical: wait_idle runs BEFORE members are destroyed,
-            // so Render2D::~Render2D can safely destroy pipelines.
-            if (device) {
-                device->wait_idle();
-            }
-        }
+static gfx::rhi::Extent2D clamp_framebuffer(
+    std::int32_t width,
+    std::int32_t height) noexcept
+{
+    return gfx::rhi::Extent2D{
+        .width  = static_cast<std::uint32_t>(std::max(0, width)),
+        .height = static_cast<std::uint32_t>(std::max(0, height)),
     };
+}
 
-    void Application::ImplDeleter::operator()(Impl* impl) const noexcept {
-        delete impl;
+struct Application::Impl
+{
+    ApplicationConfig config{};
+    bool              exit_requested{false};
+
+    platform::Window    window;
+    platform::WsiHandle surface{};
+
+    std::unique_ptr<gfx::rhi::IGpuDevice> device{};
+    gfx::rhi::SwapchainHandle             swapchain{};
+
+    gfx::renderer::Render2D renderer;
+
+    std::uint64_t     frame_index{0};
+    clock::time_point last_frame{};
+
+    Impl(
+        ApplicationConfig                       cfg,
+        platform::Window&&                      window,
+        platform::WsiHandle                     surface,
+        std::unique_ptr<gfx::rhi::IGpuDevice>&& device,
+        gfx::rhi::SwapchainHandle               swapchain,
+        gfx::renderer::Render2D&&               render)
+        : config(std::move(cfg)),
+          window(std::move(window)),
+          surface(surface),
+          device(std::move(device)),
+          swapchain(swapchain),
+          renderer(std::move(render)),
+          last_frame(clock::now())
+    {
     }
 
-    std::expected<Application, ApplicationError> Application::create(ApplicationConfig config) {
-        using gfx::rhi::SwapchainDesc;
-
-        platform::Window window{ config.window_desc };
-        if (window.should_close()) {
-            return std::unexpected(ApplicationError::WindowCreateFailed);
+    ~Impl() noexcept
+    {
+        // Critical: wait_idle runs BEFORE members are destroyed,
+        // so Render2D::~Render2D can safely destroy pipelines.
+        if (device)
+        {
+            device->wait_idle();
         }
+    }
+};
 
-        auto surface = window.native_wsi();
+void Application::ImplDeleter::operator()(
+    Impl* impl) const noexcept
+{
+    delete impl;
+}
 
-        auto device = gfx::rhi::create_device(config.device, surface);
-        if (!device) {
-            return std::unexpected(ApplicationError::DeviceCreateFailed);
-        }
+std::expected<Application,
+              ApplicationError>
+Application::create(
+    ApplicationConfig config)
+{
+    using gfx::rhi::SwapchainDesc;
 
-        auto [fbw, fbh] = window.framebuffer_size();
-        if (fbw <= 0 || fbh <= 0) {
-            auto [ww, wh] = window.window_size();
-            fbw = (ww > 0) ? ww : config.window_desc.size.width;
-            fbh = (wh > 0) ? wh : config.window_desc.size.height;
-        }
-        
-        SwapchainDesc sc_desc = config.swapchain_desc;
-        sc_desc.size = gfx::rhi::Extent2D{
-            static_cast<std::uint32_t>(std::max(1, fbw)),
-            static_cast<std::uint32_t>(std::max(1, fbh))
-        };
-
-        auto swapchain = device->create_swapchain(sc_desc, surface);
-        if (!swapchain) {
-            return std::unexpected(ApplicationError::SwapchainCreateFailed);
-        }
-
-        gfx::renderer::Render2D renderer{ *device, swapchain };
-
-        std::unique_ptr<Impl, ImplDeleter> impl{
-            new Impl{
-                std::move(config),
-                std::move(window),
-                surface,
-                std::move(device),
-                swapchain,
-                std::move(renderer)
-            }
-        };
-
-        return Application{ std::move(impl) };
+    platform::Window window{config.window_desc};
+    if (window.should_close())
+    {
+        return std::unexpected(ApplicationError::WindowCreateFailed);
     }
 
-    void Application::request_exit() noexcept {
-        impl_->exit_requested = true;
-        impl_->window.request_close();
+    auto surface = window.native_wsi();
+
+    auto device = gfx::rhi::create_device(config.device, surface);
+    if (!device)
+    {
+        return std::unexpected(ApplicationError::DeviceCreateFailed);
     }
 
-    std::int16_t Application::run(TickFn tick) {
-        using namespace std::chrono_literals;
+    auto [fbw, fbh] = window.framebuffer_size();
+    if (fbw <= 0 || fbh <= 0)
+    {
+        auto [ww, wh] = window.window_size();
+        fbw           = (ww > 0) ? ww : config.window_desc.size.width;
+        fbh           = (wh > 0) ? wh : config.window_desc.size.height;
+    }
 
-        while (!impl_->exit_requested && !impl_->window.should_close()) {
-            impl_->window.poll_events();
+    SwapchainDesc sc_desc = config.swapchain_desc;
+    sc_desc.size          = gfx::rhi::Extent2D{static_cast<std::uint32_t>(std::max(1, fbw)),
+                                      static_cast<std::uint32_t>(std::max(1, fbh))};
 
-            const auto now = clock::now();
-            const std::chrono::duration<double> dt = now - impl_->last_frame;
-            impl_->last_frame = now;
+    auto swapchain = device->create_swapchain(sc_desc, surface);
+    if (!swapchain)
+    {
+        return std::unexpected(ApplicationError::SwapchainCreateFailed);
+    }
 
-            FrameContext ctx{};
-            ctx.frame_index = impl_->frame_index++;
-            ctx.delta_seconds = dt.count();
+    gfx::renderer::Render2D renderer{*device, swapchain};
 
-            if (tick) {
-                tick(*this, ctx);
-            }
+    std::unique_ptr<Impl, ImplDeleter> impl{new Impl{std::move(config),
+                                                     std::move(window),
+                                                     surface,
+                                                     std::move(device),
+                                                     swapchain,
+                                                     std::move(renderer)}};
 
-            auto [w, h] = impl_->window.framebuffer_size();
-            const auto framebuffer = clamp_framebuffer(w, h);
+    return Application{std::move(impl)};
+}
 
-            // TODO: Why is 'draw_frame_and_handle_resize' not part of Render2D?
-            auto result = gfx::renderer::draw_frame_and_handle_resize(
-                *impl_->device,
-                impl_->swapchain,
-                impl_->renderer,
-                framebuffer);
+void Application::request_exit() noexcept
+{
+    impl_->exit_requested = true;
+    impl_->window.request_close();
+}
 
-            if (result == gfx::rhi::FrameResult::Error) {
-                std::println("Render error; exiting.");
-                return 2;
-            }
+std::int16_t Application::run(
+    TickFn tick)
+{
+    using namespace std::chrono_literals;
 
-            if (impl_->config.throttle_cpu) {
-                std::this_thread::sleep_for(impl_->config.throttle_sleep);
-            }
+    while (!impl_->exit_requested && !impl_->window.should_close())
+    {
+        impl_->window.poll_events();
+
+        auto const                          now = clock::now();
+        std::chrono::duration<double> const dt  = now - impl_->last_frame;
+        impl_->last_frame                       = now;
+
+        FrameContext ctx{};
+        ctx.frame_index   = impl_->frame_index++;
+        ctx.delta_seconds = dt.count();
+
+        if (tick)
+        {
+            tick(*this, ctx);
         }
 
-        impl_->device->wait_idle();
-        return 0;
+        auto [w, h]            = impl_->window.framebuffer_size();
+        auto const framebuffer = clamp_framebuffer(w, h);
+
+        // TODO: Why is 'draw_frame_and_handle_resize' not part of Render2D?
+        auto result = gfx::renderer::draw_frame_and_handle_resize(*impl_->device,
+                                                                  impl_->swapchain,
+                                                                  impl_->renderer,
+                                                                  framebuffer);
+
+        if (result == gfx::rhi::FrameResult::Error)
+        {
+            std::println("Render error; exiting.");
+            return 2;
+        }
+
+        if (impl_->config.throttle_cpu)
+        {
+            std::this_thread::sleep_for(impl_->config.throttle_sleep);
+        }
     }
 
-    platform::Window& Application::window() noexcept { return impl_->window; }
-    const platform::Window& Application::window() const noexcept { return impl_->window; }
+    impl_->device->wait_idle();
+    return 0;
+}
 
-    gfx::rhi::IGpuDevice& Application::device() noexcept { return *impl_->device; }
-    const gfx::rhi::IGpuDevice& Application::device() const noexcept { return *impl_->device; }
+platform::Window& Application::window() noexcept
+{
+    return impl_->window;
+}
+platform::Window const& Application::window() const noexcept
+{
+    return impl_->window;
+}
 
-    gfx::rhi::SwapchainHandle Application::swapchain() const noexcept { return impl_->swapchain; }
+gfx::rhi::IGpuDevice& Application::device() noexcept
+{
+    return *impl_->device;
+}
+gfx::rhi::IGpuDevice const& Application::device() const noexcept
+{
+    return *impl_->device;
+}
 
-    gfx::renderer::Render2D& Application::renderer() noexcept { return impl_->renderer; }
-    const gfx::renderer::Render2D& Application::renderer() const noexcept { return impl_->renderer; }
+gfx::rhi::SwapchainHandle Application::swapchain() const noexcept
+{
+    return impl_->swapchain;
+}
 
-    const ApplicationConfig& Application::config() const noexcept { return impl_->config; }
+gfx::renderer::Render2D& Application::renderer() noexcept
+{
+    return impl_->renderer;
+}
+gfx::renderer::Render2D const& Application::renderer() const noexcept
+{
+    return impl_->renderer;
+}
+
+ApplicationConfig const& Application::config() const noexcept
+{
+    return impl_->config;
+}
 
 } // namespace strata::core
