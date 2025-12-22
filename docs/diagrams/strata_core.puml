@@ -374,20 +374,11 @@ class C_0002997308125348651313 {
 +wait_idle() : void
 __
 -basic_pipeline_ : BasicPipeline
--buffers_ : std::vector<BufferResource>
 -command_pool_ : VkCommandBufferPool
--descriptor_set_layouts_ : std::vector<DescriptorSetLayoutResource>
--descriptor_sets_ : std::vector<DescriptorSetResource>
 -device_ : VkDeviceWrapper
 -frame_index_ : std::uint32_t
 -frames_ : std::vector<FrameSlot>
 -frames_in_flight_ : std::uint32_t
--free_buffers_ : std::vector<std::uint32_t>
--free_commands_ : std::vector<std::uint32_t>
--free_descriptor_set_layouts_ : std::vector<std::uint32_t>
--free_descriptor_sets_ : std::vector<std::uint32_t>
--free_pipelines_ : std::vector<std::uint32_t>
--free_textures_ : std::vector<std::uint32_t>
 -images_in_flight_ : std::vector<VkFence>
 -instance_ : VkInstanceWrapper
 -next_buffer_ : std::uint32_t
@@ -411,26 +402,6 @@ class "strata::gfx::vk::VkGpuDevice::SwapchainSync" as C_0018051402234945093614
 class C_0018051402234945093614 {
 __
 +render_finished_per_image : std::vector<VkSemaphore>
-}
-class "strata::gfx::vk::VkGpuDevice::BufferResource" as C_0012274272788331140469
-class C_0012274272788331140469 {
-__
-+buffer : VkBuffer
-+host_visible : bool
-+mapped : void *
-+memory : VkDeviceMemory
-+size : VkDeviceSize
-}
-class "strata::gfx::vk::VkGpuDevice::DescriptorSetLayoutResource" as C_0013732431376828052180
-class C_0013732431376828052180 {
-__
-+layout : VkDescriptorSetLayout
-}
-class "strata::gfx::vk::VkGpuDevice::DescriptorSetResource" as C_0012849228744193787390
-class C_0012849228744193787390 {
-__
-+layout : rhi::DescriptorSetLayoutHandle
-+set : VkDescriptorSet
 }
 class "strata::platform::wsi::Win32Instance" as C_0009843677739255298692
 class C_0009843677739255298692 {
@@ -675,10 +646,6 @@ C_0002997308125348651313 o-- C_0011075689005501709456 : -basic_pipeline_
 C_0017920997868415439149 <|-- C_0002997308125348651313
 C_0007994622723758139976 --+ C_0002997308125348651313
 C_0018051402234945093614 --+ C_0002997308125348651313
-C_0012274272788331140469 --+ C_0002997308125348651313
-C_0013732431376828052180 --+ C_0002997308125348651313
-C_0012849228744193787390 --+ C_0002997308125348651313
-C_0012849228744193787390 o-- C_0016589488479329003951 : +layout
 C_0015867045834686762295 o-- C_0009843677739255298692 : +instance
 C_0015867045834686762295 o-- C_0018290998811736525383 : +window
 C_0009424639203119917878 o-- C_0004139216579141968676 : +display
