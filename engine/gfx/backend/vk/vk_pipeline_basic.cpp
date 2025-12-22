@@ -153,7 +153,7 @@ BasicPipeline& BasicPipeline::operator=(BasicPipeline&& other) noexcept
 
 BasicPipeline create_basic_pipeline(VkDevice                               device,
                                     VkFormat                               color_format,
-                                    std::span<VkDescriptorSetLayout const> set_layouts = {})
+                                    std::span<VkDescriptorSetLayout const> set_layouts)
 {
     BasicPipeline out{};
     out.device = device;

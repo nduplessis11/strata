@@ -75,6 +75,10 @@ class VkGpuDevice final : public rhi::IGpuDevice
     // --- Recording (explicit functions fine for now)
     // -------------------------------------------------------------
     // TODO: turn these into a CommandList/Encoder object later for nicer API
+    rhi::FrameResult cmd_bind_descriptor_set(rhi::CommandBufferHandle cmd,
+                                             rhi::PipelineHandle      pipeline,
+                                             std::uint32_t            set_index,
+                                             rhi::DescriptorSetHandle set) override;
 
     rhi::FrameResult cmd_begin_swapchain_pass(rhi::CommandBufferHandle cmd,
                                               rhi::SwapchainHandle     swapchain,
@@ -182,8 +186,7 @@ class VkGpuDevice final : public rhi::IGpuDevice
     std::vector<std::uint32_t> free_descriptor_sets_{};
 
     // --- Descriptor allocation ------------------------------------------
-    // Pool-per-frame
-    std::vector<VkDescriptorPool> descriptor_pools_{};
+    VkDescriptorPool descriptor_pool_{};
 
     std::vector<BufferResource>              buffers_{}; // index = BufferHandle.value
     std::vector<DescriptorSetLayoutResource> descriptor_set_layouts_{};

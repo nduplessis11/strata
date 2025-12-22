@@ -148,7 +148,7 @@ struct AcquiredImage
 enum class ShaderStage : std::uint32_t
 {
     None     = 0,
-    Vertext  = 1 << 0,
+    Vertex   = 1 << 0,
     Fragment = 1 << 1,
     Compute  = 1 << 2,
 };

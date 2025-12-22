@@ -13,7 +13,7 @@
 namespace strata::gfx::rhi
 {
 // RHI factory: chooses backend (currently only Vulkan) and forwards to VkGpuDevice.
-std::unique_ptr<IGpuDevice> create_device(DeviceCreateInfo const&            info,
+std::unique_ptr<IGpuDevice> create_device(DeviceCreateInfo const&    info,
                                           platform::WsiHandle const& surface)
 {
     switch (info.backend)
@@ -440,17 +440,46 @@ rhi::FrameResult VkGpuDevice::submit(rhi::IGpuDevice::SubmitDesc const& sd)
     return FrameResult::Ok;
 }
 
-// --- Synchronization -----------------------------------------------------
-
-void VkGpuDevice::wait_idle()
+// --- Descriptor sets ---------------------------------------------------------
+rhi::DescriptorSetLayoutHandle VkGpuDevice::create_descriptor_set_layout(
+    rhi::DescriptorSetLayoutDesc const& /*desc*/)
 {
-    if (device_.device() != VK_NULL_HANDLE)
-    {
-        vkDeviceWaitIdle(device_.device());
-    }
+    // Stub
+    return rhi::DescriptorSetLayoutHandle{1};
+}
+
+void VkGpuDevice::destroy_descriptor_set_layout(rhi::DescriptorSetLayoutHandle /*handle*/)
+{
+    // Stub
+}
+
+rhi::DescriptorSetHandle VkGpuDevice::allocate_descriptor_set(
+    rhi::DescriptorSetLayoutHandle /*layout*/)
+{
+    // Stub
+    return rhi::DescriptorSetHandle{1};
+}
+
+void VkGpuDevice::free_descriptor_set(rhi::DescriptorSetHandle /*set*/) {}
+
+rhi::FrameResult VkGpuDevice::update_descriptor_set(
+    rhi::DescriptorSetHandle /*set*/,
+    std::span<rhi::DescriptorWrite const> /*writes*/)
+{
+    // Stub
+    return rhi::FrameResult::Ok;
 }
 
 // --- Recording (explicit functions fine for now) --------------------------
+
+rhi::FrameResult VkGpuDevice::cmd_bind_descriptor_set(rhi::CommandBufferHandle /*cmd*/,
+                                                      rhi::PipelineHandle /*pipeline*/,
+                                                      std::uint32_t /*set_index*/,
+                                                      rhi::DescriptorSetHandle /*set*/)
+{
+    // Stub
+    return rhi::FrameResult::Ok;
+}
 
 rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
     [[maybe_unused]] rhi::CommandBufferHandle cmd,
@@ -859,4 +888,13 @@ void VkGpuDevice::destroy_render_finished_per_image()
     swapchain_sync_.render_finished_per_image.clear();
 }
 
+// --- Synchronization -----------------------------------------------------
+
+void VkGpuDevice::wait_idle()
+{
+    if (device_.device() != VK_NULL_HANDLE)
+    {
+        vkDeviceWaitIdle(device_.device());
+    }
+}
 } // namespace strata::gfx::vk
