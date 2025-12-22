@@ -64,12 +64,15 @@ struct TextureDesc
     std::uint32_t mip_levels{1};
 };
 
+struct DescriptorSetLayoutHandle; // forward declare
 struct PipelineDesc
 {
     // We can evolve this later with real shader reflection data, etc.
     char const* vertex_shader_path{};
     char const* fragment_shader_path{};
     bool        alpha_blend{false};
+
+    std::span<DescriptorSetLayoutHandle const> set_layouts{};
 };
 
 enum class FrameResult
@@ -158,5 +161,59 @@ inline ShaderStage operator&(ShaderStage a, ShaderStage b)
 {
     return static_cast<ShaderStage>(static_cast<std::uint32_t>(a) & static_cast<std::uint32_t>(b));
 }
+
+enum class DescriptorType
+{
+    UniformBuffer,
+    // Future:
+    // CombinedImageSampler,
+    // StorageBuffer,
+};
+
+struct DescriptorBinding
+{
+    std::uint32_t  binding{0};
+    DescriptorType type{DescriptorType::UniformBuffer};
+    std::uint32_t  count{1};
+    ShaderStage    stages{ShaderStage::None};
+};
+
+struct DescriptorSetLayoutDesc
+{
+    std::span<DescriptorBinding const> bindings{};
+};
+
+struct DescriptorSetLayoutHandle
+{
+    std::uint32_t      value{0};
+    explicit constexpr operator bool() const noexcept
+    {
+        return value != 0;
+    }
+};
+
+struct DescriptorSetHandle
+{
+    std::uint32_t      value{0};
+    explicit constexpr operator bool() const noexcept
+    {
+        return value != 0;
+    }
+};
+
+// Minimal update model (uniform buffers only, for now)
+struct DescriptorBufferInfo
+{
+    BufferHandle  buffer{};
+    std::uint64_t offset_bytes{0};
+    std::uint64_t range_bytes{0}; // 0 = "whole buffer" (backend can expand)
+};
+
+struct DescriptorWrite
+{
+    std::uint32_t        binding{0};
+    DescriptorType       type{DescriptorType::UniformBuffer};
+    DescriptorBufferInfo buffer{};
+};
 
 } // namespace strata::gfx::rhi
