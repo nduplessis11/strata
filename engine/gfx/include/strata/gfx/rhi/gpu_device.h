@@ -1,4 +1,10 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/include/strata/gfx/rhi/gpu_device.h
+//
+// Purpose:
+//   Define the RHI IGpuDevice interface and backend factory.
+// -----------------------------------------------------------------------------
+
 #pragma once
 
 #include <memory>

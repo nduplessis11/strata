@@ -1,4 +1,9 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/include/strata/gfx/renderer/render_scene.h
+//
+// Purpose:
+//   Declare the RenderScene renderer interface.
+// -----------------------------------------------------------------------------
 
 #pragma once
 #include "strata/gfx/rhi/gpu_device.h"

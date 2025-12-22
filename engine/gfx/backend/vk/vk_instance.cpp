@@ -1,4 +1,9 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/backend/vk/vk_instance.cpp
+//
+// Purpose:
+//   Create the Vulkan instance, surface, and optional debug messenger.
+// -----------------------------------------------------------------------------
 
 #include "vk_instance.h"
 #include "vk_wsi_bridge.h"

@@ -1,4 +1,9 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/backend/vk/vk_instance.h
+//
+// Purpose:
+//   Declare a Vulkan instance wrapper with surface creation.
+// -----------------------------------------------------------------------------
 
 #pragma once
 

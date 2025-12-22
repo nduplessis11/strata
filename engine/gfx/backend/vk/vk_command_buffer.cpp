@@ -1,4 +1,9 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/backend/vk/vk_command_buffer.cpp
+//
+// Purpose:
+//   Implement Vulkan command buffer pool utilities.
+// -----------------------------------------------------------------------------
 
 #include "vk_command_buffer.h"
 

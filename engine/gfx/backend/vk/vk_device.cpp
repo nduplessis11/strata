@@ -1,4 +1,9 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/backend/vk/vk_device.cpp
+//
+// Purpose:
+//   Choose a Vulkan physical device and create logical device/queues.
+// -----------------------------------------------------------------------------
 
 #include "vk_device.h"
 

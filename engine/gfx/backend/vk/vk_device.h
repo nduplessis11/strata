@@ -1,4 +1,10 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/backend/vk/vk_device.h
+//
+// Purpose:
+//   Declare a Vulkan device wrapper for logical device and queues.
+// -----------------------------------------------------------------------------
+
 #pragma once
 
 #include <vulkan/vulkan.h>
