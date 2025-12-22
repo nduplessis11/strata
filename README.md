@@ -29,8 +29,8 @@ Diagrams:
 
 - A minimal “smoke test” renderer:
   - **Acquire → record → submit → present**
-  - **One command buffer** reused every frame
-  - **One frame in flight** (single fence)
+  - **Per-frame command buffers** (ringed with frames-in-flight)
+  - **Multiple frames in flight** (currently 2; per-frame fences/semaphores)
   - **One graphics pipeline** (fullscreen triangle)
 - Resize handling:
   - swapchain resize triggers a **`wait_idle()`** + swapchain recreation
@@ -185,8 +185,7 @@ Also keep Vulkan containment intact:
 
 Some natural next steps (also described in the docs):
 
-- Move command recording out of `present()` into the renderer (or a frame-graph)
-- Add **multiple frames-in-flight** (per-frame fences/semaphores/command buffers)
+- Add **Vulkan descriptor sets** (resource binding for buffers/textures)
 - Introduce real resource tables/registries for buffers/textures/pipelines
 - Grow beyond the single-pass fullscreen triangle (depth, MSAA, post, etc.)
 - ECS/data-driven systems (future)

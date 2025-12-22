@@ -2,7 +2,7 @@
 
 This document describes **how Strata renders a frame today**, from the game loop down to Vulkan calls.
 
-It is intentionally scoped to the **current** implementation (single pass, fullscreen triangle). As the engine grows (command buffers, multiple frames-in-flight, etc.), this doc should evolve alongside it.
+It is intentionally scoped to the **current** implementation (single pass, fullscreen triangle). As the engine grows (descriptor sets, resource registries, etc.), this doc should evolve alongside it.
 
 ---
 
@@ -27,7 +27,7 @@ Today’s frame path looks like this:
 
 - **Vulkan is contained** in `engine/gfx/backend/vk/*` (`namespace strata::gfx::vk`).
 - The renderer (`Render2D`) depends only on the **RHI** (`IGpuDevice`) and opaque handles.
-- The backend currently uses a **single primary command buffer** and a **single in-flight fence**.
+- The backend uses a **frames-in-flight ring** (per-frame command buffers + fences + image-available semaphores).
 - Rendering uses **Vulkan 1.3 dynamic rendering** (`vkCmdBeginRendering`) and **dynamic viewport/scissor**.
 - Barriers use **Synchronization2** (`vkCmdPipelineBarrier2`).
 - The first “render pass” is a **fullscreen triangle** with a solid clear + draw.
@@ -187,10 +187,12 @@ Those requirements match the frame code:
 ### Backend state (relevant pieces)
 - `VkSwapchainWrapper swapchain_` (owns `VkSwapchainKHR` + image views)
 - `VkCommandBufferPool command_pool_`
-- `VkCommandBuffer primary_cmd_` (single primary command buffer)
-- `FrameSync frame_sync_`
-  - `image_available` semaphore (single)
-  - `in_flight` fence (single, signaled initially)
+- `FrameSlot` ring (one per frame-in-flight)
+  - `VkCommandBuffer cmd`
+  - `image_available` semaphore
+  - `in_flight` fence (signaled initially)
+- `SwapchainSync render_finished_per_image` (one per swapchain image)
+- `images_in_flight_` (per-image fence tracking)
   - `render_finished_per_image` semaphores (one per swapchain image)
 - `BasicPipeline basic_pipeline_` (owns `VkPipelineLayout` + `VkPipeline`)
 - `swapchain_image_layouts_` (tracks per-image layout state)
@@ -230,13 +232,14 @@ The Vulkan backend rebuilds its `basic_pipeline_` when this is called, and also 
 
 ### 1) Wait previous frame + acquire swapchain image
 `VkGpuDevice::acquire_next_image(...)`:
-- waits for `in_flight` fence
-- calls `vkAcquireNextImageKHR(..., image_available, ..., &image_index)`
+- waits for the **current frame slot** `in_flight` fence
+- calls `vkAcquireNextImageKHR(..., frame.image_available, ..., &image_index)`
+- waits on `images_in_flight_[image_index]` if that swapchain image is still in flight
 - maps `VK_ERROR_OUT_OF_DATE_KHR` → `ResizeNeeded`
 - returns `Suboptimal` but allows rendering
 
 ### 2) Begin + record commands
-- `begin_commands()` resets/begins the single `primary_cmd_`
+- `begin_commands()` resets/begins the **current frame slot** command buffer
 - `cmd_begin_swapchain_pass(...)`:
   - transitions swapchain image to `COLOR_ATTACHMENT_OPTIMAL`
   - begins dynamic rendering with clear color
@@ -250,9 +253,10 @@ The Vulkan backend rebuilds its `basic_pipeline_` when this is called, and also 
 
 ### 3) Submit
 `submit({ cmd, swapchain, image_index, frame_index })`:
-- waits on `image_available`
+- waits on the frame slot `image_available`
 - signals `render_finished_per_image[image_index]`
-- uses `in_flight` fence
+- uses the frame slot `in_flight` fence
+- advances the frame slot index for the next frame
 
 ### 4) Present
 `present(swapchain, image_index)`:
@@ -288,8 +292,9 @@ Because the pipeline depends on swapchain format, it is recreated when the swapc
 ## Synchronization model (today)
 
 ### CPU/GPU pacing
-- Single fence `in_flight` → CPU blocks each frame until GPU completes last submission.
-- This is simple and good for early development, but limits throughput.
+- Frames-in-flight ring (currently 2 slots).
+- CPU waits on the **next frame slot fence** before recording new work for that slot.
+- Swapchain images also track `images_in_flight_` fences so we never re-use an image still being presented.
 
 ### GPU-GPU ordering
 - `image_available` semaphore ensures rendering waits until the image is available.
@@ -302,8 +307,7 @@ Because the pipeline depends on swapchain format, it is recreated when the swapc
 ---
 
 ## Current simplifications (intentional)
-- **One command buffer** reused every frame.
-- **One frame in flight** (single fence).
+- **Fixed frames-in-flight count** (currently 2).
 - **One graphics pipeline** (fullscreen triangle).
 - **No vertex/index buffers** in the frame loop.
 - **No depth**, no MSAA, no post-processing.
@@ -314,12 +318,9 @@ Because the pipeline depends on swapchain format, it is recreated when the swapc
 
 ## Planned evolution points
 
-1. **Multiple frames-in-flight**
-   - Replace single fence with N-frame ring:
-     - per-frame command buffers
-     - per-frame fences
-     - per-frame image-available semaphores
-     - optional timeline semaphore
+1. **Descriptor sets / resource binding**
+   - add descriptor set layout + update APIs to the RHI
+   - plumb Vulkan descriptor pools/sets in the backend
 
 2. **Command recording API ergonomics**
    - Replace `cmd_*` functions with a command encoder/list object.
