@@ -1,7 +1,6 @@
 // engine/gfx/include/strata/gfx/renderer/render_2d.h
 #pragma once
 
-#include <memory>
 #include "strata/gfx/rhi/gpu_device.h"
 
 namespace strata::gfx::renderer {

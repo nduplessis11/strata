@@ -46,7 +46,7 @@ WSI handle alternatives live in:
 
 - `strata::platform::wsi` (Win32/X11/Wayland variants)
 
-### Rule of thumb: “where does this code belong?”
+### Rule of thumb: "where does this code belong?"
 - If it contains `Vk*` types, it belongs in **`strata::gfx::vk`** and `engine/gfx/backend/vk/*`.
 - If it contains OS types (`HWND`, `Display*`, `wl_display*`), it belongs in **platform source files** (pImpl) and should not leak into public headers.
 - If it must be visible to renderer code, it belongs in **`gfx/rhi`** or **`gfx/renderer`** (with Vulkan hidden).
@@ -107,7 +107,7 @@ Private/internal implementation lives in `src/` or backend folders:
 - Vulkan backend types use a `Vk` prefix and live in `strata::gfx::vk`:
   - `VkGpuDevice`, `VkInstanceWrapper`, `VkDeviceWrapper`, `VkSwapchainWrapper`, `VkCommandBufferPool`
 
-### “Wrapper” naming
+### "Wrapper" naming
 Use `*Wrapper` for RAII wrappers that own raw Vulkan objects:
 - `VkInstanceWrapper` owns `VkInstance`, `VkSurfaceKHR`, optional debug messenger
 - `VkDeviceWrapper` owns `VkDevice`
@@ -276,7 +276,7 @@ Guidelines:
 
 ---
 
-## Naming “smells” to avoid
+## Naming "smells" to avoid
 
 - Abbreviations that aren’t standard (prefer `framebuffer_size` over `fb_sz`)
 - Overloaded names across layers (e.g., a platform `Device` vs GPU `Device` without qualification)
