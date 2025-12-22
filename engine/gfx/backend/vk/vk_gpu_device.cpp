@@ -36,7 +36,6 @@ namespace strata::gfx::vk {
         }
     } // anonymous namespace
 
-
     std::unique_ptr<VkGpuDevice> VkGpuDevice::create(
         const rhi::DeviceCreateInfo& info,
         const strata::platform::WsiHandle& surface)
@@ -220,7 +219,6 @@ namespace strata::gfx::vk {
         return (ar == VK_SUBOPTIMAL_KHR) ? FrameResult::Suboptimal : FrameResult::Ok;
     }
 
-
     rhi::FrameResult VkGpuDevice::present(rhi::SwapchainHandle, std::uint32_t image_index) {
         using rhi::FrameResult;
 
@@ -377,7 +375,7 @@ namespace strata::gfx::vk {
         rhi::SwapchainHandle /*swapchain*/,
         std::uint32_t image_index,
         const rhi::ClearColor& clear) {
-        
+
         using rhi::FrameResult;
 
         if (frames_.empty()) return FrameResult::Error;
@@ -491,7 +489,7 @@ namespace strata::gfx::vk {
         [[maybe_unused]] rhi::CommandBufferHandle cmd,
         rhi::SwapchainHandle /*swapchain*/,
         std::uint32_t image_index) {
-        
+
         using rhi::FrameResult;
 
         if (frames_.empty()) return FrameResult::Error;
@@ -548,7 +546,7 @@ namespace strata::gfx::vk {
     rhi::FrameResult VkGpuDevice::cmd_bind_pipeline(
         [[maybe_unused]] rhi::CommandBufferHandle cmd,
         rhi::PipelineHandle pipeline) {
-        
+
         using rhi::FrameResult;
 
         if (frames_.empty()) return FrameResult::Error;
@@ -579,7 +577,7 @@ namespace strata::gfx::vk {
     rhi::FrameResult VkGpuDevice::cmd_set_viewport_scissor(
         [[maybe_unused]] rhi::CommandBufferHandle cmd,
         rhi::Extent2D extent) {
-        
+
         using rhi::FrameResult;
 
         if (frames_.empty()) return FrameResult::Error;
@@ -614,7 +612,7 @@ namespace strata::gfx::vk {
         std::uint32_t instance_count,
         std::uint32_t first_vertex,
         std::uint32_t first_instance) {
-        
+
         using rhi::FrameResult;
 
         if (frames_.empty()) return FrameResult::Error;
