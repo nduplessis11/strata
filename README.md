@@ -17,7 +17,7 @@ Start here:
 - **Architecture:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - **Rendering flow (frame pipeline):** [`docs/RENDERING_PIPELINE.md`](docs/RENDERING_PIPELINE.md)
 - **Ownership / lifetime rules:** [`docs/LIFETIME_MODEL.md`](docs/LIFETIME_MODEL.md)
-- **Naming & style conventions:** [`docs/NAMING_CONVENTIONS.md`](docs/NAMING_CONVENTIONS.md)
+- **Naming & style conventions:** [`docs/CODING_CONVENTIONS.md`](docs/CODING_CONVENTIONS.md)
 
 Diagrams:
 
@@ -174,7 +174,7 @@ At a high level, the codebase is split into layered targets:
 
 If you’re adding code, please follow:
 
-- [`docs/NAMING_CONVENTIONS.md`](docs/NAMING_CONVENTIONS.md)
+- [`docs/CODING_CONVENTIONS.md`](docs/CODING_CONVENTIONS.md)
 
 Also keep Vulkan containment intact:
 - **No raw `Vk*` types outside** `engine/gfx/backend/vk/*` (`namespace strata::gfx::vk`).
