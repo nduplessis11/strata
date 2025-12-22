@@ -21,7 +21,7 @@ namespace
 // A unique class name for this process.
 // Each "window class" in Win32 describes default behavior (cursor, icon, WndProc).
 // We register it once, then use it to create one or more windows of that class.
-constexpr wchar_t const* kStrataWndClass = L"strata_window_class";
+constexpr wchar_t const* strata_wnd_class = L"strata_window_class";
 
 // Register the window class once per process.
 // NOTES on key fields:
@@ -46,7 +46,7 @@ ATOM register_wnd_class(
     wc.hCursor       = ::LoadCursorW(nullptr, IDC_ARROW);
     wc.hbrBackground = nullptr; // no background erase → less flicker
     wc.lpszMenuName  = nullptr;
-    wc.lpszClassName = kStrataWndClass;
+    wc.lpszClassName = strata_wnd_class;
     wc.hIconSm       = wc.hIcon;
 
     ATOM atom = ::RegisterClassExW(&wc);
@@ -232,8 +232,8 @@ Window::Window(
     }
 
     // Choose style flags. If not resizable, remove thick frame + maximize box.
-    DWORD style = WS_OVERLAPPEDWINDOW;
-    DWORD ex    = WS_EX_APPWINDOW;
+    DWORD       style = WS_OVERLAPPEDWINDOW;
+    DWORD const ex    = WS_EX_APPWINDOW;
     if (!desc.resizable)
     {
         style &= ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
@@ -246,11 +246,11 @@ Window::Window(
     int const outer_h = rect.bottom - rect.top;
 
     // Title: UTF-8 → UTF-16.
-    std::wstring wtitle = utf8_to_wide(desc.title);
+    std::wstring const wtitle = utf8_to_wide(desc.title);
 
     // Create the window. Pass Impl* via lpCreateParams so WM_NCCREATE can stash it.
     HWND hwnd = ::CreateWindowExW(ex,
-                                  kStrataWndClass,
+                                  strata_wnd_class,
                                   wtitle.c_str(),
                                   style,
                                   CW_USEDEFAULT,

@@ -86,7 +86,7 @@ FrameResult Render2D::draw_frame()
         return FrameResult::Error;
 
     rhi::AcquiredImage img{};
-    FrameResult        acquire = device_->acquire_next_image(swapchain_, img);
+    FrameResult const  acquire = device_->acquire_next_image(swapchain_, img);
 
     // If acquire says "Suboptimal", we should still render the frame,
     // but bubble up Suboptimal afterward so the caller can choose to resize.
@@ -101,7 +101,7 @@ FrameResult Render2D::draw_frame()
         hint = FrameResult::Suboptimal;
     }
 
-    rhi::CommandBufferHandle cmd = device_->begin_commands();
+    rhi::CommandBufferHandle const cmd = device_->begin_commands();
     if (!cmd)
         return FrameResult::Error;
 
@@ -153,7 +153,7 @@ FrameResult Render2D::draw_frame()
         sd.image_index    = img.image_index;
         sd.frame_index    = img.frame_index;
 
-        FrameResult sub = device_->submit(sd);
+        FrameResult const sub = device_->submit(sd);
         if (sub != FrameResult::Ok)
         {
             result = sub;
@@ -163,7 +163,7 @@ FrameResult Render2D::draw_frame()
 
     // --- Present ------------------------------------------------------------
     {
-        FrameResult pres = device_->present(swapchain_, img.image_index);
+        FrameResult const pres = device_->present(swapchain_, img.image_index);
         if (pres == FrameResult::Ok)
         {
             // If acquire was Suboptimal, bubble it up so caller can decide to resize.
@@ -208,7 +208,7 @@ FrameResult draw_frame_and_handle_resize(
         return FrameResult::Ok;
     }
 
-    FrameResult result = renderer.draw_frame();
+    FrameResult const result = renderer.draw_frame();
     if (result == FrameResult::Ok || result == FrameResult::Error)
         return result;
 
@@ -220,7 +220,7 @@ FrameResult draw_frame_and_handle_resize(
     sc_desc.vsync = true; // or expose as parameter later
 
     // Resize existing swapchain in-place.
-    FrameResult resize_result = device.resize_swapchain(swapchain, sc_desc);
+    FrameResult const resize_result = device.resize_swapchain(swapchain, sc_desc);
     if (resize_result == FrameResult::Error)
     {
         // Failed to resize; treat as non-fatal (no frame rendered).

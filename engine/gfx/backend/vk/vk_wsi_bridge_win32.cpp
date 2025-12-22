@@ -49,7 +49,7 @@ namespace wsi = strata::platform::wsi;
 
 namespace
 {
-static constexpr std::array<std::string_view, 2> kExtViews = {VK_KHR_SURFACE_EXTENSION_NAME,
+static constexpr std::array<std::string_view, 2> ext_views = {VK_KHR_SURFACE_EXTENSION_NAME,
                                                               VK_KHR_WIN32_SURFACE_EXTENSION_NAME};
 } // namespace
 
@@ -58,7 +58,7 @@ namespace strata::gfx::vk
 std::span<ExtensionName const> required_instance_extensions(
     WsiHandle const&)
 {
-    return std::span{kExtViews};
+    return std::span{ext_views};
 }
 
 VkSurfaceKHR create_surface(
