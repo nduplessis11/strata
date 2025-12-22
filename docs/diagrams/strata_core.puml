@@ -380,13 +380,6 @@ __
 +layout : VkPipelineLayout
 +pipeline : VkPipeline
 }
-class "strata::gfx::vk::FrameSync" as C_0011194169111644642578
-class C_0011194169111644642578 {
-__
-+image_available : VkSemaphore
-+in_flight : VkFence
-+render_finished_per_image : std::vector<VkSemaphore>
-}
 class "strata::gfx::vk::VkGpuDevice" as C_0002997308125348651313
 class C_0002997308125348651313 {
 -VkGpuDevice() = default : void
@@ -409,9 +402,13 @@ class C_0002997308125348651313 {
 +create_swapchain(const rhi::SwapchainDesc & desc, const strata::platform::WsiHandle & surface) : rhi::SwapchainHandle
 +create_texture(const rhi::TextureDesc & desc) : rhi::TextureHandle
 +destroy_buffer(rhi::BufferHandle handle) : void
+-destroy_frames() : void
 +destroy_pipeline(rhi::PipelineHandle handle) : void
+-destroy_render_finished_per_image() : void
 +destroy_texture(rhi::TextureHandle handle) : void
 +end_commands(rhi::CommandBufferHandle cmd) : rhi::FrameResult
+-init_frames() : bool
+-init_render_finished_per_image(std::size_t image_count) : bool
 +present(rhi::SwapchainHandle swapchain, std::uint32_t image_index) : rhi::FrameResult
 +resize_swapchain(rhi::SwapchainHandle swapchain, const rhi::SwapchainDesc & desc) : rhi::FrameResult
 +submit(const rhi::IGpuDevice::SubmitDesc & submit) : rhi::FrameResult
@@ -420,15 +417,32 @@ __
 -basic_pipeline_ : BasicPipeline
 -command_pool_ : VkCommandBufferPool
 -device_ : VkDeviceWrapper
--frame_sync_ : FrameSync
+-frame_index_ : std::uint32_t
+-frames_ : std::vector<FrameSlot>
+-frames_in_flight_ : std::uint32_t
+-images_in_flight_ : std::vector<VkFence>
 -instance_ : VkInstanceWrapper
 -next_buffer_ : std::uint32_t
 -next_command_ : std::uint32_t
 -next_pipeline_ : std::uint32_t
 -next_texture_ : std::uint32_t
--primary_cmd_ : VkCommandBuffer
+-recording_active_ : bool
+-recording_frame_index_ : std::uint32_t
 -swapchain_ : VkSwapchainWrapper
 -swapchain_image_layouts_ : std::vector<VkImageLayout>
+-swapchain_sync_ : SwapchainSync
+}
+class "strata::gfx::vk::VkGpuDevice::FrameSlot" as C_0007994622723758139976
+class C_0007994622723758139976 {
+__
++cmd : VkCommandBuffer
++image_available : VkSemaphore
++in_flight : VkFence
+}
+class "strata::gfx::vk::VkGpuDevice::SwapchainSync" as C_0018051402234945093614
+class C_0018051402234945093614 {
+__
++render_finished_per_image : std::vector<VkSemaphore>
 }
 class "strata::core::FrameContext" as C_0009952609517611504575
 class C_0009952609517611504575 {
@@ -563,9 +577,11 @@ C_0002997308125348651313 o-- C_0016636178717209631603 : -instance_
 C_0002997308125348651313 o-- C_0011145604038376368072 : -device_
 C_0002997308125348651313 o-- C_0005469923327072863924 : -swapchain_
 C_0002997308125348651313 o-- C_0010554209192484980512 : -command_pool_
-C_0002997308125348651313 o-- C_0011194169111644642578 : -frame_sync_
+C_0002997308125348651313 o-- C_0018051402234945093614 : -swapchain_sync_
 C_0002997308125348651313 o-- C_0011075689005501709456 : -basic_pipeline_
 C_0017920997868415439149 <|-- C_0002997308125348651313
+C_0007994622723758139976 --+ C_0002997308125348651313
+C_0018051402234945093614 --+ C_0002997308125348651313
 C_0002056900511809122909 o-- C_0016311843175510711894 : +window_desc
 C_0002056900511809122909 o-- C_0007170430122059447642 : +device
 C_0002056900511809122909 o-- C_0008242555543376944237 : +swapchain_desc

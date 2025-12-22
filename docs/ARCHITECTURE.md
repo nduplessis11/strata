@@ -162,7 +162,7 @@ flowchart LR
   VK --> VKD["VkDeviceWrapper(VkDevice + queues)"]
   VK --> VKS[VkSwapchainWrapper]
   VK --> VKC[VkCommandBufferPool]
-  VK --> VKF[FrameSlot ring (cmd + fence + image_available)]
+  VK --> VKF["FrameSlot ring (cmd + fence + image_available)"]
   VK --> VKIIF[images_in_flight fence tracking]
   VK --> VKRF[render_finished per swapchain image]
   VK --> VKP[BasicPipeline]
