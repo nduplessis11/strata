@@ -37,7 +37,7 @@ namespace strata::gfx::vk
 
 namespace
 {
-constexpr std::uint64_t kFenceTimeout = std::numeric_limits<std::uint64_t>::max();
+constexpr std::uint64_t fence_timeout = std::numeric_limits<std::uint64_t>::max();
 
 inline VkImageLayout safe_old_layout(
     std::vector<VkImageLayout> const& layouts,
@@ -206,27 +206,27 @@ rhi::FrameResult VkGpuDevice::acquire_next_image(
     if (frames_.empty())
         return FrameResult::Error;
 
-    VkDevice   vk_device = device_.device();
-    FrameSlot& frame     = frames_[frame_index_];
+    VkDevice         vk_device = device_.device();
+    FrameSlot const& frame     = frames_[frame_index_];
 
     // Wait for this frame slot to be available
-    if (vkWaitForFences(vk_device, 1, &frame.in_flight, VK_TRUE, kFenceTimeout) != VK_SUCCESS)
+    if (vkWaitForFences(vk_device, 1, &frame.in_flight, VK_TRUE, fence_timeout) != VK_SUCCESS)
     {
         return FrameResult::Error;
     }
 
     // Acquire using per-frame semaphore
-    std::uint32_t image_index = 0;
-    VkResult      ar          = vkAcquireNextImageKHR(vk_device,
-                                        swapchain_.swapchain(),
-                                        kFenceTimeout,
-                                        frame.image_available,
-                                        VK_NULL_HANDLE,
-                                        &image_index);
+    std::uint32_t  image_index    = 0;
+    VkResult const acquire_result = vkAcquireNextImageKHR(vk_device,
+                                                          swapchain_.swapchain(),
+                                                          fence_timeout,
+                                                          frame.image_available,
+                                                          VK_NULL_HANDLE,
+                                                          &image_index);
 
-    if (ar == VK_ERROR_OUT_OF_DATE_KHR)
+    if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR)
         return FrameResult::ResizeNeeded;
-    if (ar != VK_SUCCESS && ar != VK_SUBOPTIMAL_KHR)
+    if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR)
         return FrameResult::Error;
 
     // Wait if this swapchain image is still in flight
@@ -235,7 +235,7 @@ rhi::FrameResult VkGpuDevice::acquire_next_image(
         VkFence img_fence = images_in_flight_[image_index];
         if (img_fence != VK_NULL_HANDLE)
         {
-            if (vkWaitForFences(vk_device, 1, &img_fence, VK_TRUE, kFenceTimeout) != VK_SUCCESS)
+            if (vkWaitForFences(vk_device, 1, &img_fence, VK_TRUE, fence_timeout) != VK_SUCCESS)
             {
                 return FrameResult::Error;
             }
@@ -243,12 +243,12 @@ rhi::FrameResult VkGpuDevice::acquire_next_image(
         images_in_flight_[image_index] = frame.in_flight;
     }
 
-    VkExtent2D extent = swapchain_.extent();
-    out.image_index   = image_index;
-    out.extent        = rhi::Extent2D{extent.width, extent.height};
-    out.frame_index   = frame_index_;
+    VkExtent2D const extent = swapchain_.extent();
+    out.image_index         = image_index;
+    out.extent              = rhi::Extent2D{extent.width, extent.height};
+    out.frame_index         = frame_index_;
 
-    return (ar == VK_SUBOPTIMAL_KHR) ? FrameResult::Suboptimal : FrameResult::Ok;
+    return (acquire_result == VK_SUBOPTIMAL_KHR) ? FrameResult::Suboptimal : FrameResult::Ok;
 }
 
 rhi::FrameResult VkGpuDevice::present(
@@ -273,7 +273,7 @@ rhi::FrameResult VkGpuDevice::present(
     pi.pSwapchains        = &sw;
     pi.pImageIndices      = &image_index;
 
-    VkResult pres = vkQueuePresentKHR(device_.present_queue(), &pi);
+    VkResult const pres = vkQueuePresentKHR(device_.present_queue(), &pi);
 
     if (pres == VK_ERROR_OUT_OF_DATE_KHR)
         return FrameResult::ResizeNeeded;
@@ -373,7 +373,7 @@ rhi::CommandBufferHandle VkGpuDevice::begin_commands()
     recording_frame_index_ = frame_index_;
     recording_active_      = true;
 
-    FrameSlot& frame = frames_[recording_frame_index_];
+    FrameSlot const& frame = frames_[recording_frame_index_];
     if (frame.cmd == VK_NULL_HANDLE)
         return {};
 
@@ -402,7 +402,7 @@ rhi::FrameResult VkGpuDevice::end_commands(
         return FrameResult::Error;
     }
 
-    FrameSlot& frame = frames_[recording_frame_index_];
+    FrameSlot const& frame = frames_[recording_frame_index_];
     if (frame.cmd == VK_NULL_HANDLE)
         return FrameResult::Error;
 
@@ -421,14 +421,14 @@ rhi::FrameResult VkGpuDevice::submit(
     if (!sd.command_buffer)
         return FrameResult::Error;
 
-    FrameSlot& frame = frames_[recording_frame_index_];
+    FrameSlot const& frame = frames_[recording_frame_index_];
 
     std::uint32_t const image_index = sd.image_index;
     if (image_index >= swapchain_sync_.render_finished_per_image.size())
         return FrameResult::Error;
 
-    VkSemaphore          render_finished = swapchain_sync_.render_finished_per_image[image_index];
-    VkPipelineStageFlags wait_stage      = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSemaphore render_finished           = swapchain_sync_.render_finished_per_image[image_index];
+    VkPipelineStageFlags const wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
     VkSubmitInfo submit{};
     submit.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -578,7 +578,7 @@ rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
     color_attach.resolveImageView   = VK_NULL_HANDLE;
     color_attach.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-    VkExtent2D extent = swapchain_.extent();
+    VkExtent2D const extent = swapchain_.extent();
 
     VkRenderingInfo render_info{};
     render_info.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;

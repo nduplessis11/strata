@@ -18,9 +18,9 @@ namespace strata::gfx::vk
 namespace
 {
 
-inline constexpr bool kEnableValidation = (STRATA_VK_VALIDATION != 0);
+inline constexpr bool vk_validation_requested = (STRATA_VK_VALIDATION != 0);
 
-constexpr char const* kValidationLayers[] = {"VK_LAYER_KHRONOS_validation"};
+constexpr char const* validation_layers[] = {"VK_LAYER_KHRONOS_validation"};
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     [[maybe_unused]] VkDebugUtilsMessageSeverityFlagBitsEXT severity,
@@ -60,7 +60,7 @@ bool has_layer_support()
     std::vector<VkLayerProperties> props(count);
     vkEnumerateInstanceLayerProperties(&count, props.data());
 
-    for (char const* want : kValidationLayers)
+    for (char const* want : validation_layers)
     {
         bool const found = std::any_of(props.begin(),
                                        props.end(),
@@ -72,7 +72,7 @@ bool has_layer_support()
     return true;
 }
 
-VkResult CreateDebugUtilsMessengerEXT(
+VkResult create_debug_utils_messenger_ext(
     VkInstance                                instance,
     VkDebugUtilsMessengerCreateInfoEXT const* create_info,
     VkAllocationCallbacks const*              allocator,
@@ -86,7 +86,7 @@ VkResult CreateDebugUtilsMessengerEXT(
     return fn(instance, create_info, allocator, out);
 }
 
-void DestroyDebugUtilsMessengerEXT(
+void destroy_debug_utils_messenger_ext(
     VkInstance                   instance,
     VkDebugUtilsMessengerEXT     messenger,
     VkAllocationCallbacks const* allocator)
@@ -149,9 +149,9 @@ bool VkInstanceWrapper::init(
         exts.push_back(sv.data());
     }
 
-    bool const want_validation   = kEnableValidation;
-    bool const have_validation   = (!want_validation) ? false : has_layer_support();
-    bool const enable_validation = want_validation && have_validation;
+    bool const want_validation    = vk_validation_requested;
+    bool const have_validation    = want_validation && has_layer_support();
+    bool const validation_enabled = want_validation && have_validation;
 
     if (want_validation && !have_validation)
     {
@@ -160,7 +160,7 @@ bool VkInstanceWrapper::init(
                      "Continuing without layers.");
     }
 
-    if (enable_validation)
+    if (validation_enabled)
     {
         exts.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
@@ -176,7 +176,7 @@ bool VkInstanceWrapper::init(
 
     // Optional: allow validation messages during vkCreateInstance
     VkDebugUtilsMessengerCreateInfoEXT debug_ci{};
-    if (enable_validation)
+    if (validation_enabled)
     {
         populate_debug_messenger_ci(debug_ci);
     }
@@ -188,10 +188,10 @@ bool VkInstanceWrapper::init(
     ci.enabledExtensionCount   = static_cast<std::uint32_t>(exts.size());
     ci.ppEnabledExtensionNames = exts.data();
 
-    if (enable_validation)
+    if (validation_enabled)
     {
-        ci.enabledLayerCount   = static_cast<std::uint32_t>(std::size(kValidationLayers));
-        ci.ppEnabledLayerNames = kValidationLayers;
+        ci.enabledLayerCount   = static_cast<std::uint32_t>(std::size(validation_layers));
+        ci.ppEnabledLayerNames = validation_layers;
         ci.pNext               = &debug_ci; // hook messages from instance creation
     }
     else
@@ -210,9 +210,9 @@ bool VkInstanceWrapper::init(
     }
 
     // Create debug messenger AFTER instance creation
-    if (enable_validation)
+    if (validation_enabled)
     {
-        res = CreateDebugUtilsMessengerEXT(instance_, &debug_ci, nullptr, &debug_messenger_);
+        res = create_debug_utils_messenger_ext(instance_, &debug_ci, nullptr, &debug_messenger_);
         if (res != VK_SUCCESS)
         {
             std::println(
@@ -242,7 +242,7 @@ void VkInstanceWrapper::cleanup()
         // Destroy messenger first (it references the instance)
         if (debug_messenger_ != VK_NULL_HANDLE)
         {
-            DestroyDebugUtilsMessengerEXT(instance_, debug_messenger_, nullptr);
+            destroy_debug_utils_messenger_ext(instance_, debug_messenger_, nullptr);
             debug_messenger_ = VK_NULL_HANDLE;
         }
 

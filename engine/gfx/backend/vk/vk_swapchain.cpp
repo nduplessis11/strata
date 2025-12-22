@@ -193,9 +193,9 @@ bool VkSwapchainWrapper::init(
     VkSurfaceCapabilitiesKHR capabilities{};
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical, surface, &capabilities);
 
-    VkSurfaceFormatKHR surface_format = choose_surface_format(physical, surface);
-    VkPresentModeKHR   present_mode   = choose_present_mode(physical, surface, desc.vsync);
-    VkExtent2D         extent         = choose_extent(capabilities, desc.size);
+    VkSurfaceFormatKHR const surface_format = choose_surface_format(physical, surface);
+    VkPresentModeKHR const   present_mode   = choose_present_mode(physical, surface, desc.vsync);
+    VkExtent2D const         extent         = choose_extent(capabilities, desc.size);
 
     image_format_ = surface_format.format;
     extent_       = extent;
@@ -218,7 +218,7 @@ bool VkSwapchainWrapper::init(
     ci.imageArrayLayers = 1;
     ci.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    u32 queueFamilyIndices[2] = {
+    u32 queue_family_indices[2] = {
         graphics_family,
         present_family,
     };
@@ -227,7 +227,7 @@ bool VkSwapchainWrapper::init(
     {
         ci.imageSharingMode      = VK_SHARING_MODE_CONCURRENT;
         ci.queueFamilyIndexCount = 2;
-        ci.pQueueFamilyIndices   = queueFamilyIndices;
+        ci.pQueueFamilyIndices   = queue_family_indices;
     }
     else
     {

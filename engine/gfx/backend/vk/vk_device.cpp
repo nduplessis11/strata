@@ -23,17 +23,17 @@ namespace
 {
 
 using u32                   = std::uint32_t;
-constexpr u32 kInvalidIndex = std::numeric_limits<u32>::max();
+constexpr u32 invalid_index = std::numeric_limits<u32>::max();
 
 struct QueueFamilySelection
 {
     VkPhysicalDevice physical{VK_NULL_HANDLE};
-    u32              graphics_family{kInvalidIndex};
-    u32              present_family{kInvalidIndex};
+    u32              graphics_family{invalid_index};
+    u32              present_family{invalid_index};
 
     [[nodiscard]] bool complete() const noexcept
     {
-        return graphics_family != kInvalidIndex && present_family != kInvalidIndex;
+        return graphics_family != invalid_index && present_family != invalid_index;
     }
 };
 
@@ -76,7 +76,7 @@ struct QueueFamilySelection
 }
 
 // Keep extensions as C-strings from the start (no string_view/span conversion).
-inline constexpr std::array<char const*, 1> kDeviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+inline constexpr std::array<char const*, 1> device_extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 [[nodiscard]] bool has_required_device_extensions(
     VkPhysicalDevice             device,
@@ -204,8 +204,8 @@ VkDeviceWrapper::VkDeviceWrapper(
 
     other.device_          = VK_NULL_HANDLE;
     other.physical_        = VK_NULL_HANDLE;
-    other.graphics_family_ = kInvalidIndex;
-    other.present_family_  = kInvalidIndex;
+    other.graphics_family_ = invalid_index;
+    other.present_family_  = invalid_index;
     other.graphics_queue_  = VK_NULL_HANDLE;
     other.present_queue_   = VK_NULL_HANDLE;
 }
@@ -226,8 +226,8 @@ VkDeviceWrapper& VkDeviceWrapper::operator=(
 
         other.device_          = VK_NULL_HANDLE;
         other.physical_        = VK_NULL_HANDLE;
-        other.graphics_family_ = kInvalidIndex;
-        other.present_family_  = kInvalidIndex;
+        other.graphics_family_ = invalid_index;
+        other.present_family_  = invalid_index;
         other.graphics_queue_  = VK_NULL_HANDLE;
         other.present_queue_   = VK_NULL_HANDLE;
     }
@@ -243,8 +243,8 @@ void VkDeviceWrapper::cleanup()
     }
 
     physical_        = VK_NULL_HANDLE;
-    graphics_family_ = kInvalidIndex;
-    present_family_  = kInvalidIndex;
+    graphics_family_ = invalid_index;
+    present_family_  = invalid_index;
     graphics_queue_  = VK_NULL_HANDLE;
     present_queue_   = VK_NULL_HANDLE;
 }
@@ -257,7 +257,7 @@ bool VkDeviceWrapper::init(
 {
     cleanup();
 
-    auto selection = pick_physical_device_and_queues(instance, surface, kDeviceExtensions);
+    auto selection = pick_physical_device_and_queues(instance, surface, device_extensions);
     if (!selection.complete())
     {
         std::println(stderr, "VkDeviceWrapper: no suitable physical device found.");
@@ -293,8 +293,8 @@ bool VkDeviceWrapper::init(
 
     queue_infos.reserve(unique_families.size());
 
-    float queue_priority = 1.0f;
-    for (u32 family_index : unique_families)
+    float const queue_priority = 1.0f;
+    for (u32 const family_index : unique_families)
     {
         VkDeviceQueueCreateInfo qci{};
         qci.sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -315,8 +315,8 @@ bool VkDeviceWrapper::init(
     dci.pNext                   = &enabled13;
     dci.queueCreateInfoCount    = static_cast<u32>(queue_infos.size());
     dci.pQueueCreateInfos       = queue_infos.data();
-    dci.enabledExtensionCount   = static_cast<u32>(kDeviceExtensions.size());
-    dci.ppEnabledExtensionNames = kDeviceExtensions.data();
+    dci.enabledExtensionCount   = static_cast<u32>(device_extensions.size());
+    dci.ppEnabledExtensionNames = device_extensions.data();
     dci.pEnabledFeatures        = nullptr;
 
     VkResult dres = vkCreateDevice(selection.physical, &dci, nullptr, &device_);
