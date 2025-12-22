@@ -1,6 +1,6 @@
 ﻿# Strata
 
-Strata is a **learning-focused, production-leaning Vulkan engine** written in **C++23**.
+Strata is a **learning-focused, yet production-leaning Vulkan engine** written in **C++23**.
 
 It’s built around a simple, explicit layering model:
 
@@ -141,7 +141,7 @@ Top-level options:
   - When `ON`, warnings are treated as errors (via `cmake/warnings.cmake`).
 - `STRATA_USE_X11` (Linux only; default: `ON`)
   - When `ON`, builds against X11.
-  - When `OFF`, uses the Wayland dependency path (Wayland window backend may be WIP depending on your repo state).
+  - When `OFF`, uses the Wayland dependency path (Wayland window backend may be WIP depending on the repo state).
 - `STRATA_ENABLE_ASAN` (default: `OFF`)
   - Enables AddressSanitizer on supported compilers (Clang/GCC).
 
