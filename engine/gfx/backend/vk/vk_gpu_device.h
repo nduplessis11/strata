@@ -58,6 +58,20 @@ class VkGpuDevice final : public rhi::IGpuDevice
     rhi::FrameResult         end_commands(rhi::CommandBufferHandle cmd) override;
     rhi::FrameResult         submit(rhi::IGpuDevice::SubmitDesc const& submit) override;
 
+    // --- Descriptor sets ---------------------------------------------------------
+    rhi::DescriptorSetLayoutHandle create_descriptor_set_layout(
+        rhi::DescriptorSetLayoutDesc const& desc) override;
+
+    void destroy_descriptor_set_layout(rhi::DescriptorSetLayoutHandle handle) override;
+
+    rhi::DescriptorSetHandle allocate_descriptor_set(
+        rhi::DescriptorSetLayoutHandle layout) override;
+
+    void free_descriptor_set(rhi::DescriptorSetHandle set) override;
+
+    rhi::FrameResult update_descriptor_set(rhi::DescriptorSetHandle              set,
+                                           std::span<rhi::DescriptorWrite const> writes) override;
+
     // --- Recording (explicit functions fine for now)
     // -------------------------------------------------------------
     // TODO: turn these into a CommandList/Encoder object later for nicer API
@@ -98,6 +112,26 @@ class VkGpuDevice final : public rhi::IGpuDevice
         std::vector<VkSemaphore> render_finished_per_image;
     };
 
+    struct BufferResource
+    {
+        VkBuffer       buffer{VK_NULL_HANDLE};
+        VkDeviceMemory memory{VK_NULL_HANDLE};
+        void*          mapped{nullptr};
+        VkDeviceSize   size{0};
+        bool           host_visible{false};
+    };
+
+    struct DescriptorSetLayoutResource
+    {
+        VkDescriptorSetLayout layout{VK_NULL_HANDLE};
+    };
+
+    struct DescriptorSetResource
+    {
+        VkDescriptorSet                set{VK_NULL_HANDLE};
+        rhi::DescriptorSetLayoutHandle layout{};
+    };
+
   private:
     VkGpuDevice() = default;
 
@@ -132,10 +166,28 @@ class VkGpuDevice final : public rhi::IGpuDevice
 
     std::vector<VkImageLayout> swapchain_image_layouts_;
 
+    // --- RHI handle allocators (IDs) ------------------------------------
     std::uint32_t next_buffer_{1};
     std::uint32_t next_texture_{1};
     std::uint32_t next_pipeline_{1};
     std::uint32_t next_command_{1};
+    std::uint32_t next_descriptor_set_layout_{1};
+    std::uint32_t next_descriptor_set_{1};
+
+    std::vector<std::uint32_t> free_buffers_{};
+    std::vector<std::uint32_t> free_textures_{};
+    std::vector<std::uint32_t> free_pipelines_{};
+    std::vector<std::uint32_t> free_commands_{};
+    std::vector<std::uint32_t> free_descriptor_set_layouts_{};
+    std::vector<std::uint32_t> free_descriptor_sets_{};
+
+    // --- Descriptor allocation ------------------------------------------
+    // Pool-per-frame
+    std::vector<VkDescriptorPool> descriptor_pools_{};
+
+    std::vector<BufferResource>              buffers_{}; // index = BufferHandle.value
+    std::vector<DescriptorSetLayoutResource> descriptor_set_layouts_{};
+    std::vector<DescriptorSetResource>       descriptor_sets_{};
 
   private:
     // --- helpers ---------------------------------------------------------------
