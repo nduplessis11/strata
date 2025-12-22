@@ -18,15 +18,10 @@ using namespace strata::gfx::rhi;
 // Render2D
 // -------------------------------------------------------------------------
 
-Render2D::Render2D(
-    IGpuDevice&     device,
-    SwapchainHandle swapchain)
-    : device_(&device),
-      swapchain_(swapchain),
-      pipeline_{}
+Render2D::Render2D(IGpuDevice& device, SwapchainHandle swapchain)
+    : device_(&device), swapchain_(swapchain), pipeline_{}
 {
-    // Simple pipeline description: fullscreen triangle, flat color.
-    // We can evolve this later into a proper material/shader system.
+    // Create pipeline
     PipelineDesc desc{};
     desc.vertex_shader_path   = "shaders/fullscreen_triangle.vert.spv";
     desc.fragment_shader_path = "shaders/flat_color.frag.spv";
@@ -35,47 +30,49 @@ Render2D::Render2D(
     pipeline_ = device_->create_pipeline(desc);
 }
 
-Render2D::~Render2D()
+void Render2D::release() noexcept
 {
-    if (device_ && pipeline_)
+    if (device_)
     {
-        device_->destroy_pipeline(pipeline_);
-        pipeline_ = {};
-    }
-    device_    = nullptr;
-    swapchain_ = {};
-}
-
-Render2D::Render2D(
-    Render2D&& other) noexcept
-    : device_(other.device_),
-      swapchain_(other.swapchain_),
-      pipeline_(other.pipeline_)
-{
-
-    other.device_    = nullptr;
-    other.swapchain_ = {};
-    other.pipeline_  = {};
-}
-
-Render2D& Render2D::operator=(
-    Render2D&& other) noexcept
-{
-    if (this != &other)
-    {
-        // Release current pipeline if we own one.
-        if (device_ && pipeline_)
+        if (pipeline_)
         {
             device_->destroy_pipeline(pipeline_);
         }
+    }
 
-        device_    = other.device_;
-        swapchain_ = other.swapchain_;
-        pipeline_  = other.pipeline_;
+    // Clear handles regardless (safe for moved-from / partial init)
+    pipeline_       = {};
+    swapchain_      = {};
+    device_         = nullptr;
+}
 
-        other.device_    = nullptr;
-        other.swapchain_ = {};
-        other.pipeline_  = {};
+Render2D::~Render2D()
+{
+    release();
+}
+
+Render2D::Render2D(Render2D&& other) noexcept
+    : device_(other.device_), swapchain_(other.swapchain_), pipeline_(other.pipeline_)
+{
+    // moved-from becomes inert
+    other.device_         = nullptr;
+    other.swapchain_      = {};
+    other.pipeline_       = {};
+}
+
+Render2D& Render2D::operator=(Render2D&& other) noexcept
+{
+    if (this != &other)
+    {
+        release();
+
+        device_         = other.device_;
+        swapchain_      = other.swapchain_;
+        pipeline_       = other.pipeline_;
+
+        other.device_         = nullptr;
+        other.swapchain_      = {};
+        other.pipeline_       = {};
     }
     return *this;
 }
@@ -195,11 +192,10 @@ cleanup_after_end:
 // Helper: draw_frame_and_handle_resize
 // -------------------------------------------------------------------------
 
-FrameResult draw_frame_and_handle_resize(
-    IGpuDevice&      device,
-    SwapchainHandle& swapchain,
-    Render2D&        renderer,
-    Extent2D         framebuffer_size)
+FrameResult draw_frame_and_handle_resize(IGpuDevice&      device,
+                                         SwapchainHandle& swapchain,
+                                         Render2D&        renderer,
+                                         Extent2D         framebuffer_size)
 {
 
     // Minimized / zero-area window: skip rendering but don't treat as error.

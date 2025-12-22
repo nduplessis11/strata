@@ -37,9 +37,8 @@ struct QueueFamilySelection
     }
 };
 
-[[nodiscard]] QueueFamilySelection find_queue_families(
-    VkPhysicalDevice device,
-    VkSurfaceKHR     surface)
+[[nodiscard]] QueueFamilySelection find_queue_families(VkPhysicalDevice device,
+                                                       VkSurfaceKHR     surface)
 {
     QueueFamilySelection result{};
     result.physical = device;
@@ -78,9 +77,8 @@ struct QueueFamilySelection
 // Keep extensions as C-strings from the start (no string_view/span conversion).
 inline constexpr std::array<char const*, 1> device_extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
-[[nodiscard]] bool has_required_device_extensions(
-    VkPhysicalDevice             device,
-    std::span<char const* const> required_exts)
+[[nodiscard]] bool has_required_device_extensions(VkPhysicalDevice             device,
+                                                  std::span<char const* const> required_exts)
 {
     u32 ext_count = 0;
     vkEnumerateDeviceExtensionProperties(device, nullptr, &ext_count, nullptr);
@@ -140,8 +138,7 @@ struct Vulkan13Support
     }
 };
 
-[[nodiscard]] Vulkan13Support query_vulkan13_support(
-    VkPhysicalDevice physical)
+[[nodiscard]] Vulkan13Support query_vulkan13_support(VkPhysicalDevice physical)
 {
     Vulkan13Support out{};
 
@@ -192,8 +189,7 @@ VkDeviceWrapper::~VkDeviceWrapper()
     cleanup();
 }
 
-VkDeviceWrapper::VkDeviceWrapper(
-    VkDeviceWrapper&& other) noexcept
+VkDeviceWrapper::VkDeviceWrapper(VkDeviceWrapper&& other) noexcept
 {
     device_          = other.device_;
     physical_        = other.physical_;
@@ -210,8 +206,7 @@ VkDeviceWrapper::VkDeviceWrapper(
     other.present_queue_   = VK_NULL_HANDLE;
 }
 
-VkDeviceWrapper& VkDeviceWrapper::operator=(
-    VkDeviceWrapper&& other) noexcept
+VkDeviceWrapper& VkDeviceWrapper::operator=(VkDeviceWrapper&& other) noexcept
 {
     if (this != &other)
     {
@@ -251,9 +246,7 @@ void VkDeviceWrapper::cleanup()
 
 // --- init(): pick physical device, create logical device + queues ----------
 
-bool VkDeviceWrapper::init(
-    VkInstance   instance,
-    VkSurfaceKHR surface)
+bool VkDeviceWrapper::init(VkInstance instance, VkSurfaceKHR surface)
 {
     cleanup();
 

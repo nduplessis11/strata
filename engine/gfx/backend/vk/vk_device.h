@@ -24,8 +24,7 @@ class VkDeviceWrapper
     VkDeviceWrapper& operator=(VkDeviceWrapper&&) noexcept;
 
     // Creates a logical device and queues for the given instance + surface.
-    bool init(VkInstance   instance,
-              VkSurfaceKHR surface);
+    bool init(VkInstance instance, VkSurfaceKHR surface);
     void cleanup();
 
     [[nodiscard]] VkDevice device() const noexcept

@@ -22,11 +22,11 @@ inline constexpr bool vk_validation_requested = (STRATA_VK_VALIDATION != 0);
 
 constexpr char const* validation_layers[] = {"VK_LAYER_KHRONOS_validation"};
 
-VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
-    [[maybe_unused]] VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-    [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT        type,
-    VkDebugUtilsMessengerCallbackDataEXT const*             callback_data,
-    void* /*user_data*/)
+VKAPI_ATTR VkBool32 VKAPI_CALL
+debug_callback([[maybe_unused]] VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+               [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT        type,
+               VkDebugUtilsMessengerCallbackDataEXT const*             callback_data,
+               void* /*user_data*/)
 {
 
     // Filter severity/type here if needed.
@@ -37,8 +37,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     return VK_FALSE;
 }
 
-void populate_debug_messenger_ci(
-    VkDebugUtilsMessengerCreateInfoEXT& ci)
+void populate_debug_messenger_ci(VkDebugUtilsMessengerCreateInfoEXT& ci)
 {
     ci                 = {};
     ci.sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -72,11 +71,10 @@ bool has_layer_support()
     return true;
 }
 
-VkResult create_debug_utils_messenger_ext(
-    VkInstance                                instance,
-    VkDebugUtilsMessengerCreateInfoEXT const* create_info,
-    VkAllocationCallbacks const*              allocator,
-    VkDebugUtilsMessengerEXT*                 out)
+VkResult create_debug_utils_messenger_ext(VkInstance                                instance,
+                                          VkDebugUtilsMessengerCreateInfoEXT const* create_info,
+                                          VkAllocationCallbacks const*              allocator,
+                                          VkDebugUtilsMessengerEXT*                 out)
 {
 
     auto fn = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
@@ -86,10 +84,9 @@ VkResult create_debug_utils_messenger_ext(
     return fn(instance, create_info, allocator, out);
 }
 
-void destroy_debug_utils_messenger_ext(
-    VkInstance                   instance,
-    VkDebugUtilsMessengerEXT     messenger,
-    VkAllocationCallbacks const* allocator)
+void destroy_debug_utils_messenger_ext(VkInstance                   instance,
+                                       VkDebugUtilsMessengerEXT     messenger,
+                                       VkAllocationCallbacks const* allocator)
 {
 
     auto fn = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
@@ -105,19 +102,15 @@ VkInstanceWrapper::~VkInstanceWrapper()
     cleanup();
 }
 
-VkInstanceWrapper::VkInstanceWrapper(
-    VkInstanceWrapper&& other) noexcept
-    : instance_(other.instance_),
-      surface_(other.surface_),
-      debug_messenger_(other.debug_messenger_)
+VkInstanceWrapper::VkInstanceWrapper(VkInstanceWrapper&& other) noexcept
+    : instance_(other.instance_), surface_(other.surface_), debug_messenger_(other.debug_messenger_)
 {
     other.instance_        = VK_NULL_HANDLE;
     other.surface_         = VK_NULL_HANDLE;
     other.debug_messenger_ = VK_NULL_HANDLE;
 }
 
-VkInstanceWrapper& VkInstanceWrapper::operator=(
-    VkInstanceWrapper&& other) noexcept
+VkInstanceWrapper& VkInstanceWrapper::operator=(VkInstanceWrapper&& other) noexcept
 {
     if (this != &other)
     {
@@ -133,8 +126,7 @@ VkInstanceWrapper& VkInstanceWrapper::operator=(
     return *this;
 }
 
-bool VkInstanceWrapper::init(
-    strata::platform::WsiHandle const& wsi)
+bool VkInstanceWrapper::init(strata::platform::WsiHandle const& wsi)
 {
     cleanup();
 

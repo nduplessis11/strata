@@ -15,8 +15,7 @@ namespace strata::gfx::renderer
 class Render2D
 {
   public:
-    Render2D(rhi::IGpuDevice&     device,
-             rhi::SwapchainHandle swapchain);
+    Render2D(rhi::IGpuDevice& device, rhi::SwapchainHandle swapchain);
     ~Render2D();
 
     Render2D(Render2D&&) noexcept;
@@ -25,9 +24,11 @@ class Render2D
     rhi::FrameResult draw_frame();
 
   private:
-    rhi::IGpuDevice*     device_{nullptr}; // non-owning
-    rhi::SwapchainHandle swapchain_{};
-    rhi::PipelineHandle  pipeline_{};
+    void release() noexcept;
+
+    rhi::IGpuDevice*               device_{nullptr}; // non-owning
+    rhi::SwapchainHandle           swapchain_{};
+    rhi::PipelineHandle            pipeline_{};
 };
 
 rhi::FrameResult draw_frame_and_handle_resize(rhi::IGpuDevice&      device,

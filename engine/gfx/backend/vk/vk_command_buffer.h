@@ -23,8 +23,7 @@ class VkCommandBufferPool
     VkCommandBufferPool& operator=(VkCommandBufferPool&&) noexcept;
 
     // Create a pool for a given queue family
-    bool init(VkDevice      device,
-              std::uint32_t queue_family_index);
+    bool init(VkDevice device, std::uint32_t queue_family_index);
     void cleanup(VkDevice device);
 
     // Allocate a single primary command buffer from the pool

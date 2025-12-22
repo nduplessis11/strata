@@ -36,9 +36,7 @@ enum class BufferUsage : std::uint32_t
     Uniform = 1 << 2,
     Upload  = 1 << 3,
 };
-inline BufferUsage operator|(
-    BufferUsage a,
-    BufferUsage b)
+inline BufferUsage operator|(BufferUsage a, BufferUsage b)
 {
     return static_cast<BufferUsage>(static_cast<std::uint32_t>(a) | static_cast<std::uint32_t>(b));
 }
@@ -66,12 +64,15 @@ struct TextureDesc
     std::uint32_t mip_levels{1};
 };
 
+struct DescriptorSetLayoutHandle; // forward declare
 struct PipelineDesc
 {
     // We can evolve this later with real shader reflection data, etc.
     char const* vertex_shader_path{};
     char const* fragment_shader_path{};
     bool        alpha_blend{false};
+
+    std::span<DescriptorSetLayoutHandle const> set_layouts{};
 };
 
 enum class FrameResult
@@ -142,6 +143,77 @@ struct AcquiredImage
     std::uint32_t image_index{0};
     Extent2D      extent{};
     std::uint32_t frame_index{0};
+};
+
+enum class ShaderStage : std::uint32_t
+{
+    None     = 0,
+    Vertex   = 1 << 0,
+    Fragment = 1 << 1,
+    Compute  = 1 << 2,
+};
+
+inline ShaderStage operator|(ShaderStage a, ShaderStage b)
+{
+    return static_cast<ShaderStage>(static_cast<std::uint32_t>(a) | static_cast<std::uint32_t>(b));
+}
+inline ShaderStage operator&(ShaderStage a, ShaderStage b)
+{
+    return static_cast<ShaderStage>(static_cast<std::uint32_t>(a) & static_cast<std::uint32_t>(b));
+}
+
+enum class DescriptorType
+{
+    UniformBuffer,
+    // Future:
+    // CombinedImageSampler,
+    // StorageBuffer,
+};
+
+struct DescriptorBinding
+{
+    std::uint32_t  binding{0};
+    DescriptorType type{DescriptorType::UniformBuffer};
+    std::uint32_t  count{1};
+    ShaderStage    stages{ShaderStage::None};
+};
+
+struct DescriptorSetLayoutDesc
+{
+    std::span<DescriptorBinding const> bindings{};
+};
+
+struct DescriptorSetLayoutHandle
+{
+    std::uint32_t      value{0};
+    explicit constexpr operator bool() const noexcept
+    {
+        return value != 0;
+    }
+};
+
+struct DescriptorSetHandle
+{
+    std::uint32_t      value{0};
+    explicit constexpr operator bool() const noexcept
+    {
+        return value != 0;
+    }
+};
+
+// Minimal update model (uniform buffers only, for now)
+struct DescriptorBufferInfo
+{
+    BufferHandle  buffer{};
+    std::uint64_t offset_bytes{0};
+    std::uint64_t range_bytes{0}; // 0 = "whole buffer" (backend can expand)
+};
+
+struct DescriptorWrite
+{
+    std::uint32_t        binding{0};
+    DescriptorType       type{DescriptorType::UniformBuffer};
+    DescriptorBufferInfo buffer{};
 };
 
 } // namespace strata::gfx::rhi

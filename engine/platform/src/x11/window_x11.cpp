@@ -26,8 +26,7 @@ struct Window::Impl
     bool     visible{false};
     bool     minimized{false};
 
-    Impl(
-        WindowDesc const& desc)
+    Impl(WindowDesc const& desc)
     {
         display = ::XOpenDisplay(nullptr);
         if (!display)
@@ -162,9 +161,7 @@ struct Window::Impl
         }
     }
 
-    std::pair<int,
-              int>
-    window_size() const noexcept
+    std::pair<int, int> window_size() const noexcept
     {
         if (!display || !window)
             return {0, 0};
@@ -187,11 +184,7 @@ struct Window::Impl
     }
 };
 
-Window::Window(
-    WindowDesc const& desc)
-    : p_(std::make_unique<Impl>(desc))
-{
-}
+Window::Window(WindowDesc const& desc) : p_(std::make_unique<Impl>(desc)) {}
 
 Window::~Window() = default;
 
@@ -219,8 +212,7 @@ void Window::poll_events()
     }
 }
 
-void Window::set_title(
-    std::string_view title)
+void Window::set_title(std::string_view title)
 {
     if (!p_ || !p_->display || !p_->window)
         return;
@@ -229,14 +221,12 @@ void Window::set_title(
     ::XFlush(p_->display);
 }
 
-auto Window::window_size() const noexcept -> std::pair<int,
-                                                       int>
+auto Window::window_size() const noexcept -> std::pair<int, int>
 {
     return p_ ? p_->window_size() : std::pair<int, int>{0, 0};
 }
 
-auto Window::framebuffer_size() const noexcept -> std::pair<int,
-                                                            int>
+auto Window::framebuffer_size() const noexcept -> std::pair<int, int>
 {
     return window_size();
 }
