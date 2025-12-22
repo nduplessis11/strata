@@ -1,4 +1,9 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/backend/vk/vk_swapchain.cpp
+//
+// Purpose:
+//   Implement Vulkan swapchain creation and image view management.
+// -----------------------------------------------------------------------------
 
 #include "vk_swapchain.h"
 

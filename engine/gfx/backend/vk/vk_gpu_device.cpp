@@ -1,4 +1,9 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/backend/vk/vk_gpu_device.cpp
+//
+// Purpose:
+//   Implement the Vulkan IGpuDevice backend and RHI factory selection.
+// -----------------------------------------------------------------------------
 
 #include "vk_gpu_device.h"
 

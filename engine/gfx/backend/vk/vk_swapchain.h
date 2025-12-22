@@ -1,4 +1,10 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/backend/vk/vk_swapchain.h
+//
+// Purpose:
+//   Declare a Vulkan swapchain RAII wrapper.
+// -----------------------------------------------------------------------------
+
 #pragma once
 
 #include <vulkan/vulkan.h>

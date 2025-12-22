@@ -1,3 +1,10 @@
+// -----------------------------------------------------------------------------
+// games/arcade_shooter/src/main.cpp
+//
+// Purpose:
+//   Entry point for the arcade shooter sample application.
+// -----------------------------------------------------------------------------
+
 #include "strata/core/application.h"
 
 #include <print>

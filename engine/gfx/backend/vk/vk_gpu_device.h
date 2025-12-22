@@ -1,4 +1,10 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/backend/vk/vk_gpu_device.h
+//
+// Purpose:
+//   Declare the Vulkan IGpuDevice implementation.
+// -----------------------------------------------------------------------------
+
 #pragma once
 
 #include <memory>

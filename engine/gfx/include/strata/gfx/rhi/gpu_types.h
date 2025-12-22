@@ -1,4 +1,10 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/include/strata/gfx/rhi/gpu_types.h
+//
+// Purpose:
+//   Define common RHI types, handles, and resource descriptors.
+// -----------------------------------------------------------------------------
+
 #pragma once
 
 #include <cstdint>

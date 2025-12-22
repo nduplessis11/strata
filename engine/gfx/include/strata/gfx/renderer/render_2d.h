@@ -1,4 +1,10 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/include/strata/gfx/renderer/render_2d.h
+//
+// Purpose:
+//   Declare the Render2D renderer and helper draw function.
+// -----------------------------------------------------------------------------
+
 #pragma once
 
 #include "strata/gfx/rhi/gpu_device.h"

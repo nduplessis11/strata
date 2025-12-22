@@ -1,4 +1,10 @@
+// -----------------------------------------------------------------------------
 // engine/gfx/backend/vk/vk_command_buffer.h
+//
+// Purpose:
+//   Declare a Vulkan command buffer pool wrapper.
+// -----------------------------------------------------------------------------
+
 #pragma once
 
 #include <vulkan/vulkan.h>
