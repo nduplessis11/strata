@@ -372,7 +372,7 @@ namespace strata::gfx::vk {
 
     rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
         [[maybe_unused]] rhi::CommandBufferHandle cmd,
-        rhi::SwapchainHandle /*swapchain*/,
+        [[maybe_unused]] rhi::SwapchainHandle swapchain,
         std::uint32_t image_index,
         const rhi::ClearColor& clear) {
 
@@ -487,7 +487,7 @@ namespace strata::gfx::vk {
 
     rhi::FrameResult VkGpuDevice::cmd_end_swapchain_pass(
         [[maybe_unused]] rhi::CommandBufferHandle cmd,
-        rhi::SwapchainHandle /*swapchain*/,
+        [[maybe_unused]] rhi::SwapchainHandle swapchain,
         std::uint32_t image_index) {
 
         using rhi::FrameResult;
