@@ -25,7 +25,6 @@ Render2D::Render2D(
       swapchain_(swapchain),
       pipeline_{}
 {
-
     // Simple pipeline description: fullscreen triangle, flat color.
     // We can evolve this later into a proper material/shader system.
     PipelineDesc desc{};
