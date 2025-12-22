@@ -138,7 +138,12 @@ Inside the Vulkan backend (`gfx::vk::VkGpuDevice`):
 - `VkInstanceWrapper` owns `VkInstance`, `VkSurfaceKHR`, and optional debug messenger.
 - `VkDeviceWrapper` owns `VkDevice` and holds non-owning queue handles.
 - `VkSwapchainWrapper` owns swapchain + image views.
-- The backend currently assumes Vulkan 1.3 is available and **requires**:
+- Per-frame ring resources:
+  - command buffers (one per frame slot)
+  - image-available semaphores (one per frame slot)
+  - in-flight fences (one per frame slot)
+  - render-finished semaphores (per swapchain image)
+- The backend assumes Vulkan 1.3 is available and **requires**:
   - **dynamic rendering** (used in rendering path)
   - **synchronization2** (used for pipeline barriers)
 
@@ -157,6 +162,9 @@ flowchart LR
   VK --> VKD["VkDeviceWrapper(VkDevice + queues)"]
   VK --> VKS[VkSwapchainWrapper]
   VK --> VKC[VkCommandBufferPool]
+  VK --> VKF[FrameSlot ring (cmd + fence + image_available)]
+  VK --> VKIIF[images_in_flight fence tracking]
+  VK --> VKRF[render_finished per swapchain image]
   VK --> VKP[BasicPipeline]
 ```
 
@@ -191,7 +199,8 @@ The Vulkan backend provides the concrete implementation:
   - `VkInstanceWrapper` (instance + debug messenger + **surface**)
   - `VkDeviceWrapper` (physical device selection + logical device + queues)
   - `VkSwapchainWrapper` (swapchain images + views)
-  - `VkCommandBufferPool`, `FrameSync`, `BasicPipeline`, etc.
+  - `VkCommandBufferPool`, `FrameSlot` ring (per-frame cmd/semaphores/fences),
+    `SwapchainSync` (per-image render-finished semaphores), `BasicPipeline`, etc.
 - WSI bridge:
   - `vk_wsi_bridge.h` declares the platform-neutral interface (no `<vulkan/vulkan.h>` in public headers)
   - `vk_wsi_bridge_win32.cpp`, `vk_wsi_bridge_x11.cpp` implement platform-specific surface creation

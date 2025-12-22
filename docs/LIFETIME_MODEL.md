@@ -33,7 +33,7 @@ This is safe, simple, and predictable for early development.
 `Render2D::draw_frame()` drives the full frame:
 > acquire → begin cmd → record → end cmd → submit → present
 
-The Vulkan backend owns the actual `VkCommandBuffer` and sync primitives, but the renderer now owns **when** command recording happens in the frame.
+The Vulkan backend owns the actual `VkCommandBuffer` and sync primitives, but the renderer owns **when** command recording happens in the frame.
 
 ---
 
@@ -63,8 +63,9 @@ flowchart TD
   VK --> DEV[vk::VkDeviceWrapper owns VkDevice; holds VkPhysicalDevice + queues]
   VK --> SW["vk::VkSwapchainWrapper owns VkSwapchainKHR + VkImageView[]"]
   VK --> CP[vk::VkCommandBufferPool owns VkCommandPool]
-  VK --> CMD["primary_cmd_ VkCommandBuffer (allocated)"]
-  VK --> SYNC[FrameSync semaphores + fence]
+  VK --> CMD["FrameSlot ring: VkCommandBuffer per frame"]
+  VK --> SYNC["FrameSlot ring: image_available semaphores + in_flight fences"]
+  VK --> RF["render_finished semaphores per swapchain image"]
   VK --> PIPE[BasicPipeline VkPipelineLayout + VkPipeline]
 ```
 
@@ -186,12 +187,15 @@ Backend bring-up sequence:
    - enforces Vulkan 1.3 features:
      - `dynamicRendering`
      - `synchronization2`
-3. **Command pool + command buffer**
+3. **Command pool + per-frame command buffers**
    - `command_pool_.init(device_.device(), device_.graphics_family())`
-   - allocate one `primary_cmd_`
-4. **Frame sync**
-   - `image_available` semaphore
-   - `in_flight` fence (created **signaled** so first frame doesn’t block)
+   - allocate one command buffer per frame slot
+4. **Per-frame sync**
+   - `image_available` semaphore per frame
+   - `in_flight` fence per frame (created **signaled** so first frame doesn’t block)
+
+Swapchain-dependent sync is created when the swapchain is created:
+- one `render_finished` semaphore per swapchain image
 
 Pipeline creation is deferred:
 - created via `IGpuDevice::create_pipeline()`, and/or
@@ -375,23 +379,17 @@ This is fine for early development, but future refactors should turn handles int
 
 Natural next steps once we want more performance and complexity:
 
-1. **Multiple frames in flight**
-   - per-frame fences/semaphores
-   - per-frame command buffers (or per-frame pools)
-   - deferred destruction queue for GPU resources
+1. **Descriptor sets / resource binding**
+   - introduce descriptor set layouts and updates in the RHI
+   - map to Vulkan descriptor set allocations in the backend
 
-2. **Move command recording out of `present()`**
-   - renderer records into command buffers
-   - device submits/presents
-   - lifetimes become explicit at the RHI boundary
-
-3. **Real resource registries**
+2. **Real resource registries**
    - map `PipelineHandle` → `VkPipeline` (many)
    - map `BufferHandle` → buffer allocation + device memory
    - map `TextureHandle` → image allocation + views
    - destruction becomes reference-checked and (eventually) deferred
 
-4. **Swapchain recreation without `wait_idle()`**
+3. **Swapchain recreation without `wait_idle()`**
    - requires tracking which frame owns which resources
    - ensure old swapchain images/views aren’t still referenced by in-flight command buffers
 
