@@ -21,56 +21,11 @@ using namespace strata::gfx::rhi;
 Render2D::Render2D(IGpuDevice& device, SwapchainHandle swapchain)
     : device_(&device), swapchain_(swapchain), pipeline_{}
 {
-    // 1) Descriptor set layout (set=0, binding=0)
-    rhi::DescriptorBinding const binding{
-        .binding = 0,
-        .type    = DescriptorType::UniformBuffer,
-        .count   = 1,
-        .stages  = ShaderStage::Fragment,
-    };
-
-    rhi::DescriptorBinding const bindings[] = {binding};
-
-    rhi::DescriptorSetLayoutDesc const set_layout_desc{.bindings = bindings};
-
-    set_layout_ = device_->create_descriptor_set_layout(set_layout_desc);
-
-    // 2) Uniform buffer (RGBA color)
-    struct ColorUbo
-    {
-        float r, g, b, a;
-    };
-    ColorUbo const init_color{0.6f, 0.4f, 0.8f, 1.0f};
-
-    rhi::BufferDesc const buf_desc{
-        .size_bytes   = sizeof(ColorUbo),
-        .usage        = BufferUsage::Uniform | BufferUsage::Upload,
-        .host_visible = true,
-    };
-
-    uniform_buffer_ = device_->create_buffer(buf_desc, std::as_bytes(std::span{&init_color, 1}));
-
-    // 3) Allocate set
-    set_ = device_->allocate_descriptor_set(set_layout_);
-
-    // 4) Update set
-    rhi::DescriptorWrite write{};
-    write.binding             = 0;
-    write.type                = rhi::DescriptorType::UniformBuffer;
-    write.buffer.buffer       = uniform_buffer_;
-    write.buffer.offset_bytes = 0;
-    write.buffer.range_bytes  = sizeof(ColorUbo);
-
-    device_->update_descriptor_set(set_, std::span{&write, 1});
-
-    // 5) Create pipeline with set layouts
+    // Create pipeline
     PipelineDesc desc{};
     desc.vertex_shader_path   = "shaders/fullscreen_triangle.vert.spv";
     desc.fragment_shader_path = "shaders/flat_color.frag.spv";
     desc.alpha_blend          = false;
-
-    rhi::DescriptorSetLayoutHandle const layouts[] = {set_layout_};
-    desc.set_layouts                               = layouts;
 
     pipeline_ = device_->create_pipeline(desc);
 }
@@ -79,30 +34,14 @@ void Render2D::release() noexcept
 {
     if (device_)
     {
-        // pipeline -> set -> layout -> buffer
         if (pipeline_)
         {
             device_->destroy_pipeline(pipeline_);
-        }
-        if (set_)
-        {
-            device_->free_descriptor_set(set_);
-        }
-        if (set_layout_)
-        {
-            device_->destroy_descriptor_set_layout(set_layout_);
-        }
-        if (uniform_buffer_)
-        {
-            device_->destroy_buffer(uniform_buffer_);
         }
     }
 
     // Clear handles regardless (safe for moved-from / partial init)
     pipeline_       = {};
-    set_            = {};
-    set_layout_     = {};
-    uniform_buffer_ = {};
     swapchain_      = {};
     device_         = nullptr;
 }
@@ -113,16 +52,12 @@ Render2D::~Render2D()
 }
 
 Render2D::Render2D(Render2D&& other) noexcept
-    : device_(other.device_), swapchain_(other.swapchain_), pipeline_(other.pipeline_),
-      uniform_buffer_(other.uniform_buffer_), set_layout_(other.set_layout_), set_(other.set_)
+    : device_(other.device_), swapchain_(other.swapchain_), pipeline_(other.pipeline_)
 {
     // moved-from becomes inert
     other.device_         = nullptr;
     other.swapchain_      = {};
     other.pipeline_       = {};
-    other.uniform_buffer_ = {};
-    other.set_layout_     = {};
-    other.set_            = {};
 }
 
 Render2D& Render2D::operator=(Render2D&& other) noexcept
@@ -134,16 +69,10 @@ Render2D& Render2D::operator=(Render2D&& other) noexcept
         device_         = other.device_;
         swapchain_      = other.swapchain_;
         pipeline_       = other.pipeline_;
-        uniform_buffer_ = other.uniform_buffer_;
-        set_layout_     = other.set_layout_;
-        set_            = other.set_;
 
         other.device_         = nullptr;
         other.swapchain_      = {};
         other.pipeline_       = {};
-        other.uniform_buffer_ = {};
-        other.set_layout_     = {};
-        other.set_            = {};
     }
     return *this;
 }
@@ -187,11 +116,6 @@ FrameResult Render2D::draw_frame()
     pass_open = true;
 
     if (device_->cmd_bind_pipeline(cmd, pipeline_) != FrameResult::Ok)
-    {
-        goto cleanup;
-    }
-
-    if (device_->cmd_bind_descriptor_set(cmd, pipeline_, 0, set_) != FrameResult::Ok)
     {
         goto cleanup;
     }

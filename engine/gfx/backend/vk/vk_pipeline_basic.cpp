@@ -151,9 +151,7 @@ BasicPipeline& BasicPipeline::operator=(BasicPipeline&& other) noexcept
     return *this;
 }
 
-BasicPipeline create_basic_pipeline(VkDevice                               device,
-                                    VkFormat                               color_format,
-                                    std::span<VkDescriptorSetLayout const> set_layouts)
+BasicPipeline create_basic_pipeline(VkDevice device, VkFormat color_format)
 {
     BasicPipeline out{};
     out.device = device;
@@ -257,8 +255,8 @@ BasicPipeline create_basic_pipeline(VkDevice                               devic
     VkPipelineLayoutCreateInfo layout_ci{};
     layout_ci.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layout_ci.pNext                  = nullptr;
-    layout_ci.setLayoutCount         = static_cast<std::uint32_t>(set_layouts.size());
-    layout_ci.pSetLayouts            = set_layouts.data();
+    layout_ci.setLayoutCount         = 0;
+    layout_ci.pSetLayouts            = nullptr;
     layout_ci.pushConstantRangeCount = 0;
     layout_ci.pPushConstantRanges    = nullptr;
 

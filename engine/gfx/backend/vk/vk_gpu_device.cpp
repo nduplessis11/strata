@@ -445,19 +445,22 @@ rhi::DescriptorSetLayoutHandle VkGpuDevice::create_descriptor_set_layout(
     rhi::DescriptorSetLayoutDesc const& /*desc*/)
 {
     // Stub
-    return rhi::DescriptorSetLayoutHandle{1};
+    std::println(stderr, "VkGpuDevice: create_descriptor_set_layout not implemented");
+    return {};
 }
 
 void VkGpuDevice::destroy_descriptor_set_layout(rhi::DescriptorSetLayoutHandle /*handle*/)
 {
     // Stub
+    std::println(stderr, "VkGpuDevice: destroy_descriptor_set_layout not implemented");
 }
 
 rhi::DescriptorSetHandle VkGpuDevice::allocate_descriptor_set(
     rhi::DescriptorSetLayoutHandle /*layout*/)
 {
     // Stub
-    return rhi::DescriptorSetHandle{1};
+    std::println(stderr, "VkGpuDevice: allocate_descriptor_set not implemented");
+    return {};
 }
 
 void VkGpuDevice::free_descriptor_set(rhi::DescriptorSetHandle /*set*/) {}
@@ -467,7 +470,8 @@ rhi::FrameResult VkGpuDevice::update_descriptor_set(
     std::span<rhi::DescriptorWrite const> /*writes*/)
 {
     // Stub
-    return rhi::FrameResult::Ok;
+    std::println(stderr, "VkGpuDevice: free_descriptor_set not implemented");
+    return rhi::FrameResult::Error;
 }
 
 // --- Recording (explicit functions fine for now) --------------------------
@@ -478,7 +482,8 @@ rhi::FrameResult VkGpuDevice::cmd_bind_descriptor_set(rhi::CommandBufferHandle /
                                                       rhi::DescriptorSetHandle /*set*/)
 {
     // Stub
-    return rhi::FrameResult::Ok;
+    std::println(stderr, "VkGpuDevice: cmd_bind_descriptor_set not implemented");
+    return rhi::FrameResult::Error;
 }
 
 rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(

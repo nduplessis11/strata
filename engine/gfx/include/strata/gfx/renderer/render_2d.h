@@ -29,9 +29,6 @@ class Render2D
     rhi::IGpuDevice*               device_{nullptr}; // non-owning
     rhi::SwapchainHandle           swapchain_{};
     rhi::PipelineHandle            pipeline_{};
-    rhi::BufferHandle              uniform_buffer_{};
-    rhi::DescriptorSetLayoutHandle set_layout_{};
-    rhi::DescriptorSetHandle       set_{};
 };
 
 rhi::FrameResult draw_frame_and_handle_resize(rhi::IGpuDevice&      device,
