@@ -14,15 +14,13 @@ namespace strata::gfx::vk
 
 VkCommandBufferPool::~VkCommandBufferPool() = default;
 
-VkCommandBufferPool::VkCommandBufferPool(
-    VkCommandBufferPool&& other) noexcept
+VkCommandBufferPool::VkCommandBufferPool(VkCommandBufferPool&& other) noexcept
 {
     pool_       = other.pool_;
     other.pool_ = VK_NULL_HANDLE;
 }
 
-VkCommandBufferPool& VkCommandBufferPool::operator=(
-    VkCommandBufferPool&& other) noexcept
+VkCommandBufferPool& VkCommandBufferPool::operator=(VkCommandBufferPool&& other) noexcept
 {
     if (this != &other)
     {
@@ -32,9 +30,7 @@ VkCommandBufferPool& VkCommandBufferPool::operator=(
     return *this;
 }
 
-bool VkCommandBufferPool::init(
-    VkDevice      device,
-    std::uint32_t queue_family_index)
+bool VkCommandBufferPool::init(VkDevice device, std::uint32_t queue_family_index)
 {
     // In case we're reinitializing
     cleanup(device);
@@ -52,8 +48,7 @@ bool VkCommandBufferPool::init(
     return true;
 }
 
-void VkCommandBufferPool::cleanup(
-    VkDevice device)
+void VkCommandBufferPool::cleanup(VkDevice device)
 {
     if (pool_ != VK_NULL_HANDLE)
     {
@@ -62,8 +57,7 @@ void VkCommandBufferPool::cleanup(
     }
 }
 
-VkCommandBuffer VkCommandBufferPool::allocate(
-    VkDevice device)
+VkCommandBuffer VkCommandBufferPool::allocate(VkDevice device)
 {
     if (pool_ == VK_NULL_HANDLE)
     {

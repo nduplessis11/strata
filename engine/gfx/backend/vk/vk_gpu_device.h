@@ -36,10 +36,9 @@ class VkGpuDevice final : public rhi::IGpuDevice
                                           strata::platform::WsiHandle const& surface) override;
     rhi::FrameResult     resize_swapchain(rhi::SwapchainHandle      swapchain,
                                           rhi::SwapchainDesc const& desc) override;
-    rhi::FrameResult     present(rhi::SwapchainHandle swapchain,
-                                 std::uint32_t        image_index) override;
-    rhi::FrameResult     acquire_next_image(rhi::SwapchainHandle swapchain,
-                                            rhi::AcquiredImage&  out) override;
+    rhi::FrameResult present(rhi::SwapchainHandle swapchain, std::uint32_t image_index) override;
+    rhi::FrameResult acquire_next_image(rhi::SwapchainHandle swapchain,
+                                        rhi::AcquiredImage&  out) override;
 
     // --- Buffers ---------------------------------------------------------
     rhi::BufferHandle create_buffer(rhi::BufferDesc const&     desc,

@@ -31,9 +31,7 @@ constexpr wchar_t const* strata_wnd_class = L"strata_window_class";
 //  - hbrBackground = nullptr: don't auto-erase background → reduces flicker in renderers.
 //  - If the class is already registered (typical in multi-window engines),
 //    treat that as success; registration is idempotent for our purposes.
-ATOM register_wnd_class(
-    HINSTANCE hinst,
-    WNDPROC   proc)
+ATOM register_wnd_class(HINSTANCE hinst, WNDPROC proc)
 {
     WNDCLASSEXW wc{};
     wc.cbSize        = sizeof(wc);
@@ -60,8 +58,7 @@ ATOM register_wnd_class(
 
 // UTF-8 → UTF-16 for window titles.
 // Public API uses UTF-8 (std::string_view); Win32 "W" APIs use UTF-16 (wchar_t*).
-std::wstring utf8_to_wide(
-    std::string_view s)
+std::wstring utf8_to_wide(std::string_view s)
 {
     if (s.empty())
         return std::wstring();
@@ -105,11 +102,7 @@ struct Window::Impl
     HBRUSH    clear_brush{}; // TEMP: dark-gray fill for smoke test (renderer-ready)
 
     // Instance WndProc: receives messages after GWLP_USERDATA holds our Impl*.
-    LRESULT wnd_proc(
-        HWND   h,
-        UINT   msg,
-        WPARAM w,
-        LPARAM l)
+    LRESULT wnd_proc(HWND h, UINT msg, WPARAM w, LPARAM l)
     {
         switch (msg)
         {
@@ -176,11 +169,7 @@ struct Window::Impl
     // 1) On WM_NCCREATE, we receive lpCreateParams (our Impl*) and store it in
     //    per-window storage (GWLP_USERDATA).
     // 2) Afterwards, fetch Impl* and forward messages to the instance handler.
-    static LRESULT CALLBACK wndproc_static(
-        HWND   hwnd,
-        UINT   msg,
-        WPARAM w,
-        LPARAM l)
+    static LRESULT CALLBACK wndproc_static(HWND hwnd, UINT msg, WPARAM w, LPARAM l)
     {
         if (msg == WM_NCCREATE)
         {
@@ -216,9 +205,7 @@ struct Window::Impl
 // ────────────────────────────────────────────────────────────────────────────────
 // Window API — construct, pump, query, teardown
 
-Window::Window(
-    WindowDesc const& desc)
-    : p_(std::make_unique<Impl>())
+Window::Window(WindowDesc const& desc) : p_(std::make_unique<Impl>())
 {
 
     // Module handle of this EXE/DLL.
@@ -316,8 +303,7 @@ void Window::poll_events()
 }
 
 // Change the window title (public API uses UTF-8).
-void Window::set_title(
-    std::string_view title)
+void Window::set_title(std::string_view title)
 {
     if (!p_->hwnd)
         return;
@@ -328,8 +314,7 @@ void Window::set_title(
 // Client area size (logical units). The render area equals client for now.
 // If you enable Per-Monitor DPI Awareness (PMv2), use GetDpiForWindow()
 // to compute true pixel framebuffer size in framebuffer_size().
-auto Window::window_size() const noexcept -> std::pair<std::int32_t,
-                                                       std::int32_t>
+auto Window::window_size() const noexcept -> std::pair<std::int32_t, std::int32_t>
 {
     if (!p_->hwnd)
         return {0, 0};
@@ -340,8 +325,7 @@ auto Window::window_size() const noexcept -> std::pair<std::int32_t,
     return {w, h};
 }
 
-auto Window::framebuffer_size() const noexcept -> std::pair<std::int32_t,
-                                                            std::int32_t>
+auto Window::framebuffer_size() const noexcept -> std::pair<std::int32_t, std::int32_t>
 {
     // FIRST BRING-UP: assume client == framebuffer.
     // LATER: if DPI-aware, multiply by DPI/96 or use GetDpiForWindow().

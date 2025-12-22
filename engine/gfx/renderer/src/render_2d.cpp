@@ -18,12 +18,8 @@ using namespace strata::gfx::rhi;
 // Render2D
 // -------------------------------------------------------------------------
 
-Render2D::Render2D(
-    IGpuDevice&     device,
-    SwapchainHandle swapchain)
-    : device_(&device),
-      swapchain_(swapchain),
-      pipeline_{}
+Render2D::Render2D(IGpuDevice& device, SwapchainHandle swapchain)
+    : device_(&device), swapchain_(swapchain), pipeline_{}
 {
     // Simple pipeline description: fullscreen triangle, flat color.
     // We can evolve this later into a proper material/shader system.
@@ -46,11 +42,8 @@ Render2D::~Render2D()
     swapchain_ = {};
 }
 
-Render2D::Render2D(
-    Render2D&& other) noexcept
-    : device_(other.device_),
-      swapchain_(other.swapchain_),
-      pipeline_(other.pipeline_)
+Render2D::Render2D(Render2D&& other) noexcept
+    : device_(other.device_), swapchain_(other.swapchain_), pipeline_(other.pipeline_)
 {
 
     other.device_    = nullptr;
@@ -58,8 +51,7 @@ Render2D::Render2D(
     other.pipeline_  = {};
 }
 
-Render2D& Render2D::operator=(
-    Render2D&& other) noexcept
+Render2D& Render2D::operator=(Render2D&& other) noexcept
 {
     if (this != &other)
     {
@@ -195,11 +187,10 @@ cleanup_after_end:
 // Helper: draw_frame_and_handle_resize
 // -------------------------------------------------------------------------
 
-FrameResult draw_frame_and_handle_resize(
-    IGpuDevice&      device,
-    SwapchainHandle& swapchain,
-    Render2D&        renderer,
-    Extent2D         framebuffer_size)
+FrameResult draw_frame_and_handle_resize(IGpuDevice&      device,
+                                         SwapchainHandle& swapchain,
+                                         Render2D&        renderer,
+                                         Extent2D         framebuffer_size)
 {
 
     // Minimized / zero-area window: skip rendering but don't treat as error.

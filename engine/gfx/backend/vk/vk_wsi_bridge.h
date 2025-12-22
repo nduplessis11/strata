@@ -52,6 +52,5 @@ auto required_instance_extensions(strata::platform::WsiHandle const& wsi)
 
 // Create a VkSurfaceKHR for the given WSI. Returns VK_NULL_HANDLE on failure.
 // Implemented per-platform in separate .cc files.
-auto create_surface(VkInstance                         instance,
-                    strata::platform::WsiHandle const& wsi) -> VkSurfaceKHR;
+auto create_surface(VkInstance instance, strata::platform::WsiHandle const& wsi) -> VkSurfaceKHR;
 } // namespace strata::gfx::vk

@@ -16,9 +16,7 @@ namespace strata::core
 
 using clock = std::chrono::steady_clock;
 
-static gfx::rhi::Extent2D clamp_framebuffer(
-    std::int32_t width,
-    std::int32_t height) noexcept
+static gfx::rhi::Extent2D clamp_framebuffer(std::int32_t width, std::int32_t height) noexcept
 {
     return gfx::rhi::Extent2D{
         .width  = static_cast<std::uint32_t>(std::max(0, width)),
@@ -42,19 +40,14 @@ struct Application::Impl
     std::uint64_t     frame_index{0};
     clock::time_point last_frame{};
 
-    Impl(
-        ApplicationConfig                       cfg,
-        platform::Window&&                      window,
-        platform::WsiHandle                     surface,
-        std::unique_ptr<gfx::rhi::IGpuDevice>&& device,
-        gfx::rhi::SwapchainHandle               swapchain,
-        gfx::renderer::Render2D&&               render)
-        : config(std::move(cfg)),
-          window(std::move(window)),
-          surface(surface),
-          device(std::move(device)),
-          swapchain(swapchain),
-          renderer(std::move(render)),
+    Impl(ApplicationConfig                       cfg,
+         platform::Window&&                      window,
+         platform::WsiHandle                     surface,
+         std::unique_ptr<gfx::rhi::IGpuDevice>&& device,
+         gfx::rhi::SwapchainHandle               swapchain,
+         gfx::renderer::Render2D&&               render)
+        : config(std::move(cfg)), window(std::move(window)), surface(surface),
+          device(std::move(device)), swapchain(swapchain), renderer(std::move(render)),
           last_frame(clock::now())
     {
     }
@@ -70,16 +63,12 @@ struct Application::Impl
     }
 };
 
-void Application::ImplDeleter::operator()(
-    Impl* impl) const noexcept
+void Application::ImplDeleter::operator()(Impl* impl) const noexcept
 {
     delete impl;
 }
 
-std::expected<Application,
-              ApplicationError>
-Application::create(
-    ApplicationConfig config)
+std::expected<Application, ApplicationError> Application::create(ApplicationConfig config)
 {
     using gfx::rhi::SwapchainDesc;
 
@@ -133,8 +122,7 @@ void Application::request_exit() noexcept
     impl_->window.request_close();
 }
 
-std::int16_t Application::run(
-    TickFn tick)
+std::int16_t Application::run(TickFn tick)
 {
     using namespace std::chrono_literals;
 

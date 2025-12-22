@@ -35,8 +35,7 @@ namespace
 // Load a binary file fully into a buffer.
 // The path is interpreted relative to the current working directory
 // (usually the executable directory).
-std::vector<char> read_binary_file(
-    char const* path)
+std::vector<char> read_binary_file(char const* path)
 {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file)
@@ -63,9 +62,7 @@ std::vector<char> read_binary_file(
 }
 
 // Create a VkShaderModule from SPIR-V bytes.
-VkShaderModule create_shader_module(
-    VkDevice              device,
-    std::span<char const> code)
+VkShaderModule create_shader_module(VkDevice device, std::span<char const> code)
 {
     if (code.empty())
     {
@@ -119,19 +116,15 @@ BasicPipeline::~BasicPipeline()
     device = VK_NULL_HANDLE;
 }
 
-BasicPipeline::BasicPipeline(
-    BasicPipeline&& other) noexcept
-    : device(other.device),
-      layout(other.layout),
-      pipeline(other.pipeline)
+BasicPipeline::BasicPipeline(BasicPipeline&& other) noexcept
+    : device(other.device), layout(other.layout), pipeline(other.pipeline)
 {
     other.device   = VK_NULL_HANDLE;
     other.layout   = VK_NULL_HANDLE;
     other.pipeline = VK_NULL_HANDLE;
 }
 
-BasicPipeline& BasicPipeline::operator=(
-    BasicPipeline&& other) noexcept
+BasicPipeline& BasicPipeline::operator=(BasicPipeline&& other) noexcept
 {
     if (this != &other)
     {
@@ -158,9 +151,7 @@ BasicPipeline& BasicPipeline::operator=(
     return *this;
 }
 
-BasicPipeline create_basic_pipeline(
-    VkDevice device,
-    VkFormat color_format)
+BasicPipeline create_basic_pipeline(VkDevice device, VkFormat color_format)
 {
     BasicPipeline out{};
     out.device = device;

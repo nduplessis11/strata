@@ -19,9 +19,7 @@ namespace
 using u32 = std::uint32_t;
 
 // Choose a surface format (we prefer SRGB BGRA if available)
-VkSurfaceFormatKHR choose_surface_format(
-    VkPhysicalDevice physical,
-    VkSurfaceKHR     surface)
+VkSurfaceFormatKHR choose_surface_format(VkPhysicalDevice physical, VkSurfaceKHR surface)
 {
     u32 count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &count, nullptr);
@@ -55,10 +53,7 @@ VkSurfaceFormatKHR choose_surface_format(
 }
 
 // Choose present mode (prefer MAILBOX, else FIFO)
-VkPresentModeKHR choose_present_mode(
-    VkPhysicalDevice physical,
-    VkSurfaceKHR     surface,
-    bool             vsync)
+VkPresentModeKHR choose_present_mode(VkPhysicalDevice physical, VkSurfaceKHR surface, bool vsync)
 {
     u32 count = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &count, nullptr);
@@ -86,9 +81,8 @@ VkPresentModeKHR choose_present_mode(
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D choose_extent(
-    VkSurfaceCapabilitiesKHR const& capabilities,
-    rhi::Extent2D const&            framebuffer_size)
+VkExtent2D choose_extent(VkSurfaceCapabilitiesKHR const& capabilities,
+                         rhi::Extent2D const&            framebuffer_size)
 {
     if (capabilities.currentExtent.width != std::numeric_limits<u32>::max())
     {
@@ -116,13 +110,9 @@ VkSwapchainWrapper::~VkSwapchainWrapper()
     cleanup();
 }
 
-VkSwapchainWrapper::VkSwapchainWrapper(
-    VkSwapchainWrapper&& other) noexcept
-    : device_(other.device_),
-      swapchain_(other.swapchain_),
-      image_format_(other.image_format_),
-      extent_(other.extent_),
-      images_(std::move(other.images_)),
+VkSwapchainWrapper::VkSwapchainWrapper(VkSwapchainWrapper&& other) noexcept
+    : device_(other.device_), swapchain_(other.swapchain_), image_format_(other.image_format_),
+      extent_(other.extent_), images_(std::move(other.images_)),
       image_views_(std::move(other.image_views_))
 {
     other.device_       = VK_NULL_HANDLE;
@@ -131,8 +121,7 @@ VkSwapchainWrapper::VkSwapchainWrapper(
     other.extent_       = {};
 }
 
-VkSwapchainWrapper& VkSwapchainWrapper::operator=(
-    VkSwapchainWrapper&& other) noexcept
+VkSwapchainWrapper& VkSwapchainWrapper::operator=(VkSwapchainWrapper&& other) noexcept
 {
     if (this != &other)
     {
@@ -177,13 +166,12 @@ void VkSwapchainWrapper::cleanup()
     extent_       = {};
 }
 
-bool VkSwapchainWrapper::init(
-    VkPhysicalDevice          physical,
-    VkDevice                  device,
-    VkSurfaceKHR              surface,
-    std::uint32_t             graphics_family,
-    std::uint32_t             present_family,
-    rhi::SwapchainDesc const& desc)
+bool VkSwapchainWrapper::init(VkPhysicalDevice          physical,
+                              VkDevice                  device,
+                              VkSurfaceKHR              surface,
+                              std::uint32_t             graphics_family,
+                              std::uint32_t             present_family,
+                              rhi::SwapchainDesc const& desc)
 {
     cleanup();
 

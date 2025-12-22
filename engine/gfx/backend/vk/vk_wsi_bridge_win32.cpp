@@ -55,15 +55,12 @@ static constexpr std::array<std::string_view, 2> ext_views = {VK_KHR_SURFACE_EXT
 
 namespace strata::gfx::vk
 {
-std::span<ExtensionName const> required_instance_extensions(
-    WsiHandle const&)
+std::span<ExtensionName const> required_instance_extensions(WsiHandle const&)
 {
     return std::span{ext_views};
 }
 
-VkSurfaceKHR create_surface(
-    VkInstance       instance,
-    WsiHandle const& h)
+VkSurfaceKHR create_surface(VkInstance instance, WsiHandle const& h)
 {
     return std::visit(
         [&](auto const& alt) -> VkSurfaceKHR

@@ -36,9 +36,7 @@ enum class BufferUsage : std::uint32_t
     Uniform = 1 << 2,
     Upload  = 1 << 3,
 };
-inline BufferUsage operator|(
-    BufferUsage a,
-    BufferUsage b)
+inline BufferUsage operator|(BufferUsage a, BufferUsage b)
 {
     return static_cast<BufferUsage>(static_cast<std::uint32_t>(a) | static_cast<std::uint32_t>(b));
 }
@@ -143,5 +141,22 @@ struct AcquiredImage
     Extent2D      extent{};
     std::uint32_t frame_index{0};
 };
+
+enum class ShaderStage : std::uint32_t
+{
+    None     = 0,
+    Vertext  = 1 << 0,
+    Fragment = 1 << 1,
+    Compute  = 1 << 2,
+};
+
+inline ShaderStage operator|(ShaderStage a, ShaderStage b)
+{
+    return static_cast<ShaderStage>(static_cast<std::uint32_t>(a) | static_cast<std::uint32_t>(b));
+}
+inline ShaderStage operator&(ShaderStage a, ShaderStage b)
+{
+    return static_cast<ShaderStage>(static_cast<std::uint32_t>(a) & static_cast<std::uint32_t>(b));
+}
 
 } // namespace strata::gfx::rhi

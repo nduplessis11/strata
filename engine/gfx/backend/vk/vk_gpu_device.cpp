@@ -12,11 +12,9 @@
 
 namespace strata::gfx::rhi
 {
-
 // RHI factory: chooses backend (currently only Vulkan) and forwards to VkGpuDevice.
-std::unique_ptr<IGpuDevice> create_device(
-    DeviceCreateInfo const&            info,
-    strata::platform::WsiHandle const& surface)
+std::unique_ptr<IGpuDevice> create_device(DeviceCreateInfo const&            info,
+                                          platform::WsiHandle const& surface)
 {
     switch (info.backend)
     {
@@ -39,17 +37,15 @@ namespace
 {
 constexpr std::uint64_t fence_timeout = std::numeric_limits<std::uint64_t>::max();
 
-inline VkImageLayout safe_old_layout(
-    std::vector<VkImageLayout> const& layouts,
-    std::uint32_t                     image_index)
+inline VkImageLayout safe_old_layout(std::vector<VkImageLayout> const& layouts,
+                                     std::uint32_t                     image_index)
 {
     return (image_index < layouts.size()) ? layouts[image_index] : VK_IMAGE_LAYOUT_UNDEFINED;
 }
 } // anonymous namespace
 
-std::unique_ptr<VkGpuDevice> VkGpuDevice::create(
-    rhi::DeviceCreateInfo const&       info,
-    strata::platform::WsiHandle const& surface)
+std::unique_ptr<VkGpuDevice> VkGpuDevice::create(rhi::DeviceCreateInfo const&       info,
+                                                 strata::platform::WsiHandle const& surface)
 {
     (void)info; // later: debug flags, frames-in-flight, etc.
 
@@ -112,9 +108,8 @@ VkGpuDevice::~VkGpuDevice()
 
 // --- Swapchain -----------------------------------------------------------
 
-rhi::SwapchainHandle VkGpuDevice::create_swapchain(
-    rhi::SwapchainDesc const& desc,
-    strata::platform::WsiHandle const&)
+rhi::SwapchainHandle VkGpuDevice::create_swapchain(rhi::SwapchainDesc const& desc,
+                                                   strata::platform::WsiHandle const&)
 {
     // We have only one swapchain; ignore the handle value and always use {1}.
     if (!device_.device())
@@ -153,9 +148,7 @@ rhi::SwapchainHandle VkGpuDevice::create_swapchain(
     return rhi::SwapchainHandle{1};
 }
 
-rhi::FrameResult VkGpuDevice::resize_swapchain(
-    rhi::SwapchainHandle,
-    rhi::SwapchainDesc const& desc)
+rhi::FrameResult VkGpuDevice::resize_swapchain(rhi::SwapchainHandle, rhi::SwapchainDesc const& desc)
 {
     if (!device_.device())
     {
@@ -195,9 +188,7 @@ rhi::FrameResult VkGpuDevice::resize_swapchain(
     return rhi::FrameResult::Ok;
 }
 
-rhi::FrameResult VkGpuDevice::acquire_next_image(
-    rhi::SwapchainHandle,
-    rhi::AcquiredImage& out)
+rhi::FrameResult VkGpuDevice::acquire_next_image(rhi::SwapchainHandle, rhi::AcquiredImage& out)
 {
     using rhi::FrameResult;
 
@@ -251,9 +242,7 @@ rhi::FrameResult VkGpuDevice::acquire_next_image(
     return (acquire_result == VK_SUBOPTIMAL_KHR) ? FrameResult::Suboptimal : FrameResult::Ok;
 }
 
-rhi::FrameResult VkGpuDevice::present(
-    rhi::SwapchainHandle,
-    std::uint32_t image_index)
+rhi::FrameResult VkGpuDevice::present(rhi::SwapchainHandle, std::uint32_t image_index)
 {
     using rhi::FrameResult;
 
@@ -306,38 +295,32 @@ rhi::CommandBufferHandle VkGpuDevice::allocate_command_handle()
 
 // --- Buffers -------------------------------------------------------------
 
-rhi::BufferHandle VkGpuDevice::create_buffer(
-    rhi::BufferDesc const&,
-    std::span<std::byte const>)
+rhi::BufferHandle VkGpuDevice::create_buffer(rhi::BufferDesc const&, std::span<std::byte const>)
 {
     // Not used by Render2D yet; just hand out a unique handle for now.
     return allocate_buffer_handle();
 }
 
-void VkGpuDevice::destroy_buffer(
-    rhi::BufferHandle)
+void VkGpuDevice::destroy_buffer(rhi::BufferHandle)
 {
     // Stub for now
 }
 
 // --- Textures ------------------------------------------------------------
 
-rhi::TextureHandle VkGpuDevice::create_texture(
-    rhi::TextureDesc const&)
+rhi::TextureHandle VkGpuDevice::create_texture(rhi::TextureDesc const&)
 {
     return allocate_texture_handle();
 }
 
-void VkGpuDevice::destroy_texture(
-    rhi::TextureHandle)
+void VkGpuDevice::destroy_texture(rhi::TextureHandle)
 {
     // Stub
 }
 
 // --- Pipelines -----------------------------------------------------------
 
-rhi::PipelineHandle VkGpuDevice::create_pipeline(
-    rhi::PipelineDesc const&)
+rhi::PipelineHandle VkGpuDevice::create_pipeline(rhi::PipelineDesc const&)
 {
     if (!swapchain_.valid() || !device_.device())
     {
@@ -355,8 +338,7 @@ rhi::PipelineHandle VkGpuDevice::create_pipeline(
     return allocate_pipeline_handle();
 }
 
-void VkGpuDevice::destroy_pipeline(
-    rhi::PipelineHandle)
+void VkGpuDevice::destroy_pipeline(rhi::PipelineHandle)
 {
     // We only keep one backend pipeline; drop it when asked to destroy any handle.
     basic_pipeline_ = BasicPipeline{};
@@ -392,8 +374,7 @@ rhi::CommandBufferHandle VkGpuDevice::begin_commands()
     return rhi::CommandBufferHandle{1};
 }
 
-rhi::FrameResult VkGpuDevice::end_commands(
-    rhi::CommandBufferHandle)
+rhi::FrameResult VkGpuDevice::end_commands(rhi::CommandBufferHandle)
 {
     using rhi::FrameResult;
 
@@ -409,8 +390,7 @@ rhi::FrameResult VkGpuDevice::end_commands(
     return (vkEndCommandBuffer(frame.cmd) == VK_SUCCESS) ? FrameResult::Ok : FrameResult::Error;
 }
 
-rhi::FrameResult VkGpuDevice::submit(
-    rhi::IGpuDevice::SubmitDesc const& sd)
+rhi::FrameResult VkGpuDevice::submit(rhi::IGpuDevice::SubmitDesc const& sd)
 {
     using rhi::FrameResult;
 
@@ -656,9 +636,8 @@ rhi::FrameResult VkGpuDevice::cmd_end_swapchain_pass(
     return rhi::FrameResult::Ok;
 }
 
-rhi::FrameResult VkGpuDevice::cmd_bind_pipeline(
-    [[maybe_unused]] rhi::CommandBufferHandle cmd,
-    rhi::PipelineHandle                       pipeline)
+rhi::FrameResult VkGpuDevice::cmd_bind_pipeline([[maybe_unused]] rhi::CommandBufferHandle cmd,
+                                                rhi::PipelineHandle                       pipeline)
 {
 
     using rhi::FrameResult;
@@ -732,12 +711,11 @@ rhi::FrameResult VkGpuDevice::cmd_set_viewport_scissor(
     return FrameResult::Ok;
 }
 
-rhi::FrameResult VkGpuDevice::cmd_draw(
-    [[maybe_unused]] rhi::CommandBufferHandle cmd,
-    std::uint32_t                             vertex_count,
-    std::uint32_t                             instance_count,
-    std::uint32_t                             first_vertex,
-    std::uint32_t                             first_instance)
+rhi::FrameResult VkGpuDevice::cmd_draw([[maybe_unused]] rhi::CommandBufferHandle cmd,
+                                       std::uint32_t                             vertex_count,
+                                       std::uint32_t                             instance_count,
+                                       std::uint32_t                             first_vertex,
+                                       std::uint32_t                             first_instance)
 {
 
     using rhi::FrameResult;
@@ -828,8 +806,7 @@ void VkGpuDevice::destroy_frames()
     frames_.clear();
 }
 
-bool VkGpuDevice::init_render_finished_per_image(
-    std::size_t image_count)
+bool VkGpuDevice::init_render_finished_per_image(std::size_t image_count)
 {
     VkDevice vk_device = device_.device();
     if (!vk_device)

@@ -23,13 +23,10 @@ class IGpuDevice
 
     // --- Swapchain -----------------------------------------------------------
     virtual SwapchainHandle create_swapchain(SwapchainDesc const&               desc,
-                                             strata::platform::WsiHandle const& surface) = 0;
-    virtual FrameResult     resize_swapchain(SwapchainHandle      swapchain,
-                                             SwapchainDesc const& desc)                  = 0;
-    virtual FrameResult     acquire_next_image(SwapchainHandle swapchain,
-                                               AcquiredImage&  out)                       = 0;
-    virtual FrameResult     present(SwapchainHandle swapchain,
-                                    std::uint32_t   image_index)                           = 0;
+                                             strata::platform::WsiHandle const& surface)       = 0;
+    virtual FrameResult resize_swapchain(SwapchainHandle swapchain, SwapchainDesc const& desc) = 0;
+    virtual FrameResult acquire_next_image(SwapchainHandle swapchain, AcquiredImage& out)      = 0;
+    virtual FrameResult present(SwapchainHandle swapchain, std::uint32_t image_index)          = 0;
 
     // --- Buffers -------------------------------------------------------------
     virtual BufferHandle create_buffer(BufferDesc const&          desc,
@@ -64,19 +61,17 @@ class IGpuDevice
     virtual FrameResult cmd_begin_swapchain_pass(CommandBufferHandle cmd,
                                                  SwapchainHandle     swapchain,
                                                  std::uint32_t       image_index,
-                                                 ClearColor const&   clear) = 0;
+                                                 ClearColor const&   clear)                   = 0;
     virtual FrameResult cmd_end_swapchain_pass(CommandBufferHandle cmd,
                                                SwapchainHandle     swapchain,
-                                               std::uint32_t       image_index) = 0;
-    virtual FrameResult cmd_bind_pipeline(CommandBufferHandle cmd,
-                                          PipelineHandle      pipeline)        = 0;
-    virtual FrameResult cmd_set_viewport_scissor(CommandBufferHandle cmd,
-                                                 Extent2D            extent)         = 0;
+                                               std::uint32_t       image_index)                   = 0;
+    virtual FrameResult cmd_bind_pipeline(CommandBufferHandle cmd, PipelineHandle pipeline) = 0;
+    virtual FrameResult cmd_set_viewport_scissor(CommandBufferHandle cmd, Extent2D extent)  = 0;
     virtual FrameResult cmd_draw(CommandBufferHandle cmd,
                                  std::uint32_t       vertex_count,
                                  std::uint32_t       instance_count,
                                  std::uint32_t       first_vertex,
-                                 std::uint32_t       first_instance)            = 0;
+                                 std::uint32_t       first_instance)                              = 0;
 
     virtual void wait_idle() = 0;
 };

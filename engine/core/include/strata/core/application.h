@@ -56,8 +56,7 @@ enum class ApplicationError : std::uint8_t
     RendererCreateFailed,
 };
 
-[[nodiscard]] constexpr std::string_view to_string(
-    ApplicationError e) noexcept
+[[nodiscard]] constexpr std::string_view to_string(ApplicationError e) noexcept
 {
     switch (e)
     {
@@ -79,8 +78,7 @@ class Application
     using TickFn = std::function<void(Application&, FrameContext const&)>;
 
     [[nodiscard]]
-    static std::expected<Application,
-                         ApplicationError> create(ApplicationConfig config = {});
+    static std::expected<Application, ApplicationError> create(ApplicationConfig config = {});
 
     std::int16_t run(TickFn tick = {});
     void         request_exit() noexcept;
@@ -106,10 +104,7 @@ class Application
         void operator()(Impl*) const noexcept;
     };
 
-    explicit Application(
-        std::unique_ptr<Impl,
-                        ImplDeleter> impl) noexcept
-        : impl_(std::move(impl))
+    explicit Application(std::unique_ptr<Impl, ImplDeleter> impl) noexcept : impl_(std::move(impl))
     {
     }
 
