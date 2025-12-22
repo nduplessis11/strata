@@ -116,26 +116,6 @@ class VkGpuDevice final : public rhi::IGpuDevice
         std::vector<VkSemaphore> render_finished_per_image;
     };
 
-    struct BufferResource
-    {
-        VkBuffer       buffer{VK_NULL_HANDLE};
-        VkDeviceMemory memory{VK_NULL_HANDLE};
-        void*          mapped{nullptr};
-        VkDeviceSize   size{0};
-        bool           host_visible{false};
-    };
-
-    struct DescriptorSetLayoutResource
-    {
-        VkDescriptorSetLayout layout{VK_NULL_HANDLE};
-    };
-
-    struct DescriptorSetResource
-    {
-        VkDescriptorSet                set{VK_NULL_HANDLE};
-        rhi::DescriptorSetLayoutHandle layout{};
-    };
-
   private:
     VkGpuDevice() = default;
 
@@ -175,22 +155,6 @@ class VkGpuDevice final : public rhi::IGpuDevice
     std::uint32_t next_texture_{1};
     std::uint32_t next_pipeline_{1};
     std::uint32_t next_command_{1};
-    std::uint32_t next_descriptor_set_layout_{1};
-    std::uint32_t next_descriptor_set_{1};
-
-    std::vector<std::uint32_t> free_buffers_{};
-    std::vector<std::uint32_t> free_textures_{};
-    std::vector<std::uint32_t> free_pipelines_{};
-    std::vector<std::uint32_t> free_commands_{};
-    std::vector<std::uint32_t> free_descriptor_set_layouts_{};
-    std::vector<std::uint32_t> free_descriptor_sets_{};
-
-    // --- Descriptor allocation ------------------------------------------
-    VkDescriptorPool descriptor_pool_{};
-
-    std::vector<BufferResource>              buffers_{}; // index = BufferHandle.value
-    std::vector<DescriptorSetLayoutResource> descriptor_set_layouts_{};
-    std::vector<DescriptorSetResource>       descriptor_sets_{};
 
   private:
     // --- helpers ---------------------------------------------------------------
