@@ -302,7 +302,12 @@ namespace strata::gfx::vk {
 
     rhi::CommandBufferHandle VkGpuDevice::begin_commands() {
         if (frames_.empty()) return {};
-        FrameSlot& frame = frames_[frame_index_];
+
+        // Lock the frame slot used for this recording.
+        recording_frame_index_ = frame_index_;
+        recording_active_ = true;
+
+        FrameSlot& frame = frames_[recording_frame_index_];
         if (frame.cmd == VK_NULL_HANDLE) return {};
 
         vkResetCommandBuffer(frame.cmd, 0);
@@ -310,14 +315,25 @@ namespace strata::gfx::vk {
         VkCommandBufferBeginInfo begin{};
         begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-        if (vkBeginCommandBuffer(frame.cmd, &begin) != VK_SUCCESS) return {};
+        if (vkBeginCommandBuffer(frame.cmd, &begin) != VK_SUCCESS) {
+            recording_active_ = false;
+            return {};
+        }
+
+        // Still "opaque" for now; later encode recording_frame_index_ here.
         return rhi::CommandBufferHandle{ 1 };
     }
 
     rhi::FrameResult VkGpuDevice::end_commands(rhi::CommandBufferHandle) {
         using rhi::FrameResult;
-        if (frames_.empty()) return FrameResult::Error;
-        FrameSlot& frame = frames_[frame_index_];
+
+        if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size()) {
+            return FrameResult::Error;
+        }
+
+        FrameSlot& frame = frames_[recording_frame_index_];
+        if (frame.cmd == VK_NULL_HANDLE) return FrameResult::Error;
+
         return (vkEndCommandBuffer(frame.cmd) == VK_SUCCESS) ? FrameResult::Ok : FrameResult::Error;
     }
 
@@ -325,10 +341,10 @@ namespace strata::gfx::vk {
         using rhi::FrameResult;
 
         if (!device_.device() || !swapchain_.valid()) return FrameResult::Error;
-        if (frames_.empty()) return FrameResult::Error;
+        if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size()) return FrameResult::Error;
         if (!sd.command_buffer) return FrameResult::Error;
 
-        FrameSlot& frame = frames_[frame_index_];
+        FrameSlot& frame = frames_[recording_frame_index_];
 
         const std::uint32_t image_index = sd.image_index;
         if (image_index >= swapchain_sync_.render_finished_per_image.size()) return FrameResult::Error;
@@ -354,7 +370,10 @@ namespace strata::gfx::vk {
             swapchain_image_layouts_[image_index] = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
         }
 
-        // Advance frame slot
+        // Recording is done for this frame.
+        recording_active_ = false;
+
+        // Advance frame slot for the NEXT frame
         frame_index_ = (frame_index_ + 1) % frames_in_flight_;
 
         return FrameResult::Ok;
@@ -378,8 +397,10 @@ namespace strata::gfx::vk {
 
         using rhi::FrameResult;
 
-        if (frames_.empty()) return FrameResult::Error;
-        VkCommandBuffer vk_cmd = frames_[frame_index_].cmd;
+        if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size()) {
+            return FrameResult::Error;
+        }
+        VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
 
         if (vk_cmd == VK_NULL_HANDLE || !device_.device() || !swapchain_.valid()) {
             std::println(stderr, "cmd_begin_swapchain_pass: invalid device/swapchain/cmd");
@@ -492,9 +513,10 @@ namespace strata::gfx::vk {
 
         using rhi::FrameResult;
 
-        if (frames_.empty()) return FrameResult::Error;
-        VkCommandBuffer vk_cmd = frames_[frame_index_].cmd;
-
+        if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size()) {
+            return FrameResult::Error;
+        }
+        VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
 
         if (vk_cmd == VK_NULL_HANDLE || !device_.device() || !swapchain_.valid()) {
             std::println(stderr, "cmd_end_swapchain_pass: invalid device/swapchain/cmd");
@@ -549,8 +571,10 @@ namespace strata::gfx::vk {
 
         using rhi::FrameResult;
 
-        if (frames_.empty()) return FrameResult::Error;
-        VkCommandBuffer vk_cmd = frames_[frame_index_].cmd;
+        if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size()) {
+            return FrameResult::Error;
+        }
+        VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
 
         if (vk_cmd == VK_NULL_HANDLE || !device_.device() || !swapchain_.valid()) {
             std::println(stderr, "cmd_bind_pipeline: invalid device/swapchain/cmd");
@@ -580,8 +604,10 @@ namespace strata::gfx::vk {
 
         using rhi::FrameResult;
 
-        if (frames_.empty()) return FrameResult::Error;
-        VkCommandBuffer vk_cmd = frames_[frame_index_].cmd;
+        if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size()) {
+            return FrameResult::Error;
+        }
+        VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
 
         if (vk_cmd == VK_NULL_HANDLE) {
             std::println(stderr, "cmd_set_viewport_scissor: invalid cmd");
@@ -615,8 +641,10 @@ namespace strata::gfx::vk {
 
         using rhi::FrameResult;
 
-        if (frames_.empty()) return FrameResult::Error;
-        VkCommandBuffer vk_cmd = frames_[frame_index_].cmd;
+        if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size()) {
+            return FrameResult::Error;
+        }
+        VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
 
         if (vk_cmd == VK_NULL_HANDLE) {
             std::println(stderr, "cmd_draw: invalid cmd");

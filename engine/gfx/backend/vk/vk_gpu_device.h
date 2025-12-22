@@ -89,6 +89,11 @@ namespace strata::gfx::vk {
         // Start with 2; later feed from DeviceCreateInfo
         std::uint32_t frames_in_flight_{ 2 };
         std::uint32_t frame_index_{ 0 };
+        // Tracks which frame slot is currently being recorded/submitted.
+         // This avoids bugs if frame_index_ advances while cmd_* still runs.
+        std::uint32_t recording_frame_index_{ 0 };
+        bool          recording_active_{ false };
+
 
         // Per-frame ring resources
         std::vector<FrameSlot> frames_;
