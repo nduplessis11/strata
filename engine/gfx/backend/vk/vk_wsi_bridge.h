@@ -1,6 +1,6 @@
-﻿// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // engine/gfx/backend/vk/vk_wsi_bridge.h
-// 
+//
 // Purpose:
 //   Cross-platform bridge between the engine's platform layer (Win32/X11/Wayland)
 //   and Vulkan’s Window System Integration (WSI). This header exposes a minimal,
@@ -31,24 +31,27 @@
 // -----------------------------------------------------------------------------
 #pragma once
 #include "strata/platform/wsi_handle.h"
-#include <string_view>
 #include <span>
+#include <string_view>
 
 // Forward declare Vulkan types so we don't pull <vulkan/vulkan.h> in public headers
 struct VkInstance_T;
 struct VkSurfaceKHR_T;
-using VkInstance = VkInstance_T*;
+using VkInstance   = VkInstance_T*;
 using VkSurfaceKHR = VkSurfaceKHR_T*;
 
-namespace strata::gfx::vk {
-    // A lightweight, read-only, non-owning view of a list of extension names.
-    using ExtensionName = std::string_view;
+namespace strata::gfx::vk
+{
+// A lightweight, read-only, non-owning view of a list of extension names.
+using ExtensionName = std::string_view;
 
-    // Returns the minimal set of instance extensions required for this WSI
-    // e.g., { "VK_KHR_surface", "VK_KHR_win32_surface" } on Win32.
-    auto required_instance_extensions(const strata::platform::WsiHandle& wsi) -> std::span<const ExtensionName>;
+// Returns the minimal set of instance extensions required for this WSI
+// e.g., { "VK_KHR_surface", "VK_KHR_win32_surface" } on Win32.
+auto required_instance_extensions(strata::platform::WsiHandle const& wsi)
+    -> std::span<ExtensionName const>;
 
-    // Create a VkSurfaceKHR for the given WSI. Returns VK_NULL_HANDLE on failure.
-    // Implemented per-platform in separate .cc files.
-    auto create_surface(VkInstance instance, const strata::platform::WsiHandle& wsi) -> VkSurfaceKHR;
+// Create a VkSurfaceKHR for the given WSI. Returns VK_NULL_HANDLE on failure.
+// Implemented per-platform in separate .cc files.
+auto create_surface(VkInstance                         instance,
+                    strata::platform::WsiHandle const& wsi) -> VkSurfaceKHR;
 } // namespace strata::gfx::vk

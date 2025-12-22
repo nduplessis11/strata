@@ -14,88 +14,106 @@
 
 #pragma once
 
-#include <cstdint>
 #include <chrono>
+#include <cstdint>
 #include <functional>
 
-#include "strata/platform/window.h"
-#include "strata/gfx/rhi/gpu_device.h"
 #include "strata/gfx/renderer/render_2d.h"
+#include "strata/gfx/rhi/gpu_device.h"
+#include "strata/platform/window.h"
 #include <expected>
 
-namespace strata::core {
+namespace strata::core
+{
 
-    struct FrameContext {
-        std::uint64_t frame_index{};
-        double        delta_seconds{};
+struct FrameContext
+{
+    std::uint64_t frame_index{};
+    double        delta_seconds{};
+};
+
+struct ApplicationConfig
+{
+    // Window creation (size, title, etc.)
+    strata::platform::WindowDesc window_desc{};
+
+    // Which backend to use (Vulkan for now)
+    strata::gfx::rhi::DeviceCreateInfo device{};
+
+    // Swapchain defaults (format/vsync). Size will be set from framebuffer size at runtime.
+    strata::gfx::rhi::SwapchainDesc swapchain_desc{};
+
+    // Simple CPI throttle
+    bool                      throttle_cpu{true};
+    std::chrono::milliseconds throttle_sleep{1};
+};
+
+enum class ApplicationError : std::uint8_t
+{
+    WindowCreateFailed,
+    DeviceCreateFailed,
+    SwapchainCreateFailed,
+    RendererCreateFailed,
+};
+
+[[nodiscard]] constexpr std::string_view to_string(
+    ApplicationError e) noexcept
+{
+    switch (e)
+    {
+    case ApplicationError::WindowCreateFailed:
+        return "WindowCreateFailed";
+    case ApplicationError::DeviceCreateFailed:
+        return "DeviceCreateFailed";
+    case ApplicationError::SwapchainCreateFailed:
+        return "SwapchainCreateFailed";
+    case ApplicationError::RendererCreateFailed:
+        return "RendererCreateFailed";
+    }
+    return "Unknown";
+}
+
+class Application
+{
+  public:
+    using TickFn = std::function<void(Application&, FrameContext const&)>;
+
+    [[nodiscard]]
+    static std::expected<Application,
+                         ApplicationError> create(ApplicationConfig config = {});
+
+    std::int16_t run(TickFn tick = {});
+    void         request_exit() noexcept;
+
+    [[nodiscard]] strata::platform::Window&       window() noexcept;
+    [[nodiscard]] strata::platform::Window const& window() const noexcept;
+
+    [[nodiscard]] strata::gfx::rhi::IGpuDevice&       device() noexcept;
+    [[nodiscard]] strata::gfx::rhi::IGpuDevice const& device() const noexcept;
+
+    [[nodiscard]] strata::gfx::rhi::SwapchainHandle swapchain() const noexcept;
+
+    [[nodiscard]] strata::gfx::renderer::Render2D&       renderer() noexcept;
+    [[nodiscard]] strata::gfx::renderer::Render2D const& renderer() const noexcept;
+
+    [[nodiscard]] ApplicationConfig const& config() const noexcept;
+
+  private:
+    struct Impl;
+
+    struct ImplDeleter
+    {
+        void operator()(Impl*) const noexcept;
     };
 
-    struct ApplicationConfig {
-        // Window creation (size, title, etc.)
-        strata::platform::WindowDesc window_desc{};
-
-        // Which backend to use (Vulkan for now)
-        strata::gfx::rhi::DeviceCreateInfo device{};
-
-        // Swapchain defaults (format/vsync). Size will be set from framebuffer size at runtime.
-        strata::gfx::rhi::SwapchainDesc swapchain_desc{};
-
-        // Simple CPI throttle
-        bool throttle_cpu{ true };
-        std::chrono::milliseconds throttle_sleep{ 1 };
-    };
-
-    enum class ApplicationError : std::uint8_t {
-        WindowCreateFailed,
-        DeviceCreateFailed,
-        SwapchainCreateFailed,
-        RendererCreateFailed,
-    };
-
-    [[nodiscard]] constexpr std::string_view to_string(ApplicationError e) noexcept {
-        switch (e) {
-        case ApplicationError::WindowCreateFailed:   return "WindowCreateFailed";
-        case ApplicationError::DeviceCreateFailed:   return "DeviceCreateFailed";
-        case ApplicationError::SwapchainCreateFailed:return "SwapchainCreateFailed";
-        case ApplicationError::RendererCreateFailed: return "RendererCreateFailed";
-        }
-        return "Unknown";
+    explicit Application(
+        std::unique_ptr<Impl,
+                        ImplDeleter> impl) noexcept
+        : impl_(std::move(impl))
+    {
     }
 
-    class Application {
-    public:
-        using TickFn = std::function<void(Application&, const FrameContext&)>;
-
-        [[nodiscard]]
-        static std::expected<Application, ApplicationError> create(ApplicationConfig config = {});
-
-        std::int16_t run(TickFn tick = {});
-        void request_exit() noexcept;
-
-        [[nodiscard]] strata::platform::Window& window() noexcept;
-        [[nodiscard]] const strata::platform::Window& window() const noexcept;
-
-        [[nodiscard]] strata::gfx::rhi::IGpuDevice& device() noexcept;
-        [[nodiscard]] const strata::gfx::rhi::IGpuDevice& device() const noexcept;
-
-        [[nodiscard]] strata::gfx::rhi::SwapchainHandle swapchain() const noexcept;
-
-        [[nodiscard]] strata::gfx::renderer::Render2D& renderer() noexcept;
-        [[nodiscard]] const strata::gfx::renderer::Render2D& renderer() const noexcept;
-
-        [[nodiscard]] const ApplicationConfig& config() const noexcept;
-
-    private:
-        struct Impl;
-
-        struct ImplDeleter {
-            void operator()(Impl*) const noexcept;
-        };
-
-        explicit Application(std::unique_ptr<Impl, ImplDeleter> impl) noexcept
-            : impl_(std::move(impl)) {}
-
-        std::unique_ptr<Impl, ImplDeleter> impl_{ nullptr };
-    };
+    std::unique_ptr<Impl, ImplDeleter> impl_{nullptr};
+};
 
 } // namespace strata::core

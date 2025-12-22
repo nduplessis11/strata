@@ -1,0 +1,44 @@
+# .clang-format - C++23 style for Visual Studio 2026
+BasedOnStyle: Microsoft  # start from VS default style (4-space indents, etc.)
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+### Bracing Style ###
+BreakBeforeBraces: Allman       # Open braces on new lines (functions, classes, namespaces, etc.)
+AllowShortFunctionsOnASingleLine: Empty  # Only empty functions can be single-line
+
+### Function Declaration Formatting ###
+AlignAfterOpenBracket: true     # Align parameters vertically after the "("
+BinPackParameters: AlwaysOnePerLine  # Each function parameter on its own line
+BinPackArguments: false         # In calls, one argument per line if they don't all fit on one line
+### Example: 
+# void myFunction(
+#     int first_param,
+#     const std::string& second_param) {
+
+BreakFunctionDefinitionParameters: true  # Always break after function name and before params (for definitions)
+
+### Alignment of Declarations ###
+AlignConsecutiveDeclarations: true       # Align consecutive declarations on columns
+AlignConsecutiveAssignments: true        # (Optional) align consecutive assignments, if desired
+# With the above, declarations like:
+#    const int    MAX_VALUE = 100;
+#    static bool  is_ready  = false;
+# will align `const`/`static`, types, and `=` signs in columns.
+
+### Pointer and Reference Alignment ###
+PointerAlignment: Left    # Attach '*' to the type (e.g. "int* ptr")
+ReferenceAlignment: Left  # Attach '&' to the type (e.g. "int& ref")
+# (These settings keep pointer/reference symbols with the type. Adjust if you prefer a different style.)
+
+### Qualifiers (East Const) ###
+QualifierAlignment: Right   # Enforce east const/volatile (qualifiers to the right of the type):contentReference[oaicite:2]{index=2}:contentReference[oaicite:3]{index=3}
+# This will format "const int x" as "int const x", and "char * const ptr" as "char * const ptr" (const remains to the right of type).
+# Note: Clang-Format 14+ supports this. Review changes for any unusual cases.
+
+### Other Formatting Options ###
+ColumnLimit: 100            # Max line width (adjust as preferred)
+Cpp11BracedListStyle: true  # Format braced initializer lists like regular code
+SpaceBeforeParens: ControlStatements  # if/for/while parentheses get a space before them, function calls do not
+AllowAllArgumentsOnNextLine: false    # don't put multiple args on same line after a line break

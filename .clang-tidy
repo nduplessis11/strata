@@ -1,0 +1,50 @@
+# .clang-tidy - C++23 naming and style checks
+Checks: >- 
+  -*,
+  readability-identifier-naming,
+  misc-const-correctness,
+  cppcoreguidelines-avoid-non-const-global-variables
+
+ExtraArgs:
+  - -Wno-unused-command-line-argument
+
+CheckOptions:
+  # *** Naming convention rules for identifiers *** 
+  # Types (classes, structs, enums, typedefs): PascalCase
+  - { key: readability-identifier-naming.ClassCase,           value: CamelCase }
+  - { key: readability-identifier-naming.StructCase,          value: CamelCase }
+  - { key: readability-identifier-naming.UnionCase,           value: CamelCase }
+  - { key: readability-identifier-naming.EnumCase,            value: CamelCase }
+  - { key: readability-identifier-naming.TypedefCase,         value: CamelCase }
+  - { key: readability-identifier-naming.TemplateParameterCase, value: CamelCase }
+  # Functions and Methods: lower_snake_case
+  - { key: readability-identifier-naming.FunctionCase,        value: lower_case }
+  - { key: readability-identifier-naming.ClassMethodCase,     value: lower_case }
+  # Variables:
+  - { key: readability-identifier-naming.NamespaceCase,       value: lower_case }
+  - { key: readability-identifier-naming.GlobalVariableCase,   value: lower_case }
+  - { key: readability-identifier-naming.StaticVariableCase,   value: lower_case }
+  - { key: readability-identifier-naming.GlobalConstantCase,   value: lower_case }
+  - { key: readability-identifier-naming.StaticConstantCase,   value: lower_case }
+  - { key: readability-identifier-naming.StaticConstexprVariableCase, value: lower_case }
+  - { key: readability-identifier-naming.LocalVariableCase,    value: lower_case }
+  - { key: readability-identifier-naming.LocalConstantCase,    value: lower_case }
+  - { key: readability-identifier-naming.ParameterCase,        value: lower_case }
+  # Pointer variables (no special Hungarian notation; use same lower_case):
+  - { key: readability-identifier-naming.GlobalPointerCase,    value: lower_case }
+  - { key: readability-identifier-naming.GlobalConstantPointerCase, value: lower_case }
+  - { key: readability-identifier-naming.LocalPointerCase,     value: lower_case }
+  - { key: readability-identifier-naming.LocalConstantPointerCase, value: lower_case }
+  # Class members:
+  - { key: readability-identifier-naming.ClassMemberCase,      value: lower_case }
+  - { key: readability-identifier-naming.ClassMemberSuffix,    value: "_" }
+  # (Trailing underscore for data members **note:** clang-tidy cannot distinguish public struct members or static members here, so it will suggest an underscore for them too. See discussion below.)
+  # Constants inside classes (static const/constexpr data members):
+  - { key: readability-identifier-naming.ClassConstantCase,    value: lower_case }
+  - { key: readability-identifier-naming.ClassConstexprCase,   value: lower_case }
+  # Enum constants:
+  - { key: readability-identifier-naming.EnumConstantCase,     value: lower_case }
+  - { key: readability-identifier-naming.ScopedEnumConstantCase, value: lower_case }
+  # Macros:
+  - { key: readability-identifier-naming.MacroDefinitionCase,  value: UPPER_CASE }
+  # (We enforce ALL_CAPS for macros. You can optionally add a project-specific prefix in MacroDefinitionPrefix.)

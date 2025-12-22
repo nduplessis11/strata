@@ -10,12 +10,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+option(STRATA_ENABLE_CLANG_TIDY "Enable clang-tidy analysis" OFF)
 option(STRATA_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
 option(STRATA_USE_X11 "Use X11 on Linux (else Wayland)" ON)
 option(STRATA_ENABLE_ASAN "Enable AddressSanitizer on supported toolchains" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(warnings)  # provides: enable_strict_warnings(<target>)
+include(clang_tidy)
 
 # Shared, target-based options for all engine targets
 add_library(engine_options INTERFACE)

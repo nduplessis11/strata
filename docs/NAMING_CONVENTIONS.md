@@ -46,7 +46,7 @@ WSI handle alternatives live in:
 
 - `strata::platform::wsi` (Win32/X11/Wayland variants)
 
-### Rule of thumb: “where does this code belong?”
+### Rule of thumb: "where does this code belong?"
 - If it contains `Vk*` types, it belongs in **`strata::gfx::vk`** and `engine/gfx/backend/vk/*`.
 - If it contains OS types (`HWND`, `Display*`, `wl_display*`), it belongs in **platform source files** (pImpl) and should not leak into public headers.
 - If it must be visible to renderer code, it belongs in **`gfx/rhi`** or **`gfx/renderer`** (with Vulkan hidden).
@@ -107,7 +107,7 @@ Private/internal implementation lives in `src/` or backend folders:
 - Vulkan backend types use a `Vk` prefix and live in `strata::gfx::vk`:
   - `VkGpuDevice`, `VkInstanceWrapper`, `VkDeviceWrapper`, `VkSwapchainWrapper`, `VkCommandBufferPool`
 
-### “Wrapper” naming
+### "Wrapper" naming
 Use `*Wrapper` for RAII wrappers that own raw Vulkan objects:
 - `VkInstanceWrapper` owns `VkInstance`, `VkSurfaceKHR`, optional debug messenger
 - `VkDeviceWrapper` owns `VkDevice`
@@ -166,9 +166,42 @@ Examples:
 ## Member, local, and parameter naming
 
 ### Member variables
+
+#### Private / internal data members
 - Use **lower_snake_case** with a **trailing underscore**:
-  - `device_`, `swapchain_`, `pipeline_`, `exit_requested`, `frame_index`, `last_frame`
+  - `device_`, `swapchain_`, `pipeline_`, `exit_requested_`, `frame_index_`, `last_frame_`
   - (backend) `instance_`, `device_`, `swapchain_`, `command_pool_`, `primary_cmd_`
+- Applies to:
+  - `private:` and `protected:` data members
+  - pImpl `Impl` structs/classes that are not part of the public API
+
+#### Public data members (struct fields)
+- Use **lower_snake_case** **without** a trailing underscore:
+  - `width`, `height`, `format`, `image_count`, `present_mode`
+- Applies to:
+  - `public:` data members, especially in “data carrier” structs like `*Desc`, `*Config`, `*CreateInfo`, `*Context`, and handle/ID structs.
+
+> Rationale: public fields read like plain data (POD-style), while private fields visually signal encapsulation/ownership.
+
+Example:
+```cpp
+struct SwapchainDesc {
+    std::uint32_t width{};
+    std::uint32_t height{};
+    Format format{Format::B8G8R8A8Unorm};
+    bool vsync{true};
+};
+
+class VkSwapchainWrapper {
+public:
+    SwapchainDesc desc() const noexcept;
+
+private:
+    VkDevice device_{};
+    VkSwapchainKHR swapchain_{};
+    SwapchainDesc desc_{};
+};
+```
 
 ### Locals and parameters
 - Use **lower_snake_case**:
@@ -276,11 +309,11 @@ Guidelines:
 
 ---
 
-## Naming “smells” to avoid
+## Naming "smells" to avoid
 
 - Abbreviations that aren’t standard (prefer `framebuffer_size` over `fb_sz`)
 - Overloaded names across layers (e.g., a platform `Device` vs GPU `Device` without qualification)
-- “Manager” or “Util” without a more specific name
+- "Manager" or "Util" without a more specific name
 - Names that don’t match ownership (e.g., something named `*Handle` that actually owns resources)
 
 ---
@@ -295,7 +328,8 @@ Guidelines:
 | Class/struct | PascalCase | `Application`, `Render2D`, `VkGpuDevice` |
 | Interface | `I` + PascalCase | `IGpuDevice` |
 | Methods/functions | lower_snake_case | `create_swapchain`, `wait_idle`, `draw_frame` |
-| Members | lower_snake_case + `_` | `device_`, `swapchain_`, `pipeline_` |
+| Private/protected members | lower_snake_case + `_` | `device_`, `swapchain_`, `pipeline_` |
+| Public struct fields | lower_snake_case | `width`, `image_count`, `present_mode` |
 | Files | lower_snake_case | `vk_swapchain.cpp`, `render_2d.h` |
 | Platform file suffix | `_win32`, `_x11`, `_wayland` | `window_win32.cpp` |
 | Constant | `k` + PascalCase | `kFenceTimeout`, `kDeviceExtensions` |

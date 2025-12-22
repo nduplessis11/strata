@@ -5,4 +5,3 @@
 //   Placeholder implementation for the minimal ECS prototype. Definitions will
 //   land here as the component system is fleshed out.
 // -----------------------------------------------------------------------------
-
