@@ -31,89 +31,8 @@ namespace strata::gfx::vk {
     namespace {
         constexpr std::uint64_t kFenceTimeout = std::numeric_limits<std::uint64_t>::max();
 
-        bool init_frame_sync(FrameSync& fs, VkDevice device) {
-            VkSemaphoreCreateInfo sem_ci{};
-            sem_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-            if (vkCreateSemaphore(device, &sem_ci, nullptr, &fs.image_available) != VK_SUCCESS) {
-                std::println(stderr, "VkGpuDevice: failed to create image_available semaphore");
-                return false;
-            }
-
-            VkFenceCreateInfo fence_ci{};
-            fence_ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-            fence_ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-            if (vkCreateFence(device, &fence_ci, nullptr, &fs.in_flight) != VK_SUCCESS) {
-                std::println(stderr, "VkGpuDevice: failed to create in_flight fence");
-                return false;
-            }
-
-            return true;
-        }
-
-        void destroy_frame_sync(FrameSync& fs, VkDevice device) {
-            if (device == VK_NULL_HANDLE) return;
-
-            if (fs.in_flight != VK_NULL_HANDLE) {
-                vkDestroyFence(device, fs.in_flight, nullptr);
-                fs.in_flight = VK_NULL_HANDLE;
-            }
-
-            if (fs.image_available != VK_NULL_HANDLE) {
-                vkDestroySemaphore(device, fs.image_available, nullptr);
-                fs.image_available = VK_NULL_HANDLE;
-            }
-        }
-
-        bool init_render_finished_per_image(FrameSync& fs, VkDevice device, std::size_t image_count) {
-            // Destroy old if any (supports resize and recreate)
-            for (auto s : fs.render_finished_per_image) {
-                if (s != VK_NULL_HANDLE) {
-                    vkDestroySemaphore(device, s, nullptr);
-                }
-            }
-
-            fs.render_finished_per_image.clear();
-            fs.render_finished_per_image.resize(image_count, VK_NULL_HANDLE);
-
-            VkSemaphoreCreateInfo sem_ci{};
-            sem_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-            for (auto& sem : fs.render_finished_per_image) {
-                if (vkCreateSemaphore(device, &sem_ci, nullptr, &sem) != VK_SUCCESS) {
-                    std::println(stderr, "VkGpuDevice: failed to create per-image render_finished semaphore");
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        void destroy_render_finished_per_image(FrameSync& fs, VkDevice device) {
-            if (device == VK_NULL_HANDLE) return;
-
-            for (auto s : fs.render_finished_per_image) {
-                if (s != VK_NULL_HANDLE) {
-                    vkDestroySemaphore(device, s, nullptr);
-                }
-            }
-            fs.render_finished_per_image.clear();
-        }
-
-        // In the current engine, there is exactly one command buffer.
-        // So we ignore the RHI handle and always record into primary_cmd_.
-        // When we introduce frames-in-flight, this becomes a lookup table.
-        inline VkCommandBuffer resolve_cmd(VkCommandBuffer primary, rhi::CommandBufferHandle /*cmd*/) {
-            return primary;
-        }
-
-        inline VkImageLayout safe_old_layout(const std::vector<VkImageLayout>& layouts,
-            std::uint32_t image_index) {
-            if (image_index < layouts.size()) {
-                return layouts[image_index];
-            }
-            return VK_IMAGE_LAYOUT_UNDEFINED;
+        inline VkImageLayout safe_old_layout(const std::vector<VkImageLayout>& layouts, std::uint32_t image_index) {
+            return (image_index < layouts.size()) ? layouts[image_index] : VK_IMAGE_LAYOUT_UNDEFINED;
         }
     } // anonymous namespace
 
@@ -135,18 +54,14 @@ namespace strata::gfx::vk {
             return {};
         }
 
-        // 3) Command pool + single primary command buffer
+        // 3) Command pool
         if (!dev->command_pool_.init(dev->device_.device(), dev->device_.graphics_family())) {
             return {};
         }
 
-        dev->primary_cmd_ = dev->command_pool_.allocate(dev->device_.device());
-        if (dev->primary_cmd_ == VK_NULL_HANDLE) {
-            return {};
-        }
-
-        // 4) Frame sync (semaphores + fence)
-        if (!init_frame_sync(dev->frame_sync_, dev->device_.device())) {
+        // 4) Frames-in-flight ring
+        dev->frames_in_flight_ = 2; // start with 2
+        if (!dev->init_frames()) {
             return {};
         }
 
@@ -164,12 +79,11 @@ namespace strata::gfx::vk {
         basic_pipeline_ = BasicPipeline{};
 
         // Destroy sync primitives
-        destroy_render_finished_per_image(frame_sync_, device_.device());
-        destroy_frame_sync(frame_sync_, device_.device());
+        destroy_render_finished_per_image();
+        destroy_frames();
 
-        // Command pool + command buffer
+        // Command pool
         command_pool_.cleanup(device_.device());
-        primary_cmd_ = VK_NULL_HANDLE;
 
         // Swapchain images + views + swapchain
         swapchain_.cleanup();
@@ -204,10 +118,15 @@ namespace strata::gfx::vk {
             return rhi::SwapchainHandle{};
         }
 
-        swapchain_image_layouts_.assign(swapchain_.images().size(), VK_IMAGE_LAYOUT_UNDEFINED);
+        const std::size_t image_count = swapchain_.images().size();
 
-        if (!init_render_finished_per_image(frame_sync_, device_.device(), swapchain_.images().size())) {
+        swapchain_image_layouts_.assign(image_count, VK_IMAGE_LAYOUT_UNDEFINED);
+        images_in_flight_.assign(image_count, VK_NULL_HANDLE);
+
+        if (!init_render_finished_per_image(image_count)) {
             swapchain_.cleanup();
+            swapchain_image_layouts_.clear();
+            images_in_flight_.clear();
             return rhi::SwapchainHandle{};
         }
 
@@ -236,10 +155,15 @@ namespace strata::gfx::vk {
             return rhi::FrameResult::Error;
         }
 
-        swapchain_image_layouts_.assign(swapchain_.images().size(), VK_IMAGE_LAYOUT_UNDEFINED);
+        const std::size_t image_count = swapchain_.images().size();
 
-        if (!init_render_finished_per_image(frame_sync_, device_.device(), swapchain_.images().size())) {
+        swapchain_image_layouts_.assign(image_count, VK_IMAGE_LAYOUT_UNDEFINED);
+        images_in_flight_.assign(image_count, VK_NULL_HANDLE);
+
+        if (!init_render_finished_per_image(image_count)) {
             swapchain_.cleanup();
+            swapchain_image_layouts_.clear();
+            images_in_flight_.clear();
             return rhi::FrameResult::Error;
         }
 
@@ -253,43 +177,55 @@ namespace strata::gfx::vk {
         using rhi::FrameResult;
 
         if (!swapchain_.valid() || !device_.device()) return FrameResult::Error;
+        if (frames_.empty()) return FrameResult::Error;
 
-        VkDevice device = device_.device();
+        VkDevice vk_device = device_.device();
+        FrameSlot& frame = frames_[frame_index_];
 
-        // Wait/Reset fence (single frame in flight for now)
-        VkResult wait_res = vkWaitForFences(device, 1, &frame_sync_.in_flight, VK_TRUE, kFenceTimeout);
-        if (wait_res != VK_SUCCESS) return FrameResult::Error;
+        // Wait for this frame slot to be available
+        if (vkWaitForFences(vk_device, 1, &frame.in_flight, VK_TRUE, kFenceTimeout) != VK_SUCCESS) {
+            return FrameResult::Error;
+        }
 
-        // Acquire next image
+        // Acquire using per-frame semaphore
         std::uint32_t image_index = 0;
-        VkResult acquire_result = vkAcquireNextImageKHR(
-            device,
+        VkResult ar = vkAcquireNextImageKHR(
+            vk_device,
             swapchain_.swapchain(),
             kFenceTimeout,
-            frame_sync_.image_available,
+            frame.image_available,
             VK_NULL_HANDLE,
             &image_index);
 
-        if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) return FrameResult::ResizeNeeded;
-        if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) return FrameResult::Error;
+        if (ar == VK_ERROR_OUT_OF_DATE_KHR) return FrameResult::ResizeNeeded;
+        if (ar != VK_SUCCESS && ar != VK_SUBOPTIMAL_KHR) return FrameResult::Error;
 
-        // Report extent from swapchain (most correct)
+        // Wait if this swapchain image is still in flight
+        if (image_index < images_in_flight_.size()) {
+            VkFence img_fence = images_in_flight_[image_index];
+            if (img_fence != VK_NULL_HANDLE) {
+                if (vkWaitForFences(vk_device, 1, &img_fence, VK_TRUE, kFenceTimeout) != VK_SUCCESS) {
+                    return FrameResult::Error;
+                }
+            }
+            images_in_flight_[image_index] = frame.in_flight;
+        }
+
         VkExtent2D extent = swapchain_.extent();
         out.image_index = image_index;
         out.extent = rhi::Extent2D{ extent.width, extent.height };
-        out.frame_index = 0; // single frame in flight for now
-        
-        // We still render on SUBOPTIMAL and let the caller decide to resize.
-        return (acquire_result == VK_SUBOPTIMAL_KHR) ? FrameResult::Suboptimal : FrameResult::Ok;
+        out.frame_index = frame_index_;
+
+        return (ar == VK_SUBOPTIMAL_KHR) ? FrameResult::Suboptimal : FrameResult::Ok;
     }
 
     rhi::FrameResult VkGpuDevice::present(rhi::SwapchainHandle, std::uint32_t image_index) {
         using rhi::FrameResult;
 
         if (!swapchain_.valid() || !device_.device()) return FrameResult::Error;
-        if (image_index >= frame_sync_.render_finished_per_image.size()) return rhi::FrameResult::Error;
+        if (image_index >= swapchain_sync_.render_finished_per_image.size()) return FrameResult::Error;
 
-        VkSemaphore render_finished = frame_sync_.render_finished_per_image[image_index];
+        VkSemaphore render_finished = swapchain_sync_.render_finished_per_image[image_index];
         VkSwapchainKHR sw = swapchain_.swapchain();
 
         VkPresentInfoKHR pi{};
@@ -365,59 +301,80 @@ namespace strata::gfx::vk {
     // --- Commands & submission ----------------------------------------------
 
     rhi::CommandBufferHandle VkGpuDevice::begin_commands() {
-        if (primary_cmd_ == VK_NULL_HANDLE) return {};
+        if (frames_.empty()) return {};
 
-        vkResetCommandBuffer(primary_cmd_, 0);
+        // Lock the frame slot used for this recording.
+        recording_frame_index_ = frame_index_;
+        recording_active_ = true;
+
+        FrameSlot& frame = frames_[recording_frame_index_];
+        if (frame.cmd == VK_NULL_HANDLE) return {};
+
+        vkResetCommandBuffer(frame.cmd, 0);
 
         VkCommandBufferBeginInfo begin{};
         begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-        if (vkBeginCommandBuffer(primary_cmd_, &begin) != VK_SUCCESS) return {};
+        if (vkBeginCommandBuffer(frame.cmd, &begin) != VK_SUCCESS) {
+            recording_active_ = false;
+            return {};
+        }
 
-        // Single command buffer for now
+        // Still "opaque" for now; later encode recording_frame_index_ here.
         return rhi::CommandBufferHandle{ 1 };
     }
 
     rhi::FrameResult VkGpuDevice::end_commands(rhi::CommandBufferHandle) {
         using rhi::FrameResult;
 
-        if (vkEndCommandBuffer(primary_cmd_) != VK_SUCCESS) return FrameResult::Error;
-        return FrameResult::Ok;
+        if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size()) {
+            return FrameResult::Error;
+        }
+
+        FrameSlot& frame = frames_[recording_frame_index_];
+        if (frame.cmd == VK_NULL_HANDLE) return FrameResult::Error;
+
+        return (vkEndCommandBuffer(frame.cmd) == VK_SUCCESS) ? FrameResult::Ok : FrameResult::Error;
     }
 
     rhi::FrameResult VkGpuDevice::submit(const rhi::IGpuDevice::SubmitDesc& sd) {
         using rhi::FrameResult;
-        
-        if (primary_cmd_ == VK_NULL_HANDLE || !device_.device() || !sd.command_buffer) return FrameResult::Error;
 
-        VkCommandBuffer vk_cmd = resolve_cmd(primary_cmd_, sd.command_buffer);
+        if (!device_.device() || !swapchain_.valid()) return FrameResult::Error;
+        if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size()) return FrameResult::Error;
+        if (!sd.command_buffer) return FrameResult::Error;
+
+        FrameSlot& frame = frames_[recording_frame_index_];
+
         const std::uint32_t image_index = sd.image_index;
+        if (image_index >= swapchain_sync_.render_finished_per_image.size()) return FrameResult::Error;
 
-        if (image_index >= frame_sync_.render_finished_per_image.size()) return FrameResult::Error;
-
-        VkSemaphore render_finished = frame_sync_.render_finished_per_image[image_index];
-
+        VkSemaphore render_finished = swapchain_sync_.render_finished_per_image[image_index];
         VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
         VkSubmitInfo submit{};
         submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submit.waitSemaphoreCount = 1;
-        submit.pWaitSemaphores = &frame_sync_.image_available;
+        submit.pWaitSemaphores = &frame.image_available;
         submit.pWaitDstStageMask = &wait_stage;
         submit.commandBufferCount = 1;
-        submit.pCommandBuffers = &vk_cmd;
+        submit.pCommandBuffers = &frame.cmd;
         submit.signalSemaphoreCount = 1;
         submit.pSignalSemaphores = &render_finished;
 
         VkDevice vk_device = device_.device();
-        if (vkResetFences(vk_device, 1, &frame_sync_.in_flight) != VK_SUCCESS) return FrameResult::Error;
-        if (vkQueueSubmit(device_.graphics_queue(), 1, &submit, frame_sync_.in_flight) != VK_SUCCESS) return FrameResult::Error;
+        if (vkResetFences(vk_device, 1, &frame.in_flight) != VK_SUCCESS) return FrameResult::Error;
+        if (vkQueueSubmit(device_.graphics_queue(), 1, &submit, frame.in_flight) != VK_SUCCESS) return FrameResult::Error;
 
-
-        // we know the post-barrier will execute.
         if (image_index < swapchain_image_layouts_.size()) {
             swapchain_image_layouts_[image_index] = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
         }
+
+        // Recording is done for this frame.
+        recording_active_ = false;
+
+        // Advance frame slot for the NEXT frame
+        frame_index_ = (frame_index_ + 1) % frames_in_flight_;
 
         return FrameResult::Ok;
     }
@@ -433,14 +390,17 @@ namespace strata::gfx::vk {
     // --- Recording (explicit functions fine for now) --------------------------
 
     rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
-        rhi::CommandBufferHandle cmd,
-        rhi::SwapchainHandle /*swapchain*/,
+        [[maybe_unused]] rhi::CommandBufferHandle cmd,
+        [[maybe_unused]] rhi::SwapchainHandle swapchain,
         std::uint32_t image_index,
         const rhi::ClearColor& clear) {
-        
+
         using rhi::FrameResult;
 
-        VkCommandBuffer vk_cmd = resolve_cmd(primary_cmd_, cmd);
+        if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size()) {
+            return FrameResult::Error;
+        }
+        VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
 
         if (vk_cmd == VK_NULL_HANDLE || !device_.device() || !swapchain_.valid()) {
             std::println(stderr, "cmd_begin_swapchain_pass: invalid device/swapchain/cmd");
@@ -547,11 +507,16 @@ namespace strata::gfx::vk {
     }
 
     rhi::FrameResult VkGpuDevice::cmd_end_swapchain_pass(
-        rhi::CommandBufferHandle cmd,
-        rhi::SwapchainHandle /*swapchain*/,
+        [[maybe_unused]] rhi::CommandBufferHandle cmd,
+        [[maybe_unused]] rhi::SwapchainHandle swapchain,
         std::uint32_t image_index) {
-        
-        VkCommandBuffer vk_cmd = resolve_cmd(primary_cmd_, cmd);
+
+        using rhi::FrameResult;
+
+        if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size()) {
+            return FrameResult::Error;
+        }
+        VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
 
         if (vk_cmd == VK_NULL_HANDLE || !device_.device() || !swapchain_.valid()) {
             std::println(stderr, "cmd_end_swapchain_pass: invalid device/swapchain/cmd");
@@ -601,12 +566,15 @@ namespace strata::gfx::vk {
     }
 
     rhi::FrameResult VkGpuDevice::cmd_bind_pipeline(
-        rhi::CommandBufferHandle cmd,
+        [[maybe_unused]] rhi::CommandBufferHandle cmd,
         rhi::PipelineHandle pipeline) {
-        
+
         using rhi::FrameResult;
 
-        VkCommandBuffer vk_cmd = resolve_cmd(primary_cmd_, cmd);
+        if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size()) {
+            return FrameResult::Error;
+        }
+        VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
 
         if (vk_cmd == VK_NULL_HANDLE || !device_.device() || !swapchain_.valid()) {
             std::println(stderr, "cmd_bind_pipeline: invalid device/swapchain/cmd");
@@ -631,12 +599,16 @@ namespace strata::gfx::vk {
     }
 
     rhi::FrameResult VkGpuDevice::cmd_set_viewport_scissor(
-        rhi::CommandBufferHandle cmd,
+        [[maybe_unused]] rhi::CommandBufferHandle cmd,
         rhi::Extent2D extent) {
-        
+
         using rhi::FrameResult;
 
-        VkCommandBuffer vk_cmd = resolve_cmd(primary_cmd_, cmd);
+        if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size()) {
+            return FrameResult::Error;
+        }
+        VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
+
         if (vk_cmd == VK_NULL_HANDLE) {
             std::println(stderr, "cmd_set_viewport_scissor: invalid cmd");
             return FrameResult::Error;
@@ -661,15 +633,19 @@ namespace strata::gfx::vk {
     }
 
     rhi::FrameResult VkGpuDevice::cmd_draw(
-        rhi::CommandBufferHandle cmd,
+        [[maybe_unused]] rhi::CommandBufferHandle cmd,
         std::uint32_t vertex_count,
         std::uint32_t instance_count,
         std::uint32_t first_vertex,
         std::uint32_t first_instance) {
-        
+
         using rhi::FrameResult;
 
-        VkCommandBuffer vk_cmd = resolve_cmd(primary_cmd_, cmd);
+        if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size()) {
+            return FrameResult::Error;
+        }
+        VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
+
         if (vk_cmd == VK_NULL_HANDLE) {
             std::println(stderr, "cmd_draw: invalid cmd");
             return FrameResult::Error;
@@ -678,6 +654,105 @@ namespace strata::gfx::vk {
         vkCmdDraw(vk_cmd, vertex_count, instance_count, first_vertex, first_instance);
 
         return FrameResult::Ok;
+    }
+
+    bool VkGpuDevice::init_frames() {
+        if (!device_.device()) return false;
+
+        frames_.clear();
+        frames_.resize(frames_in_flight_);
+
+        VkDevice vk_device = device_.device();
+
+        VkSemaphoreCreateInfo sem_ci{};
+        sem_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        VkFenceCreateInfo fence_ci{};
+        fence_ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fence_ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        for (std::uint32_t i = 0; i < frames_in_flight_; ++i) {
+            frames_[i].cmd = command_pool_.allocate(vk_device);
+            if (frames_[i].cmd == VK_NULL_HANDLE) {
+                std::println(stderr, "VkGpuDevice: failed to allocate frame cmd buffer");
+                return false;
+            }
+
+            if (vkCreateSemaphore(vk_device, &sem_ci, nullptr, &frames_[i].image_available) != VK_SUCCESS) {
+                std::println(stderr, "VkGpuDevice: failed to create frame image_available semaphore");
+                return false;
+            }
+
+            if (vkCreateFence(vk_device, &fence_ci, nullptr, &frames_[i].in_flight) != VK_SUCCESS) {
+                std::println(stderr, "VkGpuDevice: failed to create frame in_flight fence");
+                return false;
+            }
+        }
+
+        frame_index_ = 0;
+        return true;
+    }
+
+    void VkGpuDevice::destroy_frames() {
+        VkDevice vk_device = device_.device();
+        if (!vk_device) {
+            frames_.clear();
+            return;
+        }
+
+        for (auto& f : frames_) {
+            if (f.in_flight != VK_NULL_HANDLE) {
+                vkDestroyFence(vk_device, f.in_flight, nullptr);
+            }
+            if (f.image_available != VK_NULL_HANDLE) {
+                vkDestroySemaphore(vk_device, f.image_available, nullptr);
+            }
+            // command buffers freed with pool destruction/reset
+            f = {};
+        }
+        frames_.clear();
+    }
+
+    bool VkGpuDevice::init_render_finished_per_image(std::size_t image_count) {
+        VkDevice vk_device = device_.device();
+        if (!vk_device) return false;
+
+        // destroy old
+        for (auto s : swapchain_sync_.render_finished_per_image) {
+            if (s != VK_NULL_HANDLE) {
+                vkDestroySemaphore(vk_device, s, nullptr);
+            }
+        }
+
+        swapchain_sync_.render_finished_per_image.clear();
+        swapchain_sync_.render_finished_per_image.resize(image_count, VK_NULL_HANDLE);
+
+        VkSemaphoreCreateInfo sem_ci{};
+        sem_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        for (auto& sem : swapchain_sync_.render_finished_per_image) {
+            if (vkCreateSemaphore(vk_device, &sem_ci, nullptr, &sem) != VK_SUCCESS) {
+                std::println(stderr, "VkGpuDevice: failed to create per-image render_finished semaphore");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    void VkGpuDevice::destroy_render_finished_per_image() {
+        VkDevice vk_device = device_.device();
+        if (!vk_device) {
+            swapchain_sync_.render_finished_per_image.clear();
+            return;
+        }
+
+        for (auto s : swapchain_sync_.render_finished_per_image) {
+            if (s != VK_NULL_HANDLE) {
+                vkDestroySemaphore(vk_device, s, nullptr);
+            }
+        }
+        swapchain_sync_.render_finished_per_image.clear();
     }
 
 } // namespace strata::gfx::vk

@@ -180,12 +180,8 @@ namespace strata::gfx::renderer {
         }
 
         FrameResult result = renderer.draw_frame();
-        if (result == FrameResult::Ok) {
-            return FrameResult::Ok;
-        }
-        if (result == FrameResult::Error) {
-            return FrameResult::Error;
-        }
+        if (result == FrameResult::Ok || result == FrameResult::Error) return result;
+
 
         // Any non-Ok, non-Error result is treated as "swapchain needs resize".
         device.wait_idle();
