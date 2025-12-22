@@ -16,12 +16,6 @@
 
 namespace strata::gfx::vk {
 
-    struct FrameSync {
-        VkSemaphore image_available{ VK_NULL_HANDLE };
-        VkFence     in_flight{ VK_NULL_HANDLE };
-        std::vector<VkSemaphore> render_finished_per_image;
-    };
-
     class VkGpuDevice final : public rhi::IGpuDevice {
     public:
         static std::unique_ptr<VkGpuDevice> create(
@@ -66,6 +60,20 @@ namespace strata::gfx::vk {
         void wait_idle() override;
 
     private:
+        // Per-frame synchronization + commad buffer (frames-in-flight ring)
+        struct FrameSlot {
+            VkCommandBuffer cmd{ VK_NULL_HANDLE };
+            VkSemaphore     image_available{ VK_NULL_HANDLE };
+            VkFence         in_flight{ VK_NULL_HANDLE };
+        };
+
+        // Swapchain-dependent sync (still per swapchain-image for now)
+        // Keeping this per-image lets present() stay: present(swapchain, image_index)
+        struct SwapchainSync {
+            std::vector<VkSemaphore> render_finished_per_image;
+        };
+
+    private:
         VkGpuDevice() = default;
 
         rhi::BufferHandle        allocate_buffer_handle();
@@ -78,9 +86,20 @@ namespace strata::gfx::vk {
         VkSwapchainWrapper   swapchain_{};
         VkCommandBufferPool  command_pool_{};
 
-        VkCommandBuffer      primary_cmd_{ VK_NULL_HANDLE };
-        FrameSync            frame_sync_{};
-        BasicPipeline        basic_pipeline_{};
+        // Start with 2; later feed from DeviceCreateInfo
+        std::uint32_t frames_in_flight_{ 2 };
+        std::uint32_t frame_index_{ 0 };
+
+        // Per-frame ring resources
+        std::vector<FrameSlot> frames_;
+
+        // Swapchain-dependent sync/state
+        SwapchainSync swapchain_sync_{};
+
+        // Fence tracking per swapchain image (prevents reusing an image still in flight)
+        std::vector<VkFence> images_in_flight_;
+
+        BasicPipeline basic_pipeline_{};
 
         std::vector<VkImageLayout> swapchain_image_layouts_;
 
@@ -88,6 +107,14 @@ namespace strata::gfx::vk {
         std::uint32_t next_texture_{ 1 };
         std::uint32_t next_pipeline_{ 1 };
         std::uint32_t next_command_{ 1 };
+
+    private:
+        // --- helpers ---------------------------------------------------------------
+        bool init_frames();
+        void destroy_frames();
+
+        bool init_render_finished_per_image(std::size_t image_count);
+        void destroy_render_finished_per_image();
     };
 
 } // namespace strata::gfx::vk
