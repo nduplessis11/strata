@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// engine/gfx/backend/vk/vk_gpu_device_recording.cpp
+// engine/gfx/backend/vk/vk_gpu_device/vk_gpu_device_recording.cpp
 //
 // Purpose:
 //   Recording commands issued to Vulkan command buffers.

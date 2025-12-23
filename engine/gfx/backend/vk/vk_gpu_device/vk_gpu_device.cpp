@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// engine/gfx/backend/vk/vk_gpu_device.cpp
+// engine/gfx/backend/vk/vk_gpu_device/vk_gpu_device.cpp
 //
 // Purpose:
 //   Implement the Vulkan IGpuDevice backend core lifecycle.

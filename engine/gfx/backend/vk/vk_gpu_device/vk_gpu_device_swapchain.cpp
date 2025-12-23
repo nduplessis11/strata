@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// engine/gfx/backend/vk/vk_gpu_device_swapchain.cpp
+// engine/gfx/backend/vk/vk_gpu_device/vk_gpu_device_swapchain.cpp
 //
 // Purpose:
 //   Swapchain creation, resizing, image acquire, and present.
