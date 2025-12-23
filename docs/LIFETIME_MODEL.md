@@ -290,8 +290,8 @@ Then C++ destroys members in reverse declaration order. In our `Impl`, the key s
    - destroyed last (native window resources released per platform)
 
 Required invariants:
-- `device` must still be alive and valid when `Render2D` destructs (you member order guarantees this).
-- `Window` must outlive `VkSurfaceKHR` (you member order guarantees this).
+- `device` must still be alive and valid when `Render2D` destructs (the member order guarantees this).
+- `Window` must outlive `VkSurfaceKHR` (the member order guarantees this).
 
 ### Vulkan backend `VkGpuDevice` teardown (explicit sequence)
 `VkGpuDevice::~VkGpuDevice()` performs an explicit safe teardown:
