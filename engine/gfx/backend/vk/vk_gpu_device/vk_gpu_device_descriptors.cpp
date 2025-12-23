@@ -103,18 +103,6 @@ void VkGpuDevice::cleanup_descriptors()
     descriptor_set_layouts_.clear();
 }
 
-rhi::DescriptorSetLayoutHandle VkGpuDevice::allocate_descriptor_set_layout_handle()
-{
-    rhi::DescriptorSetLayoutHandle h{next_descriptor_set_layout_++};
-    return h;
-}
-
-rhi::DescriptorSetHandle VkGpuDevice::allocate_descriptor_set_handle()
-{
-    rhi::DescriptorSetHandle h{next_descriptor_set_++};
-    return h;
-}
-
 VkDescriptorSetLayout VkGpuDevice::get_vk_descriptor_set_layout(
     rhi::DescriptorSetLayoutHandle handle) const noexcept
 {
