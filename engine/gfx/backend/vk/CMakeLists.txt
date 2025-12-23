@@ -16,6 +16,7 @@ add_library(strata_gfx_backend_vk STATIC
     vk_gpu_device/vk_gpu_device_resources.cpp
     vk_gpu_device/vk_gpu_device_pipeline.cpp
     vk_pipeline_basic.cpp
+    vk_descriptor.cpp
     $<$<PLATFORM_ID:Windows>:vk_wsi_bridge_win32.cpp>
     $<$<AND:$<PLATFORM_ID:Linux>,$<BOOL:${STRATA_USE_X11}>>:vk_wsi_bridge_x11.cpp>
 )
