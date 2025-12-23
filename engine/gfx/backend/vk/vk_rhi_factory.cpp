@@ -5,7 +5,7 @@
 //   RHI factory selection for Vulkan.
 // -----------------------------------------------------------------------------
 
-#include "vk_gpu_device.h"
+#include "vk_gpu_device/vk_gpu_device.h"
 
 namespace strata::gfx::rhi
 {

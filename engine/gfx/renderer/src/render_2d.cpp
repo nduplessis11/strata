@@ -41,9 +41,9 @@ void Render2D::release() noexcept
     }
 
     // Clear handles regardless (safe for moved-from / partial init)
-    pipeline_       = {};
-    swapchain_      = {};
-    device_         = nullptr;
+    pipeline_  = {};
+    swapchain_ = {};
+    device_    = nullptr;
 }
 
 Render2D::~Render2D()
@@ -55,9 +55,9 @@ Render2D::Render2D(Render2D&& other) noexcept
     : device_(other.device_), swapchain_(other.swapchain_), pipeline_(other.pipeline_)
 {
     // moved-from becomes inert
-    other.device_         = nullptr;
-    other.swapchain_      = {};
-    other.pipeline_       = {};
+    other.device_    = nullptr;
+    other.swapchain_ = {};
+    other.pipeline_  = {};
 }
 
 Render2D& Render2D::operator=(Render2D&& other) noexcept
@@ -66,13 +66,13 @@ Render2D& Render2D::operator=(Render2D&& other) noexcept
     {
         release();
 
-        device_         = other.device_;
-        swapchain_      = other.swapchain_;
-        pipeline_       = other.pipeline_;
+        device_    = other.device_;
+        swapchain_ = other.swapchain_;
+        pipeline_  = other.pipeline_;
 
-        other.device_         = nullptr;
-        other.swapchain_      = {};
-        other.pipeline_       = {};
+        other.device_    = nullptr;
+        other.swapchain_ = {};
+        other.pipeline_  = {};
     }
     return *this;
 }
