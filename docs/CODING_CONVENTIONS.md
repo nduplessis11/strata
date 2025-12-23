@@ -82,6 +82,15 @@ WSI handle variants live in:
   - `engine/gfx/backend/vk`
 
 ### File names
+
+
+### Splitting large implementations
+
+If a class implementation grows large, it is OK to split its method definitions across
+multiple `.cpp` files, keeping a single public header.
+
+Naming: `<base>_<area>.cpp`
+Example: `vk_gpu_device_swapchain.cpp`, `vk_gpu_device_commands.cpp`, ...
 - **lower_snake_case**
   - `application.cpp`, `gpu_device.h`, `render_2d.cpp`
 - Platform/backend suffixes:
