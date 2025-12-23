@@ -143,6 +143,7 @@ class VkGpuDevice final : public rhi::IGpuDevice
     VkDescriptorSetLayout get_vk_descriptor_set_layout(
         rhi::DescriptorSetLayoutHandle handle) const noexcept;
     VkDescriptorSet get_vk_descriptor_set(rhi::DescriptorSetHandle handle) const noexcept;
+    void            cleanup_descriptors();
 
     // --- Backend state -------------------------------------------------------
     VkInstanceWrapper   instance_{};

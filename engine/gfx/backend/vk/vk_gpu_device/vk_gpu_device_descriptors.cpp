@@ -68,6 +68,41 @@ bool VkGpuDevice::ensure_descriptor_pool()
     return true;
 }
 
+void VkGpuDevice::cleanup_descriptors()
+{
+    // IMPORTANT:
+    // VkGpuDevice::~VkGpuDevice() calls device_.cleanup() in its destructor body.
+    // Member destructors run AFTER the destructor body, so any RAII wrappers that
+    // destroy Vulkan objects using VkDevice must be reset BEFORE device_.cleanup().
+    //
+    // This function must be called before device_.cleanup().
+
+    VkDevice vk_device = device_.device();
+
+    // Destroy pool first:
+    // - Frees all descriptor sets allocated from it.
+    // - Ensures VkDescriptorPoolWrapper destructor runs while VkDevice is still valid.
+    descriptor_pool_.reset();
+
+    // Our handle tables can now be cleared.
+    descriptor_sets_.clear();
+
+    // Descriptor set layouts are separate objects and must be destroyed explicitly.
+    if (vk_device != VK_NULL_HANDLE)
+    {
+        for (auto& layout : descriptor_set_layouts_)
+        {
+            if (layout != VK_NULL_HANDLE)
+            {
+                vkDestroyDescriptorSetLayout(vk_device, layout, nullptr);
+                layout = VK_NULL_HANDLE;
+            }
+        }
+    }
+
+    descriptor_set_layouts_.clear();
+}
+
 rhi::DescriptorSetLayoutHandle VkGpuDevice::allocate_descriptor_set_layout_handle()
 {
     rhi::DescriptorSetLayoutHandle h{next_descriptor_set_layout_++};

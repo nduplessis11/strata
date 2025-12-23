@@ -56,6 +56,9 @@ VkGpuDevice::~VkGpuDevice()
     // Destroy pipeline first (it holds the device handle)
     basic_pipeline_ = BasicPipeline{};
 
+    // Descriptors must be destroyed/reset while VkDevice is still alive
+    cleanup_descriptors();
+
     // Destroy sync primitives
     destroy_render_finished_per_image();
     destroy_frames();
