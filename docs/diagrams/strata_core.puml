@@ -237,6 +237,23 @@ class C_0010554209192484980512 {
 __
 -pool_ : VkCommandPool
 }
+class "strata::gfx::vk::VkDescriptorPoolWrapper" as C_0002011638324630400963
+class C_0002011638324630400963 {
++VkDescriptorPoolWrapper(const VkDescriptorPoolWrapper &) = deleted : void
++VkDescriptorPoolWrapper(VkDescriptorPoolWrapper && other) noexcept : void
+-VkDescriptorPoolWrapper(VkDevice device, VkDescriptorPool descriptor_pool) noexcept : void
++~VkDescriptorPoolWrapper() noexcept : void
+..
++operator=(const VkDescriptorPoolWrapper &) = deleted : VkDescriptorPoolWrapper &
++operator=(VkDescriptorPoolWrapper && other) noexcept : VkDescriptorPoolWrapper &
+..
+{static} +create(VkDevice device) : std::expected<VkDescriptorPoolWrapper,VkResult>
++descriptor_pool() const noexcept : VkDescriptorPool
++operator bool() const noexcept : bool
+__
+-descriptor_pool_ : VkDescriptorPool
+-device_ : VkDevice
+}
 class "strata::gfx::vk::VkDeviceWrapper" as C_0011145604038376368072
 class C_0011145604038376368072 {
 +VkDeviceWrapper() = default : void
@@ -342,6 +359,8 @@ class C_0002997308125348651313 {
 -allocate_buffer_handle() : rhi::BufferHandle
 -allocate_command_handle() : rhi::CommandBufferHandle
 +allocate_descriptor_set(rhi::DescriptorSetLayoutHandle layout) : rhi::DescriptorSetHandle
+-allocate_descriptor_set_handle() : rhi::DescriptorSetHandle
+-allocate_descriptor_set_layout_handle() : rhi::DescriptorSetLayoutHandle
 -allocate_pipeline_handle() : rhi::PipelineHandle
 -allocate_texture_handle() : rhi::TextureHandle
 +begin_commands() : rhi::CommandBufferHandle
@@ -351,11 +370,11 @@ class C_0002997308125348651313 {
 +cmd_draw(rhi::CommandBufferHandle cmd, std::uint32_t vertex_count, std::uint32_t instance_count, std::uint32_t first_vertex, std::uint32_t first_instance) : rhi::FrameResult
 +cmd_end_swapchain_pass(rhi::CommandBufferHandle cmd, rhi::SwapchainHandle swapchain, std::uint32_t image_index) : rhi::FrameResult
 +cmd_set_viewport_scissor(rhi::CommandBufferHandle cmd, rhi::Extent2D extent) : rhi::FrameResult
-{static} +create(const rhi::DeviceCreateInfo & info, const strata::platform::WsiHandle & surface) : std::unique_ptr<VkGpuDevice>
-+create_buffer(const rhi::BufferDesc & desc, std::span<const std::byte> initial_data) : rhi::BufferHandle
+{static} +create(const rhi::DeviceCreateInfo & info, const platform::WsiHandle & surface) : std::unique_ptr<VkGpuDevice>
++create_buffer(const rhi::BufferDesc & desc, std::span<const std::byte> initial_data = = {}) : rhi::BufferHandle
 +create_descriptor_set_layout(const rhi::DescriptorSetLayoutDesc & desc) : rhi::DescriptorSetLayoutHandle
 +create_pipeline(const rhi::PipelineDesc & desc) : rhi::PipelineHandle
-+create_swapchain(const rhi::SwapchainDesc & desc, const strata::platform::WsiHandle & surface) : rhi::SwapchainHandle
++create_swapchain(const rhi::SwapchainDesc & desc, const platform::WsiHandle & surface) : rhi::SwapchainHandle
 +create_texture(const rhi::TextureDesc & desc) : rhi::TextureHandle
 +destroy_buffer(rhi::BufferHandle handle) : void
 +destroy_descriptor_set_layout(rhi::DescriptorSetLayoutHandle handle) : void
@@ -364,17 +383,23 @@ class C_0002997308125348651313 {
 -destroy_render_finished_per_image() : void
 +destroy_texture(rhi::TextureHandle handle) : void
 +end_commands(rhi::CommandBufferHandle cmd) : rhi::FrameResult
+-ensure_descriptor_pool() : bool
 +free_descriptor_set(rhi::DescriptorSetHandle set) : void
+-get_vk_descriptor_set(rhi::DescriptorSetHandle handle) const noexcept : VkDescriptorSet
+-get_vk_descriptor_set_layout(rhi::DescriptorSetLayoutHandle handle) const noexcept : VkDescriptorSetLayout
 -init_frames() : bool
 -init_render_finished_per_image(std::size_t image_count) : bool
 +present(rhi::SwapchainHandle swapchain, std::uint32_t image_index) : rhi::FrameResult
 +resize_swapchain(rhi::SwapchainHandle swapchain, const rhi::SwapchainDesc & desc) : rhi::FrameResult
-+submit(const rhi::IGpuDevice::SubmitDesc & submit) : rhi::FrameResult
++submit(const SubmitDesc & submit) : rhi::FrameResult
 +update_descriptor_set(rhi::DescriptorSetHandle set, std::span<const rhi::DescriptorWrite> writes) : rhi::FrameResult
 +wait_idle() : void
 __
 -basic_pipeline_ : BasicPipeline
 -command_pool_ : VkCommandBufferPool
+-descriptor_pool_ : std::optional<VkDescriptorPoolWrapper>
+-descriptor_set_layouts_ : std::vector<VkDescriptorSetLayout>
+-descriptor_sets_ : std::vector<VkDescriptorSet>
 -device_ : VkDeviceWrapper
 -frame_index_ : std::uint32_t
 -frames_ : std::vector<FrameSlot>
@@ -383,6 +408,8 @@ __
 -instance_ : VkInstanceWrapper
 -next_buffer_ : std::uint32_t
 -next_command_ : std::uint32_t
+-next_descriptor_set_ : std::uint32_t
+-next_descriptor_set_layout_ : std::uint32_t
 -next_pipeline_ : std::uint32_t
 -next_texture_ : std::uint32_t
 -recording_active_ : bool
@@ -641,8 +668,9 @@ C_0002997308125348651313 o-- C_0016636178717209631603 : -instance_
 C_0002997308125348651313 o-- C_0011145604038376368072 : -device_
 C_0002997308125348651313 o-- C_0005469923327072863924 : -swapchain_
 C_0002997308125348651313 o-- C_0010554209192484980512 : -command_pool_
-C_0002997308125348651313 o-- C_0018051402234945093614 : -swapchain_sync_
 C_0002997308125348651313 o-- C_0011075689005501709456 : -basic_pipeline_
+C_0002997308125348651313 o-- C_0018051402234945093614 : -swapchain_sync_
+C_0002997308125348651313 o-- C_0002011638324630400963 : -descriptor_pool_
 C_0017920997868415439149 <|-- C_0002997308125348651313
 C_0007994622723758139976 --+ C_0002997308125348651313
 C_0018051402234945093614 --+ C_0002997308125348651313

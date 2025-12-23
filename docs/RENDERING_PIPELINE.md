@@ -136,11 +136,25 @@ Pipeline-related:
 - `create_pipeline(desc) -> PipelineHandle`
 - `destroy_pipeline(handle)`
 
+Buffers/textures:
+- `create_buffer(desc, initial_data) -> BufferHandle`
+- `destroy_buffer(handle)`
+- `create_texture(desc) -> TextureHandle`
+- `destroy_texture(handle)`
+
+Descriptor sets:
+- `create_descriptor_set_layout(desc) -> DescriptorSetLayoutHandle`
+- `destroy_descriptor_set_layout(handle)`
+- `allocate_descriptor_set(layout) -> DescriptorSetHandle`
+- `free_descriptor_set(set)`
+- `update_descriptor_set(set, writes) -> FrameResult`
+- `cmd_bind_descriptor_set(...)`
+
 Commands/submission:
 - `begin_commands() -> CommandBufferHandle`
 - `end_commands(cmd)`
-- `submit(SubmitDesc{ command_buffer })`
-- `cmd_begin_swapchain_pass(...)`, `cmd_bind_pipeline(...)`, `cmd_draw(...)`, ...
+- `submit(SubmitDesc{ command_buffer, swapchain, image_index, frame_index })`
+- `cmd_begin_swapchain_pass(...)`, `cmd_bind_pipeline(...)`, `cmd_bind_descriptor_set(...)`, `cmd_draw(...)`, ...
 
 ---
 
@@ -319,8 +333,9 @@ Because the pipeline depends on swapchain format, it is recreated when the swapc
 ## Planned evolution points
 
 1. **Descriptor sets / resource binding**
-   - add descriptor set layout + update APIs to the RHI
-   - plumb Vulkan descriptor pools/sets in the backend
+   - (v1) descriptor set layout + allocate/update APIs exist in the RHI (uniform buffers only)
+   - Vulkan backend owns a descriptor pool and allocates descriptor sets from it
+   - Next: expand descriptor types (images/samplers, etc.) and use in renderer
 
 2. **Command recording API ergonomics**
    - Replace `cmd_*` functions with a command encoder/list object.
@@ -328,7 +343,7 @@ Because the pipeline depends on swapchain format, it is recreated when the swapc
 
 3. **Pipeline lifetime rules**
    - Today: pipeline recreated on resize via a fresh `Render2D`, and backend can lazily rebuild.
-   - Later: pipeline cache, descriptor sets, shader hot-reload, etc.
+   - Later: pipeline cache, expanded descriptor sets, shader hot-reload, etc.
 
 4. **Swapchain recreation policy**
    - Avoid `wait_idle()` by tracking in-flight resources (requires multi-frame model).
