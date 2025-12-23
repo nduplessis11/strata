@@ -26,9 +26,9 @@ class Render2D
   private:
     void release() noexcept;
 
-    rhi::IGpuDevice*               device_{nullptr}; // non-owning
-    rhi::SwapchainHandle           swapchain_{};
-    rhi::PipelineHandle            pipeline_{};
+    rhi::IGpuDevice*     device_{nullptr}; // non-owning
+    rhi::SwapchainHandle swapchain_{};
+    rhi::PipelineHandle  pipeline_{};
 };
 
 rhi::FrameResult draw_frame_and_handle_resize(rhi::IGpuDevice&      device,
