@@ -185,7 +185,7 @@ Also keep Vulkan containment intact:
 
 Some natural next steps (also described in the docs):
 
-- Add **Vulkan descriptor sets** (resource binding for buffers/textures)
+- Expand **Vulkan descriptor sets** (uniform buffers today; images/samplers later)
 - Introduce real resource tables/registries for buffers/textures/pipelines
 - Grow beyond the single-pass fullscreen triangle (depth, MSAA, post, etc.)
 - ECS/data-driven systems (future)

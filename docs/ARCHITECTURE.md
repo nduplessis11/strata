@@ -138,6 +138,7 @@ Inside the Vulkan backend (`gfx::vk::VkGpuDevice`):
 - `VkInstanceWrapper` owns `VkInstance`, `VkSurfaceKHR`, and optional debug messenger.
 - `VkDeviceWrapper` owns `VkDevice` and holds non-owning queue handles.
 - `VkSwapchainWrapper` owns swapchain + image views.
+- Descriptor pool + descriptor sets (v1: uniform buffers only).
 - Per-frame ring resources:
   - command buffers (one per frame slot)
   - image-available semaphores (one per frame slot)
@@ -165,6 +166,7 @@ flowchart LR
   VK --> VKF["FrameSlot ring (cmd + fence + image_available)"]
   VK --> VKIIF[images_in_flight fence tracking]
   VK --> VKRF[render_finished per swapchain image]
+  VK --> VKDS[Descriptor pool + descriptor sets]
   VK --> VKP[BasicPipeline]
 ```
 
@@ -181,8 +183,10 @@ The RHI is designed as:
   - wait idle
 - A set of **typed opaque handles** for resources:
   - `BufferHandle`, `TextureHandle`, `PipelineHandle`, `CommandBufferHandle`, `SwapchainHandle`
+  - `DescriptorSetLayoutHandle`, `DescriptorSetHandle`
 - POD-style “desc” structs:
   - `BufferDesc`, `TextureDesc`, `PipelineDesc`, `SwapchainDesc`, `SubmitDesc`
+  - `DescriptorSetLayoutDesc`, `DescriptorWrite`
 
 This structure keeps renderer code clean and backend-agnostic.
 

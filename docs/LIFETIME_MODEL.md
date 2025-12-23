@@ -66,6 +66,7 @@ flowchart TD
   VK --> CMD["FrameSlot ring: VkCommandBuffer per frame"]
   VK --> SYNC["FrameSlot ring: image_available semaphores + in_flight fences"]
   VK --> RF["render_finished semaphores per swapchain image"]
+  VK --> DESC[vk::VkDescriptorPoolWrapper owns VkDescriptorPool (descriptor sets)]
   VK --> PIPE[BasicPipeline VkPipelineLayout + VkPipeline]
 ```
 
@@ -380,8 +381,9 @@ This is fine for early development, but future refactors should turn handles int
 Natural next steps once we want more performance and complexity:
 
 1. **Descriptor sets / resource binding**
-   - introduce descriptor set layouts and updates in the RHI
-   - map to Vulkan descriptor set allocations in the backend
+   - (v1) descriptor set layout + allocate/update APIs exist in the RHI (uniform buffers only)
+   - Vulkan backend allocates descriptor sets from a descriptor pool wrapper
+   - Next: expand descriptor types (images/samplers, etc.) and refine lifetime rules
 
 2. **Real resource registries**
    - map `PipelineHandle` → `VkPipeline` (many)

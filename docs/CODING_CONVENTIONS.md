@@ -90,7 +90,7 @@ If a class implementation grows large, it is OK to split its method definitions 
 multiple `.cpp` files, keeping a single public header.
 
 Naming: `<base>_<area>.cpp`
-Example: `vk_gpu_device_swapchain.cpp`, `vk_gpu_device_commands.cpp`, ...
+Example: `vk_gpu_device_swapchain.cpp`, `vk_gpu_device_recording.cpp`, ...
 - **lower_snake_case**
   - `application.cpp`, `gpu_device.h`, `render_2d.cpp`
 - Platform/backend suffixes:
@@ -104,6 +104,7 @@ Public headers:
 Private implementation:
 - `engine/*/src/...`
 - `engine/gfx/backend/vk/*.cpp`
+- `engine/gfx/backend/vk/vk_gpu_device/*.cpp`
 
 ### Header hygiene
 - Use `#pragma once`
@@ -210,16 +211,16 @@ inline constexpr std::uint64_t fence_timeout_ns = 1'000'000'000;
 - **PascalCase**
 
 ### Enum values
-- **lower_snake_case**
+- **PascalCase**
 
 Example:
 
 ```cpp
 enum class FrameResult {
-    ok,
-    suboptimal,
-    resize_needed,
-    error,
+    Ok,
+    Suboptimal,
+    ResizeNeeded,
+    Error,
 };
 ```
 
