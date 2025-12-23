@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// engine/gfx/backend/vk/vk_gpu_device_resources.cpp
+// engine/gfx/backend/vk/vk_gpu_device/vk_gpu_device_resources.cpp
 //
 // Purpose:
 //   Resource creation/destruction stubs (buffers, textures).

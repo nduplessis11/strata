@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// engine/gfx/backend/vk/vk_gpu_device_pipeline.cpp
+// engine/gfx/backend/vk/vk_gpu_device/vk_gpu_device_pipeline.cpp
 //
 // Purpose:
 //   Pipeline creation/destruction for the Vulkan backend.

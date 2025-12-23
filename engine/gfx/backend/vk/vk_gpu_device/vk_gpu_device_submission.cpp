@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// engine/gfx/backend/vk/vk_gpu_device_submission.cpp
+// engine/gfx/backend/vk/vk_gpu_device/vk_gpu_device_submission.cpp
 //
 // Purpose:
 //   Command buffer submission and frames-in-flight handling.
