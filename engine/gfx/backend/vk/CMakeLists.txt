@@ -9,6 +9,7 @@ add_library(strata_gfx_backend_vk STATIC
     vk_command_buffer.cpp
     vk_rhi_factory.cpp
     vk_gpu_device/vk_gpu_device.cpp
+    vk_gpu_device/vk_gpu_device_handles.cpp
     vk_gpu_device/vk_gpu_device_swapchain.cpp
     vk_gpu_device/vk_gpu_device_submission.cpp
     vk_gpu_device/vk_gpu_device_recording.cpp

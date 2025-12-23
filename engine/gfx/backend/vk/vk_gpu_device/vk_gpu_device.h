@@ -122,6 +122,16 @@ class VkGpuDevice final : public rhi::IGpuDevice
         std::vector<VkSemaphore> render_finished_per_image{};
     };
 
+    // --- Buffer registry ------------------------------------------------------
+    struct BufferRecord
+    {
+        VkBuffer       buffer{VK_NULL_HANDLE};
+        VkDeviceMemory memory{VK_NULL_HANDLE};
+        std::uint64_t  size_bytes{0};
+        void*          mapped{nullptr}; // only for host_visible buffers
+        bool           host_visible{false};
+    };
+
     bool init_frames();
     void destroy_frames();
 
@@ -144,6 +154,10 @@ class VkGpuDevice final : public rhi::IGpuDevice
         rhi::DescriptorSetLayoutHandle handle) const noexcept;
     VkDescriptorSet get_vk_descriptor_set(rhi::DescriptorSetHandle handle) const noexcept;
     void            cleanup_descriptors();
+
+    // --- Buffer internals ----------------------------------------------------
+    VkBuffer get_vk_buffer(rhi::BufferHandle handle) const noexcept;
+    void     cleanup_buffers();
 
     // --- Backend state -------------------------------------------------------
     VkInstanceWrapper   instance_{};
@@ -177,6 +191,8 @@ class VkGpuDevice final : public rhi::IGpuDevice
     std::uint32_t                      next_descriptor_set_{1};
     std::vector<VkDescriptorSetLayout> descriptor_set_layouts_{};
     std::vector<VkDescriptorSet>       descriptor_sets_{};
+
+    std::vector<BufferRecord> buffers_{};
 
     // Single global pool (simple v1): lazily created.
     // Stored as optional because VkDescriptorPoolWrapper is move-only and not

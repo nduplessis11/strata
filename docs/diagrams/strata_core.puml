@@ -364,6 +364,8 @@ class C_0002997308125348651313 {
 -allocate_pipeline_handle() : rhi::PipelineHandle
 -allocate_texture_handle() : rhi::TextureHandle
 +begin_commands() : rhi::CommandBufferHandle
+-cleanup_buffers() : void
+-cleanup_descriptors() : void
 +cmd_begin_swapchain_pass(rhi::CommandBufferHandle cmd, rhi::SwapchainHandle swapchain, std::uint32_t image_index, const rhi::ClearColor & clear) : rhi::FrameResult
 +cmd_bind_descriptor_set(rhi::CommandBufferHandle cmd, rhi::PipelineHandle pipeline, std::uint32_t set_index, rhi::DescriptorSetHandle set) : rhi::FrameResult
 +cmd_bind_pipeline(rhi::CommandBufferHandle cmd, rhi::PipelineHandle pipeline) : rhi::FrameResult
@@ -385,6 +387,7 @@ class C_0002997308125348651313 {
 +end_commands(rhi::CommandBufferHandle cmd) : rhi::FrameResult
 -ensure_descriptor_pool() : bool
 +free_descriptor_set(rhi::DescriptorSetHandle set) : void
+-get_vk_buffer(rhi::BufferHandle handle) const noexcept : VkBuffer
 -get_vk_descriptor_set(rhi::DescriptorSetHandle handle) const noexcept : VkDescriptorSet
 -get_vk_descriptor_set_layout(rhi::DescriptorSetLayoutHandle handle) const noexcept : VkDescriptorSetLayout
 -init_frames() : bool
@@ -396,6 +399,7 @@ class C_0002997308125348651313 {
 +wait_idle() : void
 __
 -basic_pipeline_ : BasicPipeline
+-buffers_ : std::vector<BufferRecord>
 -command_pool_ : VkCommandBufferPool
 -descriptor_pool_ : std::optional<VkDescriptorPoolWrapper>
 -descriptor_set_layouts_ : std::vector<VkDescriptorSetLayout>
@@ -429,6 +433,15 @@ class "strata::gfx::vk::VkGpuDevice::SwapchainSync" as C_0018051402234945093614
 class C_0018051402234945093614 {
 __
 +render_finished_per_image : std::vector<VkSemaphore>
+}
+class "strata::gfx::vk::VkGpuDevice::BufferRecord" as C_0001311421129333406444
+class C_0001311421129333406444 {
+__
++buffer : VkBuffer
++host_visible : bool
++mapped : void *
++memory : VkDeviceMemory
++size_bytes : std::uint64_t
 }
 class "strata::platform::wsi::Win32Instance" as C_0009843677739255298692
 class C_0009843677739255298692 {
@@ -674,6 +687,7 @@ C_0002997308125348651313 o-- C_0002011638324630400963 : -descriptor_pool_
 C_0017920997868415439149 <|-- C_0002997308125348651313
 C_0007994622723758139976 --+ C_0002997308125348651313
 C_0018051402234945093614 --+ C_0002997308125348651313
+C_0001311421129333406444 --+ C_0002997308125348651313
 C_0015867045834686762295 o-- C_0009843677739255298692 : +instance
 C_0015867045834686762295 o-- C_0018290998811736525383 : +window
 C_0009424639203119917878 o-- C_0004139216579141968676 : +display

@@ -59,6 +59,9 @@ VkGpuDevice::~VkGpuDevice()
     // Descriptors must be destroyed/reset while VkDevice is still alive
     cleanup_descriptors();
 
+    // Buffers
+    cleanup_buffers();
+
     // Destroy sync primitives
     destroy_render_finished_per_image();
     destroy_frames();
@@ -73,28 +76,6 @@ VkGpuDevice::~VkGpuDevice()
     // Logical device
     device_.cleanup();
     // Instance + surface cleaned up by VkInstanceWrapper destructor
-}
-
-// --- Handle allocation helpers -------------------------------------------
-
-rhi::BufferHandle VkGpuDevice::allocate_buffer_handle()
-{
-    return rhi::BufferHandle{next_buffer_++};
-}
-
-rhi::TextureHandle VkGpuDevice::allocate_texture_handle()
-{
-    return rhi::TextureHandle{next_texture_++};
-}
-
-rhi::PipelineHandle VkGpuDevice::allocate_pipeline_handle()
-{
-    return rhi::PipelineHandle{next_pipeline_++};
-}
-
-rhi::CommandBufferHandle VkGpuDevice::allocate_command_handle()
-{
-    return rhi::CommandBufferHandle{next_command_++};
 }
 
 // --- Synchronization -----------------------------------------------------

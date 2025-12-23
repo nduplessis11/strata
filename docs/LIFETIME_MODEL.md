@@ -66,7 +66,7 @@ flowchart TD
   VK --> CMD["FrameSlot ring: VkCommandBuffer per frame"]
   VK --> SYNC["FrameSlot ring: image_available semaphores + in_flight fences"]
   VK --> RF["render_finished semaphores per swapchain image"]
-  VK --> DESC[vk::VkDescriptorPoolWrapper owns VkDescriptorPool (descriptor sets)]
+  VK --> DESC["vk::VkDescriptorPoolWrapper owns VkDescriptorPool (descriptor sets)"]
   VK --> PIPE[BasicPipeline VkPipelineLayout + VkPipeline]
 ```
 
@@ -298,11 +298,13 @@ Required invariants:
 
 1. `wait_idle()` (ensure nothing is in-flight)
 2. Destroy pipeline (`basic_pipeline_ = {}`)  
-3. Destroy sync primitives
-4. Destroy command pool (and implicitly its command buffers)
-5. Destroy swapchain resources (views + swapchain)
-6. Destroy logical device (`device_.cleanup()`)
-7. After destructor body, member destructors run; finally `VkInstanceWrapper::~VkInstanceWrapper()` destroys:
+3. Cleanup descriptor resources (`cleanup_descriptors()`)
+4. Cleanup buffer resources (`cleanup_buffers()`)
+5. Destroy sync primitives
+6. Destroy command pool (and implicitly its command buffers)
+7. Destroy swapchain resources (views + swapchain)
+8. Destroy logical device (`device_.cleanup()`)
+9. After destructor body, member destructors run; finally `VkInstanceWrapper::~VkInstanceWrapper()` destroys:
    - debug messenger
    - surface
    - instance
