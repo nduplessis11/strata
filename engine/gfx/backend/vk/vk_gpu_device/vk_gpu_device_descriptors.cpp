@@ -41,7 +41,7 @@ rhi::FrameResult VkGpuDevice::update_descriptor_set(
     std::span<rhi::DescriptorWrite const> /*writes*/)
 {
     // Stub
-    std::println(stderr, "VkGpuDevice: free_descriptor_set not implemented");
+    std::println(stderr, "VkGpuDevice: update_descriptor_set not implemented");
     return rhi::FrameResult::Error;
 }
 

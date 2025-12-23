@@ -10,6 +10,7 @@
 #include <memory>
 #include <span>
 #include <vector>
+#include <cstdint>
 
 #include <vulkan/vulkan.h>
 
@@ -149,6 +150,36 @@ class VkGpuDevice final : public rhi::IGpuDevice
     BasicPipeline basic_pipeline_{};
 
     std::vector<VkImageLayout> swapchain_image_layouts_;
+
+    // --- handle <-> slot index helpers -----------------------------------
+    static std::uint32_t to_index(rhi::DescriptorSetLayoutHandle h)
+    {
+        return h.value - 1;
+    }
+    static std::uint32_t to_index(rhi::DescriptorSetHandle h)
+    {
+        return h.value - 1;
+    }
+
+    static rhi::DescriptorSetLayoutHandle to_handle_layout(std::uint32_t idx)
+    {
+        return rhi::DescriptorSetLayoutHandle{idx + 1};
+    }
+
+    static rhi::DescriptorSetHandle to_handle_set(std::uint32_t idx)
+    {
+        return rhi::DescriptorSetHandle{idx + 1};
+    }
+
+    // --- Descriptor infrastructure (simple v1) ---------------------------
+    VkDescriptorPool descriptor_pool_{VK_NULL_HANDLE};
+
+    // Slot maps: handle.value = index + 1
+    std::vector<VkDescriptorSetLayout> descriptor_set_layouts_;
+    std::vector<std::uint32_t>         free_descriptor_set_layout_slots_;
+
+    std::vector<VkDescriptorSet> descriptor_sets_;
+    std::vector<std::uint32_t>   free_descriptor_set_slots_;
 
     // --- RHI handle allocators (IDs) ------------------------------------
     std::uint32_t next_buffer_{1};
