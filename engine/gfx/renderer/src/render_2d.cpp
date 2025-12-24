@@ -132,12 +132,15 @@ Render2D::~Render2D()
 }
 
 Render2D::Render2D(Render2D&& other) noexcept
-    : device_(other.device_), swapchain_(other.swapchain_), pipeline_(other.pipeline_)
+    : device_(other.device_), swapchain_(other.swapchain_), pipeline_(other.pipeline_),
+      ubo_layout_(other.ubo_layout_), ubo_set_(other.ubo_set_), ubo_buffer_(other.ubo_buffer_)
 {
-    // moved-from becomes inert
-    other.device_    = nullptr;
-    other.swapchain_ = {};
-    other.pipeline_  = {};
+    other.device_     = nullptr;
+    other.swapchain_  = {};
+    other.pipeline_   = {};
+    other.ubo_layout_ = {};
+    other.ubo_set_    = {};
+    other.ubo_buffer_ = {};
 }
 
 Render2D& Render2D::operator=(Render2D&& other) noexcept
@@ -146,13 +149,19 @@ Render2D& Render2D::operator=(Render2D&& other) noexcept
     {
         release();
 
-        device_    = other.device_;
-        swapchain_ = other.swapchain_;
-        pipeline_  = other.pipeline_;
+        device_     = other.device_;
+        swapchain_  = other.swapchain_;
+        pipeline_   = other.pipeline_;
+        ubo_layout_ = other.ubo_layout_;
+        ubo_set_    = other.ubo_set_;
+        ubo_buffer_ = other.ubo_buffer_;
 
-        other.device_    = nullptr;
-        other.swapchain_ = {};
-        other.pipeline_  = {};
+        other.device_     = nullptr;
+        other.swapchain_  = {};
+        other.pipeline_   = {};
+        other.ubo_layout_ = {};
+        other.ubo_set_    = {};
+        other.ubo_buffer_ = {};
     }
     return *this;
 }
