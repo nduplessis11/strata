@@ -1,6 +1,6 @@
 ﻿# Rendering Pipeline
 
-This document describes **how Strata renders a frame today**, from the game loop down to Vulkan calls.
+This document describes **how Strata renders a frame**, from the game loop down to Vulkan calls.
 
 It is intentionally scoped to the **current** implementation (single pass, fullscreen triangle). As the engine grows (descriptor sets, resource registries, etc.), this doc should evolve alongside it.
 
@@ -8,7 +8,7 @@ It is intentionally scoped to the **current** implementation (single pass, fulls
 
 ## TL;DR
 
-Today’s frame path looks like this:
+The frame path looks like this:
 
 1. `core::Application::run()` drives the loop and calls a helper:
    - `gfx::renderer::draw_frame_and_handle_resize(device, swapchain, renderer, framebuffer_size)`
@@ -23,7 +23,7 @@ Today’s frame path looks like this:
 
 ---
 
-## Key design choices (today)
+## Key design choices
 
 - **Vulkan is contained** in `engine/gfx/backend/vk/*` (`namespace strata::gfx::vk`).
 - The renderer (`Render2D`) depends only on the **RHI** (`IGpuDevice`) and opaque handles.
@@ -76,7 +76,7 @@ On exit, `device->wait_idle()` is called once more.
 
 ## Renderer frontend: `gfx::renderer::Render2D`
 
-`Render2D` is the “frontend” renderer object. Today it owns:
+`Render2D` is the “frontend” renderer object. It owns:
 - `rhi::SwapchainHandle swapchain_` (opaque)
 - `rhi::PipelineHandle pipeline_` (opaque; currently functions as a “valid/created” token)
 - a non-owning `rhi::IGpuDevice* device_`
@@ -117,7 +117,7 @@ This helper implements the current resize policy:
 
 Resize path:
 1. `device.wait_idle()` (simple + safe, but stalls)
-2. Build `SwapchainDesc` from the framebuffer (**vsync hard-coded true today**)
+2. Build `SwapchainDesc` from the framebuffer (**vsync hard-coded true**)
 3. `device.resize_swapchain(swapchain, sc_desc)`
 4. Rebuild renderer (recreates pipeline):
    - `renderer = Render2D{ device, swapchain };`
@@ -223,7 +223,7 @@ Those requirements match the frame code:
    - creates swapchain and image views
 4. initialize `swapchain_image_layouts_` to `VK_IMAGE_LAYOUT_UNDEFINED`
 5. create per-image render-finished semaphores
-6. return `SwapchainHandle{1}` (only one swapchain exists today)
+6. return `SwapchainHandle{1}` (only one swapchain exists currently)
 
 ### Swapchain resize (`resize_swapchain`)
 Resize mirrors creation:
@@ -303,7 +303,7 @@ Because the pipeline depends on swapchain format, it is recreated when the swapc
 
 ---
 
-## Synchronization model (today)
+## Synchronization model
 
 ### CPU/GPU pacing
 - Frames-in-flight ring (currently 2 slots).
@@ -342,7 +342,7 @@ Because the pipeline depends on swapchain format, it is recreated when the swapc
    - Support secondary command buffers or parallel recording.
 
 3. **Pipeline lifetime rules**
-   - Today: pipeline recreated on resize via a fresh `Render2D`, and backend can lazily rebuild.
+   - Now: pipeline recreated on resize via a fresh `Render2D`, and backend can lazily rebuild.
    - Later: pipeline cache, expanded descriptor sets, shader hot-reload, etc.
 
 4. **Swapchain recreation policy**
