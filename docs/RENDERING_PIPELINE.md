@@ -79,6 +79,9 @@ On exit, `device->wait_idle()` is called once more.
 `Render2D` is the “frontend” renderer object. It owns:
 - `rhi::SwapchainHandle swapchain_` (opaque)
 - `rhi::PipelineHandle pipeline_` (opaque; currently functions as a “valid/created” token)
+- `rhi::DescriptorSetLayoutHandle ubo_layout_` (opaque)
+- `rhi::DescriptorSetHandle ubo_set_` (opaque)
+- `rhi::BufferHandle ubo_buffer_` (opaque; host-visible uniform buffer)
 - a non-owning `rhi::IGpuDevice* device_`
 
 ### Pipeline setup (`Render2D::Render2D`)
@@ -86,9 +89,14 @@ Constructor creates a simple pipeline:
 - vertex shader: `shaders/fullscreen_triangle.vert.spv`
 - fragment shader: `shaders/flat_color.frag.spv`
 - no blending
+- descriptor set layout: set 0, binding 0 = uniform buffer (fragment-visible)
 
 and calls:
-- `pipeline_ = device_->create_pipeline(desc);`
+- `ubo_layout_ = device_->create_descriptor_set_layout(layout_desc);`
+- `ubo_set_    = device_->allocate_descriptor_set(ubo_layout_);`
+- `ubo_buffer_ = device_->create_buffer(buf_desc, init_bytes);`
+- `device_->update_descriptor_set(ubo_set_, writes);`
+- `pipeline_ = device_->create_pipeline(desc);` (with `desc.set_layouts = { ubo_layout_ }`)
 
 ### Frame rendering (`Render2D::draw_frame`)
 `draw_frame()` now drives the full frame:
@@ -119,7 +127,7 @@ Resize path:
 1. `device.wait_idle()` (simple + safe, but stalls)
 2. Build `SwapchainDesc` from the framebuffer (**vsync hard-coded true**)
 3. `device.resize_swapchain(swapchain, sc_desc)`
-4. Rebuild renderer (recreates pipeline):
+4. Rebuild renderer (recreates descriptor resources + pipeline):
    - `renderer = Render2D{ device, swapchain };`
 
 ---
@@ -335,7 +343,7 @@ Because the pipeline depends on swapchain format, it is recreated when the swapc
 1. **Descriptor sets / resource binding**
    - (v1) descriptor set layout + allocate/update APIs exist in the RHI (uniform buffers only)
    - Vulkan backend owns a descriptor pool and allocates descriptor sets from it
-   - Next: expand descriptor types (images/samplers, etc.) and use in renderer
+   - Next: expand descriptor types (images/samplers, etc.) and grow renderer usage beyond the current UBO
 
 2. **Command recording API ergonomics**
    - Replace `cmd_*` functions with a command encoder/list object.

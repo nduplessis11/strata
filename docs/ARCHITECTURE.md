@@ -193,7 +193,7 @@ This structure keeps renderer code clean and backend-agnostic.
 ### Renderer (`gfx/renderer`)
 `Render2D` is a higher-level renderer built on the RHI:
 - Holds a pointer/reference to `IGpuDevice`
-- Holds RHI handles (e.g., a pipeline and swapchain handle)
+- Holds RHI handles (e.g., swapchain/pipeline, descriptor set layout/set, uniform buffer handles)
 - Exposes a simple `draw_frame()` that returns `rhi::FrameResult`
 
 ### Vulkan backend (`gfx/backend/vk`)
