@@ -73,7 +73,7 @@ flowchart TD
 ### Ownership rules
 - `Application::Impl` **owns** the `Window`, `IGpuDevice`, and `Render2D`.
 - `platform::WsiHandle` is a **non-owning value** describing native window system state needed to create a Vulkan surface.
-- `Render2D` **owns RHI handles** (e.g., `PipelineHandle`) but not Vulkan objects directly.
+- `Render2D` **owns RHI handles** (e.g., `PipelineHandle`, plus UBO `DescriptorSetLayoutHandle` / `DescriptorSetHandle` / `BufferHandle`) but not Vulkan objects directly.
 - `VkGpuDevice` **owns Vulkan objects** via RAII wrappers and explicit teardown order.
 - `VkSwapchainWrapper` owns:
   - `VkSwapchainKHR`
@@ -281,6 +281,7 @@ Then C++ destroys members in reverse declaration order. In our `Impl`, the key s
 
 1. **`Render2D` destructor**
    - calls `device->destroy_pipeline(pipeline_)`
+   - frees/destroys renderer-owned UBO descriptor resources (`free_descriptor_set`, `destroy_buffer`, `destroy_descriptor_set_layout`)
 2. **`device` destructor**
    - destroys the Vulkan backend objects (through virtual destructor dispatch)
    - destroys `VkSurfaceKHR` during `VkInstanceWrapper` cleanup (inside backend lifetime)
@@ -327,8 +328,8 @@ On resize request:
    - backend destroys/recreates swapchain + image views
    - backend resets `basic_pipeline_ = {}` (invalidates pipeline)
 3. `renderer = Render2D{ device, swapchain }`
-   - destroys old pipeline handle via `destroy_pipeline()`
-   - creates a new pipeline handle via `create_pipeline()`
+   - destroys old renderer-owned RHI resources (pipeline + UBO descriptor set/buffer/layout)
+   - creates new renderer-owned RHI resources (UBO descriptor set/buffer/layout + pipeline)
 
 This is safe because `wait_idle()` ensures:
 - No in-flight command buffer references old swapchain images/views
