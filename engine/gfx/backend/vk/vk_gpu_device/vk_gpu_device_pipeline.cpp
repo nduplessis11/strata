@@ -14,19 +14,39 @@ namespace strata::gfx::vk
 
 // --- Pipelines -----------------------------------------------------------
 
-rhi::PipelineHandle VkGpuDevice::create_pipeline(rhi::PipelineDesc const&)
+rhi::PipelineHandle VkGpuDevice::create_pipeline(rhi::PipelineDesc const& desc)
 {
     if (!swapchain_.valid() || !device_.device())
     {
-        return rhi::PipelineHandle{};
+        return {};
     }
 
-    // We ignore PipelineDesc for now and always build the same fullscreen-triangle pipeline.
-    basic_pipeline_ = create_basic_pipeline(device_.device(), swapchain_.image_format());
+    // Remember the layout handles so cmd_bind_pipeline can rebuild if needed.
+    pipeline_set_layout_handles_.assign(desc.set_layouts.begin(), desc.set_layouts.end());
+
+    std::vector<VkDescriptorSetLayout> vk_layouts;
+    vk_layouts.reserve(pipeline_set_layout_handles_.size());
+
+    for (auto const h : pipeline_set_layout_handles_)
+    {
+        VkDescriptorSetLayout const vk_layout = get_vk_descriptor_set_layout(h);
+        if (vk_layout == VK_NULL_HANDLE)
+        {
+            std::println(stderr,
+                         "VkGpuDevice: create_pipeline failed (DescriptorSetLayoutHandle invalid)");
+            pipeline_set_layout_handles_.clear();
+            return {};
+        }
+        vk_layouts.push_back(vk_layout);
+    }
+
+    basic_pipeline_ =
+        create_basic_pipeline(device_.device(), swapchain_.image_format(), std::span{vk_layouts});
     if (!basic_pipeline_.valid())
     {
         std::println(stderr, "VkGpuDevice: failed to create basic pipeline");
-        return rhi::PipelineHandle{};
+        pipeline_set_layout_handles_.clear();
+        return {};
     }
 
     return allocate_pipeline_handle();
@@ -36,6 +56,7 @@ void VkGpuDevice::destroy_pipeline(rhi::PipelineHandle)
 {
     // We only keep one backend pipeline; drop it when asked to destroy any handle.
     basic_pipeline_ = BasicPipeline{};
+    pipeline_set_layout_handles_.clear();
 }
 
 } // namespace strata::gfx::vk

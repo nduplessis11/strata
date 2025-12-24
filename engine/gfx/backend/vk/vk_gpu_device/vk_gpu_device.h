@@ -160,11 +160,12 @@ class VkGpuDevice final : public rhi::IGpuDevice
     void     cleanup_buffers();
 
     // --- Backend state -------------------------------------------------------
-    VkInstanceWrapper   instance_{};
-    VkDeviceWrapper     device_{};
-    VkSwapchainWrapper  swapchain_{};
-    VkCommandBufferPool command_pool_{};
-    BasicPipeline       basic_pipeline_{};
+    VkInstanceWrapper                           instance_{};
+    VkDeviceWrapper                             device_{};
+    VkSwapchainWrapper                          swapchain_{};
+    VkCommandBufferPool                         command_pool_{};
+    BasicPipeline                               basic_pipeline_{};
+    std::vector<rhi::DescriptorSetLayoutHandle> pipeline_set_layout_handles_{};
 
     // Frames in flight (ring)
     std::uint32_t          frames_in_flight_{2};
