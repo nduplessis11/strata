@@ -13,6 +13,10 @@ Strata aims to be:
 
 ## Principles
 
+**Priority order:** pragmatism over consistency over cleverness  
+Prefer solutions that are clear and practical, even if that occasionally bends strict consistency.
+Consistency is still valued, and cleverness is a last resort.
+
 1. **Consistency beats cleverness**
    - Choose one style and apply it everywhere.
 

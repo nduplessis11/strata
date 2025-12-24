@@ -1,18 +1,18 @@
 ﻿# Strata Lifetime Model
 
-This document describes **ownership**, **construction/destruction order**, and the **safety invariants** Strata relies on today—especially around Vulkan objects and swapchain resize.
+This document describes **ownership**, **construction/destruction order**, and the **safety invariants** Strata relies on; especially around Vulkan objects and swapchain resize.
 
 It reflects the current “production-leaning, learning-first” approach:
 - Prefer **explicit ownership**
 - Prefer **RAII cleanup**
 - Prefer **safe destruction** (often via `wait_idle()`), even if it’s not the most performant yet
 
-> Scope: what exists today in `core::Application`, `platform::Window`, `platform::WsiHandle`, `gfx::renderer::Render2D`, `gfx::rhi::IGpuDevice`, and the Vulkan backend (`gfx/backend/vk/*`).  
+> Scope: what exists in `core::Application`, `platform::Window`, `platform::WsiHandle`, `gfx::renderer::Render2D`, `gfx::rhi::IGpuDevice`, and the Vulkan backend (`gfx/backend/vk/*`).  
 > Non-scope: future ECS lifetimes, asset systems, multithreading, streaming, etc.
 
 ---
 
-## Key ideas (today)
+## Key ideas
 
 ### No partially-initialized `Application`
 `Application::create()` returns `std::expected<Application, ApplicationError>`. If we get an `Application`, these are expected to be valid and usable:
@@ -70,7 +70,7 @@ flowchart TD
   VK --> PIPE[BasicPipeline VkPipelineLayout + VkPipeline]
 ```
 
-### Ownership rules (today)
+### Ownership rules
 - `Application::Impl` **owns** the `Window`, `IGpuDevice`, and `Render2D`.
 - `platform::WsiHandle` is a **non-owning value** describing native window system state needed to create a Vulkan surface.
 - `Render2D` **owns RHI handles** (e.g., `PipelineHandle`) but not Vulkan objects directly.
@@ -115,7 +115,7 @@ Therefore, the required invariant is:
 
 > `platform::Window` must outlive the Vulkan `VkSurfaceKHR` created from it.
 
-Strata satisfies this today because:
+Strata satisfies this because:
 - the Vulkan surface is created during device bring-up
 - the surface is destroyed when the device/backend is destroyed
 - the window object is destroyed **after** the device/backend is destroyed
@@ -319,7 +319,7 @@ In `draw_frame_and_handle_resize()`:
 - `FrameResult::Error` → treat as fatal
 - Any other result (`Suboptimal`, `ResizeNeeded`) → treat as resize request
 
-### Resize sequence (today)
+### Resize sequence
 On resize request:
 
 1. `device.wait_idle()`
@@ -346,7 +346,7 @@ RHI exposes typed handles like:
 These are **not owning objects**. They are IDs/tokens.
 
 ### Current single-instance mapping in Vulkan backend
-Today, the Vulkan backend effectively implements:
+The Vulkan backend effectively implements:
 - one swapchain (`SwapchainHandle{1}` always means “the one swapchain”)
 - one pipeline stored as `BasicPipeline basic_pipeline_`
 
@@ -358,7 +358,7 @@ This is fine for early development, but future refactors should turn handles int
 
 ---
 
-## Lifetime rules we can rely on (today)
+## Lifetime rules to rely on
 
 ### Rules for engine code
 1. If we have a valid `Application`, then `window()`, `device()`, `swapchain()`, and `renderer()` are non-null/valid and usable.

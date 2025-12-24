@@ -1,6 +1,6 @@
 ﻿# Strata
 
-Strata is a **learning-focused, yet production-leaning Vulkan engine** written in **C++23**.
+Strata is a C++23 game engine designed around classic 2D/3D level-editor workflows (Hammer, TrenchBroom, DromEd, Doom Builder), with Vulkan as its initial cross-platform backend for Windows and Linux.
 
 It’s built around a simple, explicit layering model:
 
@@ -25,7 +25,7 @@ Diagrams:
 
 ---
 
-## Current status (what it does today)
+## Current status
 
 - A minimal “smoke test” renderer:
   - **Acquire → record → submit → present**
@@ -185,7 +185,7 @@ Also keep Vulkan containment intact:
 
 Some natural next steps (also described in the docs):
 
-- Expand **Vulkan descriptor sets** (uniform buffers today; images/samplers later)
+- Expand **Vulkan descriptor sets** (uniform buffers now; images/samplers later)
 - Introduce real resource tables/registries for buffers/textures/pipelines
 - Grow beyond the single-pass fullscreen triangle (depth, MSAA, post, etc.)
 - ECS/data-driven systems (future)

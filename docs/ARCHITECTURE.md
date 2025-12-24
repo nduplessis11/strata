@@ -4,7 +4,7 @@
 > **platform** (OS/window/WSI handles) → **core** (app orchestration + runtime helpers) → **gfx** (RHI + renderer + Vulkan backend).
 
 This document explains Strata’s *current* architecture: module boundaries, dependency rules, and the “shape” of the runtime object graph.  
-It is intentionally opinionated and pragmatic—this is a living document.
+It favors pragmatism over consistency, and consistency over cleverness, and should be treated as a living document.
 
 ---
 
@@ -124,7 +124,7 @@ This keeps OS and Vulkan headers out of public headers, while still supporting m
 
 ---
 
-## Runtime object graph (today)
+## Runtime object graph
 
 At runtime, `strata::core::Application` owns the high-level system objects and connects them:
 
@@ -263,14 +263,14 @@ docs/
 ## Open questions / future decisions
 
 - **Value types vs reference types**:
-  - Today: RHI handles are value types; owning wrappers are RAII/move-only.
+  - Now: RHI handles are value types; owning wrappers are RAII/move-only.
   - Later: decide if more “value-like” engine types are desirable (e.g., small structs vs heap allocations).
 - **Replaceability vs integration**:
   - Renderer is backend-agnostic via RHI.
   - Platform WSI is abstracted via `WsiHandle`.
   - Over time: decide whether subsystems should be “swappable” (plugins) or just “replaceable by refactor.”
 - **WSI + window lifetime policy**:
-  - Today: the native window is expected to outlive the Vulkan surface created from it.
+  - Now: the native window is expected to outlive the Vulkan surface created from it.
   - Later: codify explicit destruction policy for native windows (especially Win32).
 
 ---
