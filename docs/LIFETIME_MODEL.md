@@ -327,9 +327,9 @@ On resize request:
 2. `device.resize_swapchain(swapchain, sc_desc)`
    - backend destroys/recreates swapchain + image views
    - backend resets `basic_pipeline_ = {}` (invalidates pipeline)
-3. `renderer = Render2D{ device, swapchain }`
-   - destroys old renderer-owned RHI resources (pipeline + UBO descriptor set/buffer/layout)
-   - creates new renderer-owned RHI resources (UBO descriptor set/buffer/layout + pipeline)
+3. `renderer.recreate_pipeline()`
+   - swapchain-independent renderer-owned RHI resources (UBO descriptor set/buffer/layout) persist across the resize
+   - only the pipeline is rebuilt for the new swapchain format; if recreation fails, the frame is skipped but the application keeps running
 
 This is safe because `wait_idle()` ensures:
 - No in-flight command buffer references old swapchain images/views

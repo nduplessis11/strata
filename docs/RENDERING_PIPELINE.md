@@ -19,7 +19,7 @@ The frame path looks like this:
 4. If the swapchain is suboptimal/out-of-date:
    - the engine calls `device.wait_idle()`,
    - recreates the swapchain,
-   - rebuilds the pipeline (via a fresh `Render2D`).
+   - asks the existing renderer to recreate its pipeline (via `renderer.recreate_pipeline()`, keeping UBO + descriptor resources).
 
 ---
 
@@ -127,8 +127,9 @@ Resize path:
 1. `device.wait_idle()` (simple + safe, but stalls)
 2. Build `SwapchainDesc` from the framebuffer (**vsync hard-coded true**)
 3. `device.resize_swapchain(swapchain, sc_desc)`
-4. Rebuild renderer (recreates descriptor resources + pipeline):
-   - `renderer = Render2D{ device, swapchain };`
+4. Ask the existing renderer to recreate its pipeline (swapchain-independent resources persist):
+   - `renderer.recreate_pipeline()` rebuilds the pipeline for the new swapchain format while keeping UBO + descriptor resources.
+   - If `recreate_pipeline()` fails (non-`Ok`), it is treated as non-fatal: the frame is skipped, but the application keeps running.
 
 ---
 
@@ -351,7 +352,7 @@ Because the pipeline depends on swapchain format, it is recreated when the swapc
    - Support secondary command buffers or parallel recording.
 
 3. **Pipeline lifetime rules**
-   - Now: pipeline recreated on resize via a fresh `Render2D`, and backend can lazily rebuild.
+   - Now: pipeline is recreated on resize via `renderer.recreate_pipeline()` (swapchain-independent UBO + descriptor resources persist), and the backend can lazily rebuild.
    - Later: pipeline cache, expanded descriptor sets, shader hot-reload, etc.
 
 4. **Swapchain recreation policy**
