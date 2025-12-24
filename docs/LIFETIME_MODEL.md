@@ -200,7 +200,7 @@ Swapchain-dependent sync is created when the swapchain is created:
 
 Pipeline creation is deferred:
 - created via `IGpuDevice::create_pipeline()`, and/or
-- lazily rebuilt in `present()` if invalidated (e.g., after resize)
+- lazily rebuilt in `cmd_bind_pipeline()` if invalidated (e.g., after resize)
 
 ---
 

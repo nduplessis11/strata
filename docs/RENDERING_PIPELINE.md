@@ -217,6 +217,7 @@ Those requirements match the frame code:
 - `images_in_flight_` (per-image fence tracking)
   - `render_finished_per_image` semaphores (one per swapchain image)
 - `BasicPipeline basic_pipeline_` (owns `VkPipelineLayout` + `VkPipeline`)
+- `pipeline_set_layout_handles_` (stores the `rhi::DescriptorSetLayoutHandle`s needed to rebuild `basic_pipeline_`)
 - `swapchain_image_layouts_` (tracks per-image layout state)
 
 ### Swapchain creation (`create_swapchain`)
@@ -294,7 +295,7 @@ The Vulkan backend rebuilds its `basic_pipeline_` when this is called, and also 
 ## Basic pipeline: `vk_pipeline_basic.*`
 
 Strata’s initial pipeline is built by:
-- `create_basic_pipeline(VkDevice device, VkFormat color_format)`
+- `create_basic_pipeline(VkDevice device, VkFormat color_format, std::span<VkDescriptorSetLayout const> set_layouts = {})`
 
 Key details:
 - Loads SPIR-V from disk:
