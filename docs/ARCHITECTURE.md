@@ -4,7 +4,7 @@
 > **platform** (OS/window/WSI handles) → **core** (app orchestration + runtime helpers) → **gfx** (RHI + renderer + Vulkan backend).
 
 This document explains Strata’s *current* architecture: module boundaries, dependency rules, and the “shape” of the runtime object graph.  
-It is intentionally opinionated and pragmatic—this is a living document.
+It favors pragmatism over consistency, and consistency over cleverness, and should be treated as a living document.
 
 ---
 
