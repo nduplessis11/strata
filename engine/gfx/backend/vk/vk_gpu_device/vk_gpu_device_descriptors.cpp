@@ -338,20 +338,6 @@ rhi::FrameResult VkGpuDevice::update_descriptor_set(rhi::DescriptorSetHandle    
     if (writes.empty())
         return rhi::FrameResult::Ok;
 
-    // NOTE:
-    // We only support UniformBuffer writes right now.
-    // We still need a real BufferHandle -> VkBuffer mapping in the backend to make this useful.
-    // If buffers aren't implemented yet, this will return Error until they are.
-    //
-    // Hook point: replace resolve_vk_buffer(...) with a buffer registry lookup.
-    auto resolve_vk_buffer = [&](rhi::BufferHandle buffer_handle) -> VkBuffer
-    {
-        // TODO: Implement real BufferHandle -> VkBuffer mapping (likely in
-        // vk_gpu_device_resources).
-        (void)buffer_handle;
-        return VK_NULL_HANDLE;
-    };
-
     std::vector<VkDescriptorBufferInfo> vk_buffer_infos;
     std::vector<VkWriteDescriptorSet>   vk_writes;
     vk_buffer_infos.reserve(writes.size());
@@ -367,7 +353,7 @@ rhi::FrameResult VkGpuDevice::update_descriptor_set(rhi::DescriptorSetHandle    
             return rhi::FrameResult::Error;
         }
 
-        VkBuffer const vk_buffer = resolve_vk_buffer(w.buffer.buffer);
+        VkBuffer const vk_buffer = get_vk_buffer(w.buffer.buffer);
         if (vk_buffer == VK_NULL_HANDLE)
         {
             std::println(
