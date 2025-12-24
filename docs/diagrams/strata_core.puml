@@ -217,6 +217,7 @@ class C_0010824766815022468742 {
 +operator=(Render2D &&) noexcept : Render2D &
 ..
 +draw_frame() : rhi::FrameResult
++recreate_pipeline() : rhi::FrameResult
 -release() noexcept : void
 __
 -device_ : rhi::IGpuDevice *

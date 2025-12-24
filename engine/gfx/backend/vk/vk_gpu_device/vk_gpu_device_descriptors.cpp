@@ -218,6 +218,24 @@ void VkGpuDevice::destroy_descriptor_set_layout(rhi::DescriptorSetLayoutHandle h
     if (layout == VK_NULL_HANDLE)
         return;
 
+    // IMPORTANT:
+    // If this layout is part of the current pipeline layout recipe,
+    // invalidate the backend pipeline + recipe before destroying it.
+    for (auto const h : pipeline_set_layout_handles_)
+    {
+        if (h.value == handle.value)
+        {
+            std::println(stderr,
+                         "destroy_descriptor_set_layout: layout {} is used by current pipeline; "
+                         "invalidating pipeline",
+                         handle.value);
+
+            basic_pipeline_ = BasicPipeline{};
+            pipeline_set_layout_handles_.clear();
+            break;
+        }
+    }
+
     vkDestroyDescriptorSetLayout(vk_device, layout, nullptr);
     layout = VK_NULL_HANDLE;
 }

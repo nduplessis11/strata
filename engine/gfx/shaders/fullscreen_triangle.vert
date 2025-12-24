@@ -1,3 +1,5 @@
+// engine/gfx/shaders/fullscreen_triangle.vert
+
 #version 450
 
 // Fullscreen triangle in clip space, generated from gl_VertexIndex.
