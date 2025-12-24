@@ -22,13 +22,71 @@ inline VkImageLayout safe_old_layout(std::vector<VkImageLayout> const& layouts,
 } // namespace
 
 rhi::FrameResult VkGpuDevice::cmd_bind_descriptor_set(rhi::CommandBufferHandle /*cmd*/,
-                                                      rhi::PipelineHandle /*pipeline*/,
-                                                      std::uint32_t /*set_index*/,
-                                                      rhi::DescriptorSetHandle /*set*/)
+                                                      rhi::PipelineHandle      pipeline,
+                                                      std::uint32_t            set_index,
+                                                      rhi::DescriptorSetHandle set)
 {
-    // Stub
-    std::println(stderr, "VkGpuDevice: cmd_bind_descriptor_set not implemented");
-    return rhi::FrameResult::Error;
+
+    using rhi::FrameResult;
+
+    if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
+        return FrameResult::Error;
+
+    VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
+
+    if (vk_cmd == VK_NULL_HANDLE || !device_.device())
+        return FrameResult::Error;
+
+    if (!pipeline)
+    {
+        std::println(stderr, "cmd_bind_descriptor_set: invalid PipelineHandle");
+        return FrameResult::Error;
+    }
+    if (!set)
+    {
+        std::println(stderr, "cmd_bind_descriptor_set: invalid DescriptorSetHandle");
+        return FrameResult::Error;
+    }
+
+    if (!basic_pipeline_.valid())
+    {
+        std::println(stderr, "cmd_bind_descriptor_set: pipeline not valid (bind pipeline first)");
+        return FrameResult::Error;
+    }
+
+    VkDescriptorSet const vk_set = get_vk_descriptor_set(set);
+    if (vk_set == VK_NULL_HANDLE)
+    {
+        std::println(stderr, "cmd_bind_descriptor_set: descriptor set not found");
+        return FrameResult::Error;
+    }
+
+    if (set_index >= pipeline_set_layout_handles_.size())
+    {
+        std::println(stderr,
+                     "cmd_bind_descriptor_set: set_index {} out of range (pipeline has {} sets)",
+                     set_index,
+                     pipeline_set_layout_handles_.size());
+        return FrameResult::Error;
+    }
+
+    if (pipeline_set_layout_handles_.empty())
+    {
+        std::println(stderr,
+                     "cmd_bind_descriptor_set: pipeline has no set layouts (missing recipe)");
+        return rhi::FrameResult::Error;
+    }
+
+    vkCmdBindDescriptorSets(vk_cmd,
+                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            basic_pipeline_.layout,
+                            set_index,
+                            1,
+                            &vk_set,
+                            0,
+                            nullptr);
+
+    return FrameResult::Ok;
 }
 
 rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(

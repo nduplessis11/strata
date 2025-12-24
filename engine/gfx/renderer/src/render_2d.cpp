@@ -93,8 +93,8 @@ Render2D::Render2D(IGpuDevice& device, SwapchainHandle swapchain)
     desc.alpha_blend          = false;
 
     // Pass set layouts (span is consumed immediately)
-    DescriptorSetLayoutHandle set_layouts_[] = {ubo_layout_};
-    desc.set_layouts                         = set_layouts_;
+    DescriptorSetLayoutHandle const set_layouts[] = {ubo_layout_};
+    desc.set_layouts                              = set_layouts;
 
     pipeline_ = device_->create_pipeline(desc);
 }
@@ -209,6 +209,11 @@ FrameResult Render2D::draw_frame()
         goto cleanup;
     }
 
+    if (device_->cmd_bind_descriptor_set(cmd, pipeline_, 0, ubo_set_) != FrameResult::Ok)
+    {
+        goto cleanup;
+    }
+
     if (device_->cmd_set_viewport_scissor(cmd, img.extent) != FrameResult::Ok)
     {
         goto cleanup;
@@ -277,6 +282,26 @@ cleanup_after_end:
     return result;
 }
 
+FrameResult Render2D::recreate_pipeline()
+{
+    if (!device_ || !swapchain_ || !ubo_layout_)
+        return FrameResult::Error;
+
+    if (pipeline_)
+        device_->destroy_pipeline(pipeline_);
+
+    PipelineDesc desc{};
+    desc.vertex_shader_path   = "shaders/fullscreen_triangle.vert.spv";
+    desc.fragment_shader_path = "shaders/flat_color.frag.spv";
+    desc.alpha_blend          = false;
+
+    DescriptorSetLayoutHandle const set_layouts[] = {ubo_layout_};
+    desc.set_layouts                              = set_layouts;
+
+    pipeline_ = device_->create_pipeline(desc);
+    return pipeline_ ? FrameResult::Ok : FrameResult::Error;
+}
+
 // -------------------------------------------------------------------------
 // Helper: draw_frame_and_handle_resize
 // -------------------------------------------------------------------------
@@ -312,8 +337,13 @@ FrameResult draw_frame_and_handle_resize(IGpuDevice&      device,
         return FrameResult::Ok;
     }
 
-    // Rebuild the pipeline via a fresh Render2D for the resized swapchain.
-    renderer = Render2D{device, swapchain};
+    // Swapchain-independent resources (UBO + descriptors) can persist.
+    // Only rebuild pipeline (swapchain format could change across resize).
+    if (renderer.recreate_pipeline() != FrameResult::Ok)
+    {
+        // Treat as non-fatal: no frame rendered, but app keeps running.
+        return FrameResult::Ok;
+    }
 
     return FrameResult::Ok;
 }

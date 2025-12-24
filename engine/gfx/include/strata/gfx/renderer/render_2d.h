@@ -22,6 +22,7 @@ class Render2D
     Render2D& operator=(Render2D&&) noexcept;
 
     rhi::FrameResult draw_frame();
+    rhi::FrameResult recreate_pipeline();
 
   private:
     void release() noexcept;

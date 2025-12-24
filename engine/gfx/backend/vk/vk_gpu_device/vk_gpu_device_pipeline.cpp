@@ -54,9 +54,13 @@ rhi::PipelineHandle VkGpuDevice::create_pipeline(rhi::PipelineDesc const& desc)
 
 void VkGpuDevice::destroy_pipeline(rhi::PipelineHandle)
 {
-    // We only keep one backend pipeline; drop it when asked to destroy any handle.
+    // v1: single backend pipeline. Drop the Vulkan objects.
     basic_pipeline_ = BasicPipeline{};
-    pipeline_set_layout_handles_.clear();
+
+    // IMPORTANT:
+    // Do NOT clear pipeline_set_layout_handles_ here.
+    // These handles are the "recipe" for rebuilding the pipeline layout after
+    // swapchain resize / pipeline invalidation.
 }
 
 } // namespace strata::gfx::vk
