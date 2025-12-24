@@ -40,7 +40,8 @@ rhi::PipelineHandle VkGpuDevice::create_pipeline(rhi::PipelineDesc const& desc)
         vk_layouts.push_back(vk_layout);
     }
 
-    basic_pipeline_ = create_basic_pipeline(device_.device(), swapchain_.image_format());
+    basic_pipeline_ =
+        create_basic_pipeline(device_.device(), swapchain_.image_format(), std::span{vk_layouts});
     if (!basic_pipeline_.valid())
     {
         std::println(stderr, "VkGpuDevice: failed to create basic pipeline");
