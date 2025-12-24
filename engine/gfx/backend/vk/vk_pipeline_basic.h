@@ -38,6 +38,9 @@ struct BasicPipeline
 
 // Build a pipeline that renders a fullscreen triangle using dynamic rendering.
 // Returns an invalid BasicPipeline on failure.
-[[nodiscard]] BasicPipeline create_basic_pipeline(VkDevice device, VkFormat color_format);
+[[nodiscard]]
+BasicPipeline create_basic_pipeline(VkDevice                               device,
+                                    VkFormat                               color_format,
+                                    std::span<VkDescriptorSetLayout const> set_layouts = {});
 
 } // namespace strata::gfx::vk

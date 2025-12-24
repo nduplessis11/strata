@@ -241,7 +241,24 @@ rhi::FrameResult VkGpuDevice::cmd_bind_pipeline([[maybe_unused]] rhi::CommandBuf
     // Lazily rebuild backend pipeline if needed (e.g., after swapchain resize).
     if (!basic_pipeline_.valid())
     {
-        basic_pipeline_ = create_basic_pipeline(device_.device(), swapchain_.image_format());
+        std::vector<VkDescriptorSetLayout> vk_layouts;
+        vk_layouts.reserve(pipeline_set_layout_handles_.size());
+
+        for (auto const h : pipeline_set_layout_handles_)
+        {
+            VkDescriptorSetLayout const vk_layout = get_vk_descriptor_set_layout(h);
+            if (vk_layout == VK_NULL_HANDLE)
+            {
+                std::println(stderr,
+                             "cmd_bind_pipeline: cannot rebuild pipeline (set layout invalid)");
+                return FrameResult::Error;
+            }
+            vk_layouts.push_back(vk_layout);
+        }
+
+        basic_pipeline_ = create_basic_pipeline(device_.device(),
+                                                swapchain_.image_format(),
+                                                std::span{vk_layouts});
         if (!basic_pipeline_.valid())
         {
             std::println(stderr, "cmd_bind_pipeline: failed to (re)create BasicPipeline");
