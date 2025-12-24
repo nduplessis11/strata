@@ -185,7 +185,10 @@ rhi::BufferHandle VkGpuDevice::create_buffer(rhi::BufferDesc const&     desc,
     auto const mem_type_index =
         find_memory_type_index(vk_physical, req.memoryTypeBits, required_flags);
     if (!mem_type_index.has_value())
-        return fail("no compatible HOST_VISIBLE|HOST_COHERENT memory type");
+    {
+        return fail(
+            "v1: requires HOST_VISIBLE|HOST_COHERENT; add flush path for non-coherent memory");
+    }
 
     VkMemoryAllocateInfo const mai{
         .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
