@@ -14,5 +14,4 @@ target_link_libraries(strata_gfx_rhi
     INTERFACE
         engine_options
         strata_platform
-        strata_gfx_backend_vk
 )

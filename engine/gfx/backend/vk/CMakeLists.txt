@@ -35,7 +35,7 @@ target_include_directories(strata_gfx_backend_vk
 )
 
 target_link_libraries(strata_gfx_backend_vk
-    PUBLIC
+    PRIVATE
         engine_options
         Vulkan::Vulkan
         strata_platform       # for WsiHandle, etc.
