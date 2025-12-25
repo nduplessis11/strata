@@ -9,7 +9,7 @@ target_include_directories(strata_gfx_rhi
         ${CMAKE_SOURCE_DIR}/engine/gfx/include
 )
 
-# RHI depends on engine_options + platform types, and (currently) the active backend for create_device().
+# RHI depends on engine_options + platform types.
 target_link_libraries(strata_gfx_rhi
     INTERFACE
         engine_options

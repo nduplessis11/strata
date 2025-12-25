@@ -22,6 +22,11 @@ include(clang_tidy)
 # Shared, target-based options for all engine targets
 add_library(engine_options INTERFACE)
 
+if (STRATA_ENABLE_ASAN AND (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU"))
+  target_compile_options(engine_options INTERFACE -fsanitize=address -fno-omit-frame-pointer)
+  target_link_options(engine_options INTERFACE -fsanitize=address)
+endif()
+
 # Ensure C++23 is requested by all targets that link this.
 target_compile_features(engine_options INTERFACE cxx_std_23)
 
