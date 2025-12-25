@@ -116,7 +116,7 @@ rhi::BufferHandle VkGpuDevice::create_buffer(rhi::BufferDesc const&     desc,
     VkBufferUsageFlags const usage_flags = to_vk_buffer_usage_flags(desc.usage);
     if (usage_flags == 0)
     {
-        std::println(stderr, "VkGpuDevice: create_buffer failed (usage flags are None/unsupported");
+        std::println(stderr, "VkGpuDevice: create_buffer failed (usage flags are NoFlags/unsupported");
         buffers_[index] = BufferRecord{};
         return {};
     }

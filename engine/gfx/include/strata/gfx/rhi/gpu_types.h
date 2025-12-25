@@ -30,7 +30,7 @@ enum class Format
 
 enum class BufferUsage : std::uint32_t
 {
-    None    = 0,
+    NoFlags = 0,
     Vertex  = 1 << 0,
     Index   = 1 << 1,
     Uniform = 1 << 2,
@@ -43,7 +43,7 @@ inline BufferUsage operator|(BufferUsage a, BufferUsage b)
 
 enum class TextureUsage : std::uint32_t
 {
-    None            = 0,
+    NoFlags         = 0,
     Sampled         = 1 << 0,
     ColorAttachment = 1 << 1,
     DepthStencil    = 1 << 2,
@@ -52,7 +52,7 @@ enum class TextureUsage : std::uint32_t
 struct BufferDesc
 {
     std::uint64_t size_bytes{};
-    BufferUsage   usage{BufferUsage::None};
+    BufferUsage   usage{BufferUsage::NoFlags};
     bool          host_visible{false}; // true -> mapped/UPLOAD heap
 };
 
@@ -60,7 +60,7 @@ struct TextureDesc
 {
     Extent2D      size{};
     Format        format{Format::Unknown};
-    TextureUsage  usage{TextureUsage::None};
+    TextureUsage  usage{TextureUsage::NoFlags};
     std::uint32_t mip_levels{1};
 };
 
@@ -147,7 +147,7 @@ struct AcquiredImage
 
 enum class ShaderStage : std::uint32_t
 {
-    None     = 0,
+    NoFlags  = 0,
     Vertex   = 1 << 0,
     Fragment = 1 << 1,
     Compute  = 1 << 2,
@@ -175,7 +175,7 @@ struct DescriptorBinding
     std::uint32_t  binding{0};
     DescriptorType type{DescriptorType::UniformBuffer};
     std::uint32_t  count{1};
-    ShaderStage    stages{ShaderStage::None};
+    ShaderStage    stages{ShaderStage::NoFlags};
 };
 
 struct DescriptorSetLayoutDesc

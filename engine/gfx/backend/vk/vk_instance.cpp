@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <print>
 #include <vector>
+#include <cstring>
+
 #include <vulkan/vulkan.h>
 
 namespace strata::gfx::vk

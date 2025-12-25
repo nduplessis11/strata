@@ -31,11 +31,11 @@ namespace
 {
     VkShaderStageFlags out = 0;
 
-    if ((stages & rhi::ShaderStage::Vertex) != rhi::ShaderStage::None)
+    if ((stages & rhi::ShaderStage::Vertex) != rhi::ShaderStage::NoFlags)
         out |= VK_SHADER_STAGE_VERTEX_BIT;
-    if ((stages & rhi::ShaderStage::Fragment) != rhi::ShaderStage::None)
+    if ((stages & rhi::ShaderStage::Fragment) != rhi::ShaderStage::NoFlags)
         out |= VK_SHADER_STAGE_FRAGMENT_BIT;
-    if ((stages & rhi::ShaderStage::Compute) != rhi::ShaderStage::None)
+    if ((stages & rhi::ShaderStage::Compute) != rhi::ShaderStage::NoFlags)
         out |= VK_SHADER_STAGE_COMPUTE_BIT;
 
     return out;

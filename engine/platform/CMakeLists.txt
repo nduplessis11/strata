@@ -19,23 +19,27 @@ if (WIN32)
   # user32, gdi32 for windowing; winmm if you use timeBeginPeriod for timer granularity
   target_link_libraries(strata_platform PUBLIC user32 gdi32 winmm)
 elseif (UNIX AND NOT APPLE)
-  if (STRATA_USE_X11)
-    find_package(X11 REQUIRED)
-    find_package(Threads REQUIRED)
-    target_include_directories(strata_platform PRIVATE ${X11_INCLUDE_DIR})
-    target_link_libraries(strata_platform PUBLIC ${X11_LIBRARIES} Threads::Threads dl)
-  else()
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(WAYLAND_CLIENT REQUIRED wayland-client)
-    find_package(Threads REQUIRED)
-    target_include_directories(strata_platform PRIVATE ${WAYLAND_CLIENT_INCLUDE_DIRS})
-    target_link_libraries(strata_platform PUBLIC ${WAYLAND_CLIENT_LIBRARIES} Threads::Threads dl)
-    target_sources(strata_platform PRIVATE src/wayland/window_wayland.cpp)  # if/when you add it
-  endif()
-endif()
 
-# Optional: ASan
-if (STRATA_ENABLE_ASAN AND (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU"))
-  target_compile_options(strata_platform PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-  target_link_options(strata_platform PRIVATE -fsanitize=address)
+  find_package(Threads REQUIRED)
+
+  if (STRATA_USE_X11)
+    target_sources(strata_platform PRIVATE src/x11/window_x11.cpp)
+
+    find_package(X11 REQUIRED)
+
+    # Prefer imported targets if your CMake provides them; otherwise fall back.
+    if (TARGET X11::X11)
+      target_link_libraries(strata_platform PUBLIC X11::X11)
+      if (TARGET X11::Xext)
+        target_link_libraries(strata_platform PUBLIC X11::Xext)
+      endif()
+      else()
+        # Mark as SYSTEM to reduce noise when -Werror is on.
+        target_include_directories(strata_platform SYSTEM PRIVATE ${X11_INCLUDE_DIR})
+        target_link_libraries(strata_platform PUBLIC ${X11_LIBRARIES})
+      endif()
+    target_link_libraries(strata_platform PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
+  else()
+    message(FATAL_ERROR "STRATA_USE_X11=OFF selected, but Vulkan Wayland WSI bridge is not implemented yet.")
+  endif()
 endif()

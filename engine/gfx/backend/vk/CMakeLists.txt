@@ -30,15 +30,14 @@ target_compile_definitions(strata_gfx_backend_vk PRIVATE
 # Headers use #include "gfx/rhi/gpu_device.h" and platform types.
 target_include_directories(strata_gfx_backend_vk
     PRIVATE
-        ${CMAKE_SOURCE_DIR}/engine/gfx/include # "<strata/gfx/rhi/...>
         ${CMAKE_CURRENT_SOURCE_DIR}            # vk_*.h in this directory
 )
 
 target_link_libraries(strata_gfx_backend_vk
     PUBLIC
-        engine_options
         Vulkan::Vulkan
-        strata_platform       # for WsiHandle, etc.
+    PRIVATE
+        strata_gfx_rhi
 )
 
 enable_strict_warnings(strata_gfx_backend_vk)
@@ -54,27 +53,35 @@ elseif (UNIX AND NOT APPLE)
   endif()
 endif()
 
-# Optional: shader compilation step, adapted from old strata_gfx target
-file(GLOB_RECURSE STRATA_GLSL CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../shaders/*.*")
-find_program(GLSLC glslc HINTS ENV VULKAN_SDK PATH_SUFFIXES Bin bin)
-if (GLSLC AND STRATA_GLSL)
-  # All compiled shaders go to a common engine/gfx/shaders directory in the build tree
-  set(STRATA_SHADER_OUT_DIR "${CMAKE_BINARY_DIR}/engine/gfx/shaders")
+# Optional: shader compilation step.
+option(STRATA_BUILD_SHADERS "Build SPIR-V shaders with glslc" ON)
 
-  set(SPV_OUT "")
-  foreach(GLSL ${STRATA_GLSL})
-    get_filename_component(NAME ${GLSL} NAME)
-    set(SPV "${STRATA_SHADER_OUT_DIR}/${NAME}.spv")
-    add_custom_command(
-      OUTPUT ${SPV}
-      COMMAND ${CMAKE_COMMAND} -E make_directory "${STRATA_SHADER_OUT_DIR}"
-      COMMAND ${GLSLC} --target-env=vulkan1.3 -std=450 -o ${SPV} ${GLSL}
-      DEPENDS ${GLSL}
-      COMMENT "Compiling shader ${NAME}"
-      VERBATIM
-    )
-    list(APPEND SPV_OUT ${SPV})
-  endforeach()
-  add_custom_target(strata_shaders DEPENDS ${SPV_OUT})
-  add_dependencies(strata_gfx_backend_vk strata_shaders)
+if (STRATA_BUILD_SHADERS)
+  find_program(GLSLC glslc HINTS ENV VULKAN_SDK PATH_SUFFIXES Bin bin)
+  if (NOT GLSLC)
+    message(FATAL_ERROR "STRATA_BUILD_SHADERS=ON but glslc not found.")
+  endif()
+
+  file(GLOB_RECURSE STRATA_GLSL CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../shaders/*.*")
+  if (STRATA_GLSL)
+    # All compiled shaders go to a common engine/gfx/shaders directory in the build tree
+    set(STRATA_SHADER_OUT_DIR "${CMAKE_BINARY_DIR}/engine/gfx/shaders")
+
+    set(SPV_OUT "")
+    foreach(GLSL ${STRATA_GLSL})
+      get_filename_component(NAME ${GLSL} NAME)
+      set(SPV "${STRATA_SHADER_OUT_DIR}/${NAME}.spv")
+      add_custom_command(
+        OUTPUT ${SPV}
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${STRATA_SHADER_OUT_DIR}"
+        COMMAND ${GLSLC} --target-env=vulkan1.3 -std=450 -o ${SPV} ${GLSL}
+        DEPENDS ${GLSL}
+        COMMENT "Compiling shader ${NAME}"
+        VERBATIM
+      )
+      list(APPEND SPV_OUT ${SPV})
+    endforeach()
+    add_custom_target(strata_gfx_shaders DEPENDS ${SPV_OUT})
+    add_dependencies(strata_gfx_backend_vk strata_gfx_shaders)
+  endif()
 endif()
