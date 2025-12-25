@@ -1,7 +1,7 @@
 ﻿# Strata Architecture
 
 > **TL;DR**: Strata is a learning-focused, production-leaning Vulkan engine. The codebase is organized into clear layers:  
-> **platform** (OS/window/WSI handles) → **core** (app orchestration + runtime helpers) → **gfx** (RHI + renderer + Vulkan backend).
+> **platform** (OS/window/WSI handles) ← **core** (app orchestration + runtime helpers) → **gfx** (RHI + renderer + Vulkan backend).
 
 This document explains Strata’s *current* architecture: module boundaries, dependency rules, and the “shape” of the runtime object graph.  
 It favors pragmatism over consistency, and consistency over cleverness, and should be treated as a living document.
@@ -86,7 +86,7 @@ Submodules:
 Strata aims for “layering with pragmatic escape hatches.” A good default mental model:
 
 ```
-platform  ←  core  ←  gfx
+platform  ←  core  →  gfx
               ↑
            (entry point)
 ```

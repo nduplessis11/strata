@@ -4,7 +4,7 @@ Strata is a C++23 game engine designed around classic 2D/3D level-editor workflo
 
 It’s built around a simple, explicit layering model:
 
-> **platform** (OS/window/WSI) → **core** (app orchestration) → **gfx** (RHI + renderer + Vulkan backend)
+> **platform** (OS/window/WSI) ← **core** (app orchestration) → **gfx** (RHI + renderer + Vulkan backend)
 
 Strata is intentionally small and pragmatic right now: the current renderer clears the swapchain and draws a **fullscreen triangle** via **Vulkan 1.3 dynamic rendering**.
 
@@ -71,10 +71,11 @@ cmake/               CMake helper modules (warnings, etc.)
 - **Vulkan 1.3** development files (headers + loader library)
   - On Windows, this is typically the Vulkan SDK.
   - On Linux, this is typically your distro’s Vulkan dev packages.
+- `glslc` (shader compiler) in your PATH (required by default; see `STRATA_BUILD_SHADERS`).
 - Platform dependencies:
   - **Windows**: Win32 (no extra packages; uses system libs like `user32`, `gdi32`, `winmm`)
   - **Linux/X11** (default): Xlib dev packages (and `Threads`, `dl`)
-  - **Linux/Wayland** (optional): `wayland-client` dev packages via `pkg-config`
+  - **Linux/Wayland**: not supported yet (CMake will error if `STRATA_USE_X11=OFF`; Vulkan Wayland WSI bridge is not implemented yet)
 
 > Tip: the project enables `CMAKE_EXPORT_COMPILE_COMMANDS ON`, so you’ll get a `compile_commands.json` in your build directory (nice for clangd).
 
@@ -141,7 +142,12 @@ Top-level options:
   - When `ON`, warnings are treated as errors (via `cmake/warnings.cmake`).
 - `STRATA_USE_X11` (Linux only; default: `ON`)
   - When `ON`, builds against X11.
-  - When `OFF`, uses the Wayland dependency path (Wayland window backend may be WIP depending on the repo state).
+  - When `OFF`, configuration currently fails because the Vulkan Wayland WSI bridge is not implemented yet.
+- `STRATA_ENABLE_VULKAN` (default: `ON`)
+  - Vulkan is currently the only gfx backend, so `OFF` is not supported yet.
+- `STRATA_BUILD_SHADERS` (default: `ON`)
+  - When `ON`, shaders are compiled to SPIR-V using `glslc` during the build.
+  - When `ON`, configuration fails if `glslc` is not found.
 - `STRATA_ENABLE_ASAN` (default: `OFF`)
   - Enables AddressSanitizer on supported compilers (Clang/GCC).
 
@@ -165,7 +171,9 @@ At a high level, the codebase is split into layered targets:
 - `strata_platform` (STATIC): windowing/event loop + `WsiHandle` production
 - `strata_gfx_rhi` (INTERFACE): header-only RHI surface (interfaces + typed handles)
 - `strata_gfx_renderer` (STATIC): renderer layer built on the RHI
-- `strata_core` (STATIC): `Application` wrapper and orchestration
+- `strata_gfx_backend_vk` (STATIC): Vulkan backend implementation
+- `strata_gfx` (INTERFACE): aggregator target (`strata_gfx_rhi` + `strata_gfx_renderer` + active backend(s))
+- `strata_core` (STATIC): `Application` wrapper and orchestration (links `strata_platform` + `strata_gfx`)
 - `strata_shooter` (EXECUTABLE): example “game” that links `strata_core`
 
 ---

@@ -15,7 +15,7 @@ D32_SFloat
 }
 enum "strata::gfx::rhi::BufferUsage" as C_0002710142173650316241
 enum C_0002710142173650316241 {
-None
+NoFlags
 Vertex
 Index
 Uniform
@@ -23,7 +23,7 @@ Upload
 }
 enum "strata::gfx::rhi::TextureUsage" as C_0002766783461747024134
 enum C_0002766783461747024134 {
-None
+NoFlags
 Sampled
 ColorAttachment
 DepthStencil
@@ -112,7 +112,7 @@ __
 }
 enum "strata::gfx::rhi::ShaderStage" as C_0008357057760786454341
 enum C_0008357057760786454341 {
-None
+NoFlags
 Vertex
 Fragment
 Compute
