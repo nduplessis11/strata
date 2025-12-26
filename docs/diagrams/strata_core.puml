@@ -606,7 +606,7 @@ __
 }
 class "strata::platform::Window" as C_0005247819231906793915
 class C_0005247819231906793915 {
-+Window(const WindowDesc & desc) : void
++Window(base::Diagnostics & diagnostics, const WindowDesc & desc) : void
 +Window(Window &&) noexcept : void
 +Window(const Window &) = deleted : void
 +~Window() : void
@@ -634,6 +634,7 @@ class C_0013200129816682565187 {
 __
 +clear_brush : HBRUSH
 +closing : bool
++diagnostics : base::Diagnostics *
 +hinstance : HINSTANCE
 +hwnd : HWND
 +minimized : bool
@@ -668,6 +669,8 @@ class C_0005212081933056084623 {
 {static} +create(ApplicationConfig config = {}) : std::expected<Application,ApplicationError>
 +device() noexcept : strata::gfx::rhi::IGpuDevice &
 +device() const noexcept : const strata::gfx::rhi::IGpuDevice &
++diagnostics() noexcept : strata::base::Diagnostics &
++diagnostics() const noexcept : const strata::base::Diagnostics &
 +renderer() noexcept : strata::gfx::renderer::Render2D &
 +renderer() const noexcept : const strata::gfx::renderer::Render2D &
 +request_exit() noexcept : void
@@ -685,11 +688,12 @@ __
 }
 class "strata::core::Application::Impl" as C_0003684588886580275255
 class C_0003684588886580275255 {
-+Impl(ApplicationConfig cfg, platform::Window && window, platform::WsiHandle surface, std::unique_ptr<gfx::rhi::IGpuDevice> && device, gfx::rhi::SwapchainHandle swapchain, gfx::renderer::Render2D && render) : void
++Impl(ApplicationConfig cfg, std::unique_ptr<base::Diagnostics> && diag, platform::Window && window, platform::WsiHandle surface, std::unique_ptr<gfx::rhi::IGpuDevice> && device, gfx::rhi::SwapchainHandle swapchain, gfx::renderer::Render2D && render) : void
 +~Impl() noexcept : void
 __
 +config : ApplicationConfig
 +device : std::unique_ptr<gfx::rhi::IGpuDevice>
++diagnostics : std::unique_ptr<base::Diagnostics>
 +exit_requested : bool
 +frame_index : std::uint64_t
 +last_frame : clock::time_point
@@ -803,6 +807,7 @@ C_0009424639203119917878 o-- C_0000103132443571165194 : +window
 C_0016276992989547283338 o-- C_0018051248413152380528 : +display
 C_0016276992989547283338 o-- C_0006480956703282666377 : +surface
 C_0016311843175510711894 o-- C_0005777160501785278061 : +size
+C_0005247819231906793915 ..> C_0015969163135226357711
 C_0005247819231906793915 ..> C_0016311843175510711894
 C_0005247819231906793915 ..> C_0015867045834686762295
 C_0005247819231906793915 ..> C_0009424639203119917878
@@ -811,6 +816,7 @@ C_0013200129816682565187 --+ C_0005247819231906793915
 C_0013200129816682565187 ..> C_0015867045834686762295
 C_0013200129816682565187 ..> C_0009424639203119917878
 C_0013200129816682565187 ..> C_0016276992989547283338
+C_0013200129816682565187 --> C_0015969163135226357711 : +diagnostics
 C_0002056900511809122909 o-- C_0016311843175510711894 : +window_desc
 C_0002056900511809122909 o-- C_0007170430122059447642 : +device
 C_0002056900511809122909 o-- C_0008242555543376944237 : +swapchain_desc
@@ -821,12 +827,14 @@ C_0005212081933056084623 ..> C_0005247819231906793915
 C_0005212081933056084623 ..> C_0017920997868415439149
 C_0005212081933056084623 ..> C_0010872083216687935010
 C_0005212081933056084623 ..> C_0010824766815022468742
+C_0005212081933056084623 ..> C_0015969163135226357711
 C_0005212081933056084623 ..> C_0003684588886580275255
 C_0005212081933056084623 ..> C_0009403174502820656066
 C_0009403174502820656066 --+ C_0005212081933056084623
 C_0009403174502820656066 ..> C_0003684588886580275255
 C_0003684588886580275255 --+ C_0005212081933056084623
 C_0003684588886580275255 o-- C_0002056900511809122909 : +config
+C_0003684588886580275255 o-- C_0015969163135226357711 : +diagnostics
 C_0003684588886580275255 o-- C_0005247819231906793915 : +window
 C_0003684588886580275255 o-- C_0015867045834686762295 : +surface
 C_0003684588886580275255 o-- C_0009424639203119917878 : +surface

@@ -81,7 +81,7 @@ std::expected<Application, ApplicationError> Application::create(ApplicationConf
     // Create Diagnostics first; it is explcitly owned and passed down.
     auto diagnostics = std::make_unique<base::Diagnostics>();
 
-    platform::Window window{config.window_desc};
+    platform::Window window{*diagnostics, config.window_desc};
     if (window.should_close())
     {
         STRATA_LOG_ERROR(diagnostics->logger(), "core", "Window creation failed");

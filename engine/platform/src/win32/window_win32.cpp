@@ -11,6 +11,7 @@
 #include <utility>
 #include <windows.h>
 
+#include "strata/base/diagnostics.h"
 #include "strata/platform/window.h"
 #include "strata/platform/wsi_handle.h"
 
@@ -95,6 +96,8 @@ namespace strata::platform
 //    all later messages to the instance handler (wnd_proc).
 struct Window::Impl
 {
+    base::Diagnostics* diagnostics{nullptr};
+
     HINSTANCE hinstance{};
     HWND      hwnd{};
     bool      closing{false};
@@ -205,8 +208,9 @@ struct Window::Impl
 // ────────────────────────────────────────────────────────────────────────────────
 // Window API — construct, pump, query, teardown
 
-Window::Window(WindowDesc const& desc) : p_(std::make_unique<Impl>())
+Window::Window(base::Diagnostics& diagnostics, WindowDesc const& desc) : p_(std::make_unique<Impl>())
 {
+    p_->diagnostics = &diagnostics;
 
     // Module handle of this EXE/DLL.
     p_->hinstance = ::GetModuleHandleW(nullptr);
@@ -214,6 +218,7 @@ Window::Window(WindowDesc const& desc) : p_(std::make_unique<Impl>())
     // Register our window class (idempotent).
     if (!register_wnd_class(p_->hinstance, &Impl::wndproc_static))
     {
+        STRATA_LOG_ERROR(diagnostics.logger(), "platform", "Win32: RegisterClassExW failed");
         p_->closing = true;
         return;
     }
@@ -251,6 +256,7 @@ Window::Window(WindowDesc const& desc) : p_(std::make_unique<Impl>())
 
     if (!hwnd)
     {
+        STRATA_LOG_ERROR(diagnostics.logger(), "platform", "Win32: CreateWindowExW failed");
         p_->closing = true;
         return;
     }

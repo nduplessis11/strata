@@ -4,12 +4,20 @@
 // Purpose:
 //   Public RAII + pImpl window class. Owns the native window, exposes portable
 //   operations, and hands the renderer a WsiHandle for graphics integration.
+//
+// Notes:
+//   - Takes a Diagnostics& explicitly (no globals).
 // -----------------------------------------------------------------------------
 
 #pragma once
 #include "strata/platform/wsi_handle.h"
 #include <memory>
 #include <string_view>
+
+namespace strata::base
+{
+class Diagnostics;
+}
 
 namespace strata::platform
 {
@@ -30,7 +38,7 @@ struct WindowDesc
 class Window
 {
   public:
-    explicit Window(WindowDesc const& desc);
+    explicit Window(base::Diagnostics& diagnostics, WindowDesc const& desc);
     ~Window();
 
     Window(Window&&) noexcept;

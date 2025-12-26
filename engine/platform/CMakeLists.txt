@@ -4,8 +4,6 @@ add_library(strata_platform STATIC
   src/clock.cpp
   src/filesystem.cpp
   src/input_raw.cpp
-  $<$<PLATFORM_ID:Windows>:src/win32/window_win32.cpp>
-  $<$<PLATFORM_ID:Linux>:  src/x11/window_x11.cpp>
 )
 
 target_include_directories(strata_platform PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -13,11 +11,17 @@ target_compile_features(strata_platform PUBLIC cxx_std_23)
 enable_strict_warnings(strata_platform)
 
 # Inherit /utf-8 and UNICODE/_UNICODE from one place
-target_link_libraries(strata_platform PUBLIC engine_options)
+target_link_libraries(strata_platform 
+  PUBLIC 
+    engine_options 
+    strata_base
+)
 
 if (WIN32)
   # user32, gdi32 for windowing; winmm if you use timeBeginPeriod for timer granularity
   target_link_libraries(strata_platform PUBLIC user32 gdi32 winmm)
+  target_sources(strata_platform PRIVATE src/win32/window_win32.cpp)
+
 elseif (UNIX AND NOT APPLE)
 
   find_package(Threads REQUIRED)

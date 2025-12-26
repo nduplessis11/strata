@@ -88,6 +88,11 @@ class Application
     std::int16_t run(TickFn tick = {});
     void         request_exit() noexcept;
 
+    // --- Accessors -----------------------------------------------------------------
+    //
+    // Const-propagating accessors: constness of Application controls whether subsystems are
+    // returned as T& or T const&.
+
     [[nodiscard]] strata::platform::Window&       window() noexcept;
     [[nodiscard]] strata::platform::Window const& window() const noexcept;
 
