@@ -24,6 +24,15 @@ Consistency is still valued, and cleverness is a last resort.
    - Don't encode storage or lifetime in names (`kPrefix`, `g_`, `m_`, `_s`, etc.).
    - The language already encodes `static`, `constexpr`, `inline`, `const`, and access (`public` / `private`).
 
+   **Exception:**  
+   When *representation or storage is semantically relevant to the context*—such as adapting data to fit an API, protocol, or conversion boundary—it is acceptable to reflect that in the name.
+   - This commonly applies to temporary values created specifically for type or format adaptation.
+   - Prefer short, conventional suffixes that communicate intent, not ownership or lifetime (e.g. `_sv`, `_str`, `_bytes`).
+
+   ~~~cpp
+   auto const level_sv = to_string(record.level); // explicit API-fit representation
+   ~~~
+
 3. **Ownership is signaled by `_`**
    - A **trailing underscore** (`lower_snake_case_`) is reserved for **private/protected instance data members only**.
    - Public data never uses a trailing underscore.
