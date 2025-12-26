@@ -1,10 +1,11 @@
+# CMake build on Windows + Linux (Vulkan-enabled)
 name: CMake on multiple platforms
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
 
 jobs:
   build:
@@ -18,10 +19,12 @@ jobs:
             build_type: Release
             c_compiler: cl
             cpp_compiler: cl
+
           - os: ubuntu-latest
             build_type: Release
             c_compiler: gcc
             cpp_compiler: g++
+
           - os: ubuntu-latest
             build_type: Release
             c_compiler: clang
@@ -32,13 +35,12 @@ jobs:
 
       # ---- Vulkan dependencies ----
       - name: Install Vulkan SDK (Windows)
-      # Installs headers + libs + tools and sets VULKAN_SDK
         if: runner.os == 'Windows'
         uses: humbletim/install-vulkan-sdk@v1.2
         with:
           version: latest
           cache: true
-          # quiet: true  # optional
+          quiet: false
 
       - name: Install Vulkan dev packages (Linux)
         if: runner.os == 'Linux'
@@ -56,18 +58,44 @@ jobs:
         run: |
           echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
-      - name: Configure CMake
+      # Optional: show Vulkan SDK layout on Windows to debug FindVulkan issues
+      - name: Verify Vulkan SDK layout (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo "VULKAN_SDK=$VULKAN_SDK"
+          ls -la "$VULKAN_SDK" || true
+          ls -la "$VULKAN_SDK/Include" | head || true
+          ls -la "$VULKAN_SDK/Lib" | head || true
+
+      # ---- Configure ----
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
         shell: bash
         run: >
           cmake -B "${{ steps.strings.outputs.build-output-dir }}"
+          -S "${{ github.workspace }}"
           -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
           -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          -S "${{ github.workspace }}"
+          -DVulkan_INCLUDE_DIR="$VULKAN_SDK/Include"
+          -DVulkan_LIBRARY="$VULKAN_SDK/Lib/vulkan-1.lib"
 
+      - name: Configure CMake (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: >
+          cmake -B "${{ steps.strings.outputs.build-output-dir }}"
+          -S "${{ github.workspace }}"
+          -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
+          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      # ---- Build ----
       - name: Build
         run: cmake --build "${{ steps.strings.outputs.build-output-dir }}" --config ${{ matrix.build_type }}
 
+      # ---- Test ----
       - name: Test
         working-directory: "${{ steps.strings.outputs.build-output-dir }}"
         run: ctest --build-config ${{ matrix.build_type }}
