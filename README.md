@@ -4,7 +4,7 @@ Strata is a C++23 game engine designed around classic 2D/3D level-editor workflo
 
 It’s built around a simple, explicit layering model:
 
-> **platform** (OS/window/WSI) ← **core** (app orchestration) → **gfx** (RHI + renderer + Vulkan backend)
+> **base** (diagnostics + low-level utilities) → **platform** (OS/window/WSI) ← **core** (app orchestration) → **gfx** (RHI + renderer + Vulkan backend)
 
 Strata is intentionally small and pragmatic right now: the current renderer clears the swapchain and draws a **fullscreen triangle** via **Vulkan 1.3 dynamic rendering**.
 
@@ -52,6 +52,7 @@ If you’re looking for a “read the code top-to-bottom” entry point, follow 
 ## Repo layout (high level)
 
 ```text
+engine/base          Diagnostics + assertions + other low-level utilities
 engine/platform      OS + windowing + event polling + WSI handle production
 engine/core          Application wrapper, main loop, runtime helpers
 engine/gfx           RHI + renderer + backend/vk + shaders
@@ -168,6 +169,7 @@ cmake --build build/debug
 At a high level, the codebase is split into layered targets:
 
 - `engine_options` (INTERFACE): shared compile options/definitions
+- `strata_base` (STATIC): diagnostics/assertions and other low-level utilities (no OS/Vulkan deps)
 - `strata_platform` (STATIC): windowing/event loop + `WsiHandle` production
 - `strata_gfx_rhi` (INTERFACE): header-only RHI surface (interfaces + typed handles)
 - `strata_gfx_renderer` (STATIC): renderer layer built on the RHI

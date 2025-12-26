@@ -1,4 +1,89 @@
 @startuml
+enum "strata::base::LogLevel" as C_0013027043135182793153
+enum C_0013027043135182793153 {
+Trace
+Debug
+Info
+Warn
+Error
+Fatal
+}
+class "strata::base::LogRecord" as C_0010592338517071783832
+class C_0010592338517071783832 {
+__
++category : std::string
++level : LogLevel
++location : std::source_location
++message : std::string
++thread_id : std::thread::id
++timestamp : std::chrono::system_clock::time_point
+}
+abstract "strata::base::ILogSink" as C_0000212634736638790917
+abstract C_0000212634736638790917 {
++~ILogSink() constexpr = default : void
+..
+{abstract} +write(const LogRecord & record) = 0 : void
+__
+}
+class "strata::base::StderrSink" as C_0009626563013743656890
+class C_0009626563013743656890 {
++StderrSink() = default : void
++StderrSink(Config config) : void
+..
++write(const LogRecord & record) : void
+__
+-config_ : Config
+-mutex_ : std::mutex
+}
+class "strata::base::StderrSink::Config" as C_0002411626154236394662
+class C_0002411626154236394662 {
+__
++include_location : bool
++include_thread_id : bool
++include_timestamp : bool
+}
+class "strata::base::Logger" as C_0014999958827645994269
+class C_0014999958827645994269 {
++Logger() = default : void
++Logger(Config config) : void
+..
++add_sink(std::unique_ptr<ILogSink> sink) : void
++log(LogLevel level, std::string_view category, std::string_view message, std::source_location location = std::source_location::current()) : void
++logf<Args...>(LogLevel level, std::string_view category, std::source_location location, basic_format_string<Args...> fmt, Args &&... args) : void
++set_min_level(LogLevel level) noexcept : void
++should_log(LogLevel level) const noexcept : bool
+__
+-min_level_ : LogLevel
+-sinks_ : std::vector<std::unique_ptr<ILogSink>>
+}
+class "strata::base::Logger::Config" as C_0001157951305619981417
+class C_0001157951305619981417 {
+__
++min_level : LogLevel
+}
+class "strata::base::Diagnostics" as C_0015969163135226357711
+class C_0015969163135226357711 {
++Diagnostics() : void
++Diagnostics(Config config) : void
+..
++assert_failed(std::string_view expr_text, std::string_view message, std::source_location location) : void
++debug_break_on_error(std::source_location location = std::source_location::current()) const noexcept : void
++error(std::string_view category, std::string_view message, std::source_location location = std::source_location::current()) : void
++fatal(std::string_view category, std::string_view message, std::source_location location = std::source_location::current()) : void
++logger() noexcept : Logger &
++logger() const noexcept : const Logger &
+__
+-config_ : Config
+-logger_ : Logger
+}
+class "strata::base::Diagnostics::Config" as C_0001096765954109145703
+class C_0001096765954109145703 {
+__
++debug_break_on_assert : bool
++debug_break_on_error : bool
++debug_break_on_fatal : bool
++min_level : LogLevel
+}
 class "strata::gfx::rhi::Extent2D" as C_0016237545735345995570
 class C_0016237545735345995570 {
 __
@@ -613,6 +698,21 @@ __
 +swapchain : gfx::rhi::SwapchainHandle
 +window : platform::Window
 }
+C_0010592338517071783832 o-- C_0013027043135182793153 : +level
+C_0000212634736638790917 ..> C_0010592338517071783832
+C_0009626563013743656890 ..> C_0010592338517071783832
+C_0009626563013743656890 o-- C_0002411626154236394662 : -config_
+C_0000212634736638790917 <|-- C_0009626563013743656890
+C_0002411626154236394662 --+ C_0009626563013743656890
+C_0014999958827645994269 ..> C_0001157951305619981417
+C_0014999958827645994269 o-- C_0013027043135182793153 : -min_level_
+C_0014999958827645994269 o-- C_0000212634736638790917 : -sinks_
+C_0001157951305619981417 --+ C_0014999958827645994269
+C_0001157951305619981417 o-- C_0013027043135182793153 : +min_level
+C_0015969163135226357711 o-- C_0001096765954109145703 : -config_
+C_0015969163135226357711 o-- C_0014999958827645994269 : -logger_
+C_0001096765954109145703 --+ C_0015969163135226357711
+C_0001096765954109145703 o-- C_0013027043135182793153 : +min_level
 C_0006233893228748483879 o-- C_0002710142173650316241 : +usage
 C_0003925641868641178642 o-- C_0016237545735345995570 : +size
 C_0003925641868641178642 o-- C_0011402702226009568895 : +format
