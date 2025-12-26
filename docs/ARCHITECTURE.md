@@ -1,7 +1,7 @@
 ﻿# Strata Architecture
 
 > **TL;DR**: Strata is a learning-focused, production-leaning Vulkan engine. The codebase is organized into clear layers:  
-> **platform** (OS/window/WSI handles) ← **core** (app orchestration + runtime helpers) → **gfx** (RHI + renderer + Vulkan backend).
+> **base** (diagnostics + low-level utilities) → **platform** (OS/window/WSI handles) ← **core** (app orchestration + runtime helpers) → **gfx** (RHI + renderer + Vulkan backend).
 
 This document explains Strata’s *current* architecture: module boundaries, dependency rules, and the “shape” of the runtime object graph.  
 It favors pragmatism over consistency, and consistency over cleverness, and should be treated as a living document.
@@ -34,10 +34,21 @@ It favors pragmatism over consistency, and consistency over cleverness, and shou
 > Folder names below represent conceptual modules; exact paths may vary.
 
 ```
+engine/base         → dependency-free utilities (diagnostics, assertions, helpers)
 engine/platform     → OS + windowing + input + WSI handle production
 engine/core         → application wrapper, (future) ECS, action map + runtime helpers
 engine/gfx          → graphics abstractions, rhi/*, renderer/*, backend/vk/*, shaders/*
 ```
+
+### `engine/base`
+Responsibilities:
+- Dependency-free utilities and building blocks (no OS/Vulkan deps).
+- Explicitly-owned diagnostics (logging + assertions) designed to be passed down intentionally (no global state).
+
+Key types:
+- `strata::base::Diagnostics` (owns a `Logger` and assertion/fatal behavior)
+- `strata::base::Logger` (owns sinks; e.g., `StderrSink`)
+- `strata::base::ILogSink`, `strata::base::LogRecord`, `strata::base::LogLevel`
 
 ### `engine/platform`
 Responsibilities:
@@ -94,6 +105,8 @@ platform  ←  core  →  gfx
 More specifically:
 
 ### Allowed dependencies
+- `base` should not depend on `platform`, `core`, or `gfx`.
+- Any higher layer may depend on `base` (dependency-free utilities).
 - `core` may depend on `platform` and `gfx`.
 - `gfx/renderer` may depend on `gfx/rhi`.
 - `gfx/backend/vk` may depend on:

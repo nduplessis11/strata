@@ -64,6 +64,7 @@ All engine code lives under:
 ### Layered namespaces
 Namespaces communicate architecture and dependency boundaries:
 
+- `strata::base` -- diagnostics/assertions and other dependency-free utilities
 - `strata::platform` -- windowing, input, OS-specific implementations
 - `strata::core` -- application wrapper / main loop orchestration
 - `strata::gfx` -- graphics layer root
@@ -77,6 +78,7 @@ WSI handle variants live in:
 - `strata::platform::wsi` (Win32 / X11 / Wayland)
 
 ### Rule of thumb: where does this code belong?
+- Dependency-free facilities (e.g., diagnostics/logging/assertions) → `strata::base`
 - `Vk*` types → `strata::gfx::vk`
 - OS types (`HWND`, `Display*`, `wl_display*`) → platform `.cpp` (pImpl)
 - Renderer-visible abstractions → `gfx::rhi` or `gfx::renderer`
@@ -88,6 +90,7 @@ WSI handle variants live in:
 ### Folder names
 - Lowercase only
 - Reflect architecture:
+  - `engine/base`
   - `engine/core`
   - `engine/platform`
   - `engine/gfx/rhi`
