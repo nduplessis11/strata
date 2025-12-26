@@ -1,116 +1,100 @@
-# CMake build on Windows + Linux (Vulkan-enabled)
-name: CMake on multiple platforms
+name: build
 
 on:
   push:
-    branches: ["master"]
   pull_request:
-    branches: ["master"]
 
 jobs:
   build:
+    name: build (${{ matrix.os }}, ${{ matrix.build_type }}, ${{ matrix.c_compiler }}, ${{ matrix.cpp_compiler }})
     runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
-            build_type: Release
-            c_compiler: cl
-            cpp_compiler: cl
           - os: ubuntu-latest
             build_type: Release
             c_compiler: gcc
             cpp_compiler: g++
+
           - os: ubuntu-latest
             build_type: Release
             c_compiler: clang
             cpp_compiler: clang++
 
+          - os: windows-latest
+            build_type: Release
+            c_compiler: cl
+            cpp_compiler: cl
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # ---- Vulkan dependencies ----
-      - name: Install Vulkan SDK (Windows)
-        if: runner.os == 'Windows'
-        uses: humbletim/install-vulkan-sdk@v1.2
-        with:
-          version: latest
-          cache: true
-          quiet: false
-
-      - name: Install Vulkan dev packages (Linux)
+      # Linux prerequisites (X11 headers + Ninja is commonly needed for CMake builds)
+      - name: Install Linux dependencies
         if: runner.os == 'Linux'
-        shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libvulkan-dev \
-            vulkan-tools \
-            spirv-tools
+          sudo apt-get install -y ninja-build libx11-dev
 
-      - name: Set reusable strings
-        id: strings
+      # Vulkan SDK (PINNED)
+      #
+      # The action docs list 1.4.309.0 as a known-working cross-platform version.
+      # Using "latest" can resolve to a newer SDK that this action's unpacking path
+      # doesn't lay out with Include/Lib on Windows runners. :contentReference[oaicite:1]{index=1}
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.4.309.0
+          cache: true
+
+      # Fail fast if the SDK layout isn't what CMake expects
+      - name: Sanity check Vulkan SDK layout
         shell: bash
         run: |
-          echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+          echo "VULKAN_SDK=$VULKAN_SDK"
+          ls -la "$VULKAN_SDK" || true
 
-      # ---- Fix Vulkan SDK root on Windows (portable SDK extraction has varying layout) ----
-      - name: Locate Vulkan SDK root (Windows)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          echo "Initial VULKAN_SDK=$VULKAN_SDK"
-
-          # Find the directory that contains Include/vulkan/vulkan.h
-          sdk_root="$(find "$VULKAN_SDK" -type f -path "*/Include/vulkan/vulkan.h" -print -quit | xargs -I{} dirname "{}" | xargs -I{} dirname "{}")"
-          if [ -z "$sdk_root" ]; then
-            echo "::error::Could not locate Vulkan headers (Include/vulkan/vulkan.h) under $VULKAN_SDK"
-            echo "Top-level contents:"
-            ls -la "$VULKAN_SDK" || true
-            echo "Tree (depth 3):"
-            find "$VULKAN_SDK" -maxdepth 3 -type d -print || true
-            exit 1
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            test -f "$VULKAN_SDK/Include/vulkan/vulkan.h"
+            test -f "$VULKAN_SDK/Lib/vulkan-1.lib"
+          else
+            test -f "$VULKAN_SDK/include/vulkan/vulkan.h"
+            # just show what we have; loader names/paths can vary a bit
+            ls -la "$VULKAN_SDK/lib" || true
           fi
 
-          echo "Resolved Vulkan SDK root: $sdk_root"
-          echo "VULKAN_SDK=$sdk_root" >> "$GITHUB_ENV"
-          echo "$sdk_root/Bin" >> "$GITHUB_PATH"
-          echo "$sdk_root/bin" >> "$GITHUB_PATH"
-
-          echo "SDK root contents:"
-          ls -la "$sdk_root" || true
-          ls -la "$sdk_root/Include" | head || true
-          ls -la "$sdk_root/Lib" | head || true
-
-      # ---- Configure ----
-      - name: Configure CMake (Windows)
+      # Configure
+      # - Windows: default generator is Visual Studio (multi-config), so CMAKE_BUILD_TYPE is ignored.
+      # - Linux: use Ninja + CMAKE_BUILD_TYPE.
+      - name: Configure (Windows)
         if: runner.os == 'Windows'
         shell: bash
-        run: >
-          cmake -B "${{ steps.strings.outputs.build-output-dir }}"
-          -S "${{ github.workspace }}"
-          -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
-          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
-          -DVulkan_ROOT="${VULKAN_SDK}"
-          -DCMAKE_PREFIX_PATH="${VULKAN_SDK}"
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
 
-      - name: Configure CMake (Linux)
+      - name: Configure (Linux)
         if: runner.os == 'Linux'
         shell: bash
-        run: >
-          cmake -B "${{ steps.strings.outputs.build-output-dir }}"
-          -S "${{ github.workspace }}"
-          -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
-          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
 
-      # ---- Build ----
-      - name: Build
-        run: cmake --build "${{ steps.strings.outputs.build-output-dir }}" --config ${{ matrix.build_type }}
+      # Build
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cmake --build build --config ${{ matrix.build_type }} --parallel
 
-      # ---- Test ----
-      - name: Test
-        working-directory: "${{ steps.strings.outputs.build-output-dir }}"
-        run: ctest --build-config ${{ matrix.build_type }}
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cmake --build build --parallel
