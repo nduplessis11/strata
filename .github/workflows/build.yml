@@ -1,0 +1,112 @@
+name: build
+
+on:
+  push:
+    branches: ["master"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["master"]
+
+# Needed for creating Releases (tag pushes). Safe to keep for PRs.
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: windows (Release) + publish
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ---- Vulkan SDK (PINNED; known-good layout for CI) ----
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.4.309.0
+          cache: true
+
+      - name: Sanity check Vulkan SDK layout (Windows)
+        shell: bash
+        run: |
+          echo "VULKAN_SDK=$VULKAN_SDK"
+          ls -la "$VULKAN_SDK" || true
+          test -f "$VULKAN_SDK/Include/vulkan/vulkan.h"
+          test -f "$VULKAN_SDK/Lib/vulkan-1.lib"
+
+          # Make shader tools available if your build uses them
+          echo "$VULKAN_SDK/Bin" >> "$GITHUB_PATH"
+          echo "$VULKAN_SDK/bin" >> "$GITHUB_PATH"
+
+      # ---- Configure / Build / Test ----
+      - name: Configure CMake
+        shell: pwsh
+        run: |
+          cmake -S "$env:GITHUB_WORKSPACE" -B "$env:GITHUB_WORKSPACE\build"
+
+      - name: Build (Release)
+        shell: pwsh
+        run: |
+          cmake --build "$env:GITHUB_WORKSPACE\build" --config Release --parallel
+
+      - name: Test (Release)
+        shell: pwsh
+        run: |
+          ctest --test-dir "$env:GITHUB_WORKSPACE\build" --build-config Release --output-on-failure
+
+      # ---- Stage files to publish ----
+      - name: Stage arcade shooter dist
+        id: stage
+        shell: pwsh
+        run: |
+          $buildDir = Join-Path $env:GITHUB_WORKSPACE "build"
+          $distDir  = Join-Path $env:GITHUB_WORKSPACE "dist"
+          New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+
+          # Find arcade shooter EXE (current target output name)
+          $exe = Get-ChildItem -Path $buildDir -Recurse -File -Filter "strata_shooter.exe" | Select-Object -First 1
+          if (-not $exe) { throw "Could not find strata_shooter.exe under $buildDir" }
+
+          # Publish name (you can keep strata_shooter.exe if you prefer)
+          Copy-Item $exe.FullName (Join-Path $distDir "arcade_shooter.exe") -Force
+
+          # Optional: include PDB if present
+          $pdbPath = [System.IO.Path]::ChangeExtension($exe.FullName, ".pdb")
+          if (Test-Path $pdbPath) { Copy-Item $pdbPath $distDir -Force }
+
+          # Shaders: safest is the shaders folder next to the EXE output
+          $exeDir    = $exe.Directory.FullName
+          $shaderDir = Join-Path $exeDir "shaders"
+          if (Test-Path $shaderDir) {
+            Copy-Item $shaderDir (Join-Path $distDir "shaders") -Recurse -Force
+          } else {
+            Write-Host "::warning::No shaders folder found next to exe at $shaderDir. If runtime needs shaders, ensure your post-build copy step runs in CI."
+          }
+
+          "distDir=$distDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      # ---- 1) Upload as Actions artifact (always) ----
+      - name: Upload artifact (Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: arcade_shooter-windows-Release
+          path: ${{ steps.stage.outputs.distDir }}
+          if-no-files-found: error
+          retention-days: 14
+
+      # ---- 2) Publish to GitHub Releases (only on tag pushes) ----
+      - name: Zip release payload
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:GITHUB_WORKSPACE ("arcade_shooter-" + "${{ github.ref_name }}" + "-windows.zip")
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Compress-Archive -Path (Join-Path $env:GITHUB_WORKSPACE "dist\*") -DestinationPath $zip
+
+      - name: Create/Update GitHub Release + upload asset
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ github.workspace }}/arcade_shooter-${{ github.ref_name }}-windows.zip
+          generate_release_notes: true
