@@ -23,6 +23,8 @@
 namespace strata::base
 {
 
+Diagnostics::Diagnostics() : Diagnostics(Config()) {}
+
 Diagnostics::Diagnostics(Config config)
     : config_(config), logger_(Logger::Config{.min_level = config.min_level})
 {
