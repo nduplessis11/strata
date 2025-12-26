@@ -10,6 +10,11 @@
 #include "strata/platform/wsi_handle.h"
 #include <vulkan/vulkan.h>
 
+namespace strata::base
+{
+class Diagnostics;
+}
+
 namespace strata::gfx::vk
 {
 
@@ -22,8 +27,8 @@ class VkInstanceWrapper
     VkInstanceWrapper(VkInstanceWrapper&&) noexcept;
     VkInstanceWrapper& operator=(VkInstanceWrapper&&) noexcept;
 
-    // Create instance and surface for a given WSI handle.
-    bool init(strata::platform::WsiHandle const& wsi);
+    // Create instance + debug messenger + surface for a given WSI handle.
+    bool init(base::Diagnostics& diagnostics, strata::platform::WsiHandle const& wsi);
 
     VkInstance instance() const noexcept
     {
@@ -36,6 +41,8 @@ class VkInstanceWrapper
 
   private:
     void cleanup();
+
+    base::Diagnostics* diagnostics_{nullptr}; // non-owning; points at Application-owned Diagnostics
 
     VkInstance               instance_{VK_NULL_HANDLE};
     VkSurfaceKHR             surface_{VK_NULL_HANDLE};

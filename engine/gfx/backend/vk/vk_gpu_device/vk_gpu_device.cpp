@@ -7,31 +7,39 @@
 
 #include "vk_gpu_device.h"
 
+#include "../vk_check.h"
+#include "strata/base/diagnostics.h"
+
 namespace strata::gfx::vk
 {
 
-std::unique_ptr<VkGpuDevice> VkGpuDevice::create(rhi::DeviceCreateInfo const&       info,
+std::unique_ptr<VkGpuDevice> VkGpuDevice::create(base::Diagnostics&                 diagnostics,
+                                                 rhi::DeviceCreateInfo const&       info,
                                                  strata::platform::WsiHandle const& surface)
 {
     (void)info; // later: debug flags, frames-in-flight, etc.
 
-    auto dev = std::unique_ptr<VkGpuDevice>(new VkGpuDevice());
+    auto dev          = std::unique_ptr<VkGpuDevice>(new VkGpuDevice());
+    dev->diagnostics_ = &diagnostics;
 
     // 1) Instance + surface
-    if (!dev->instance_.init(surface))
+    if (!dev->instance_.init(diagnostics, surface))
     {
+        STRATA_LOG_ERROR(diagnostics.logger(), "vk", "VkInstanceWrapper::init failed");
         return {};
     }
 
     // 2) Physical + logical device + queues
     if (!dev->device_.init(dev->instance_.instance(), dev->instance_.surface()))
     {
+        STRATA_LOG_ERROR(diagnostics.logger(), "vk", "VkDeviceWrapper::init failed");
         return {};
     }
 
     // 3) Command pool
     if (!dev->command_pool_.init(dev->device_.device(), dev->device_.graphics_family()))
     {
+        STRATA_LOG_ERROR(diagnostics.logger(), "vk", "VkCommandBufferPool::init failed");
         return {};
     }
 
@@ -39,12 +47,14 @@ std::unique_ptr<VkGpuDevice> VkGpuDevice::create(rhi::DeviceCreateInfo const&   
     dev->frames_in_flight_ = 2; // start with 2
     if (!dev->init_frames())
     {
+        STRATA_LOG_ERROR(diagnostics.logger(), "vk", "VkGpuDevice::init_frames failed");
         return {};
     }
 
     // Basic pipeline is created after the first swapchain is created, because
     // it needs the swapchain color format. For now, we defer it to create_pipeline.
 
+    STRATA_LOG_INFO(diagnostics.logger(), "vk", "VkGpuDevice created");
     return dev;
 }
 
@@ -84,7 +94,17 @@ void VkGpuDevice::wait_idle()
 {
     if (device_.device() != VK_NULL_HANDLE)
     {
-        vkDeviceWaitIdle(device_.device());
+        VkResult res = vkDeviceWaitIdle(device_.device());
+        if (res != VK_SUCCESS)
+        {
+            if (diagnostics_)
+            {
+                diagnostics_->logger().log(base::LogLevel::Error,
+                                           "vk",
+                                           vk_error_message("vkDeviceWaitIdle", res),
+                                           std::source_location{});
+            }
+        }
     }
 }
 

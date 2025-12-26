@@ -13,6 +13,11 @@
 #include "gpu_types.h"
 #include "strata/platform/wsi_handle.h" // for surface creation
 
+namespace strata::base
+{
+class Diagnostics;
+}
+
 namespace strata::gfx::rhi
 {
 
@@ -106,7 +111,8 @@ struct DeviceCreateInfo
     // Frames in flight, debugging flags, etc., can go here
 };
 
-std::unique_ptr<IGpuDevice> create_device(DeviceCreateInfo const&    info,
+std::unique_ptr<IGpuDevice> create_device(base::Diagnostics&         diagnostics,
+                                          DeviceCreateInfo const&    info,
                                           platform::WsiHandle const& surface);
 
 } // namespace strata::gfx::rhi

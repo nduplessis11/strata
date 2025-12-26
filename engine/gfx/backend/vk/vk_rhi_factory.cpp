@@ -10,14 +10,15 @@
 namespace strata::gfx::rhi
 {
 // RHI factory: chooses backend (currently only Vulkan) and forwards to VkGpuDevice.
-std::unique_ptr<IGpuDevice> create_device(DeviceCreateInfo const&    info,
+std::unique_ptr<IGpuDevice> create_device(base::Diagnostics&         diagnostics,
+                                          DeviceCreateInfo const&    info,
                                           platform::WsiHandle const& surface)
 {
     switch (info.backend)
     {
     case BackendType::Vulkan:
     default:
-        return vk::VkGpuDevice::create(info, surface);
+        return vk::VkGpuDevice::create(diagnostics, info, surface);
     }
 }
 

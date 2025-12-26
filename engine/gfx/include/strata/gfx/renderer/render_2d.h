@@ -9,17 +9,26 @@
 
 #include "strata/gfx/rhi/gpu_device.h"
 
+namespace
+{
+class Diagnostics;
+}
+
 namespace strata::gfx::renderer
 {
 
 class Render2D
 {
   public:
-    Render2D(rhi::IGpuDevice& device, rhi::SwapchainHandle swapchain);
+    Render2D(base::Diagnostics&   diagnostics,
+             rhi::IGpuDevice&     device,
+             rhi::SwapchainHandle swapchain);
     ~Render2D();
 
     Render2D(Render2D&&) noexcept;
     Render2D& operator=(Render2D&&) noexcept;
+
+    [[nodiscard]] bool is_valid() const noexcept;
 
     rhi::FrameResult draw_frame();
     rhi::FrameResult recreate_pipeline();
@@ -27,7 +36,9 @@ class Render2D
   private:
     void release() noexcept;
 
-    rhi::IGpuDevice*     device_{nullptr}; // non-owning
+    base::Diagnostics* diagnostics_{nullptr}; // non-owning
+    rhi::IGpuDevice*   device_{nullptr};      // non-owning
+
     rhi::SwapchainHandle swapchain_{};
     rhi::PipelineHandle  pipeline_{};
 
@@ -39,6 +50,7 @@ class Render2D
 rhi::FrameResult draw_frame_and_handle_resize(rhi::IGpuDevice&      device,
                                               rhi::SwapchainHandle& swapchain,
                                               Render2D&             renderer,
-                                              rhi::Extent2D         framebuffer_size);
+                                              rhi::Extent2D         framebuffer_size,
+                                              base::Diagnostics&    diagnostics);
 
 } // namespace strata::gfx::renderer

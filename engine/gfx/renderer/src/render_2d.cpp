@@ -9,8 +9,10 @@
 
 #include "strata/gfx/renderer/render_2d.h"
 
-#include <print>
+#include <cstdint>
 #include <span>
+
+#include "strata/base/diagnostics.h"
 
 namespace strata::gfx::renderer
 {
@@ -21,9 +23,14 @@ using namespace strata::gfx::rhi;
 // Render2D
 // -------------------------------------------------------------------------
 
-Render2D::Render2D(IGpuDevice& device, SwapchainHandle swapchain)
-    : device_(&device), swapchain_(swapchain), pipeline_{}
+Render2D::Render2D(base::Diagnostics& diagnostics, IGpuDevice& device, SwapchainHandle swapchain)
+      : diagnostics_(&diagnostics)
+      , device_(&device)
+      , swapchain_(swapchain)
+      , pipeline_{}
 {
+    STRATA_ASSERT(diagnostics, swapchain_);
+
     // 1) Descriptor set layout: set 0, binding 0 = uniform buffer visible to fragment shader.
     DescriptorBinding binding{};
     binding.binding = 0;
@@ -37,14 +44,18 @@ Render2D::Render2D(IGpuDevice& device, SwapchainHandle swapchain)
     ubo_layout_ = device_->create_descriptor_set_layout(layout_desc);
     if (!ubo_layout_)
     {
-        std::println(stderr, "Render2D: failed to create UBO descriptor set layout");
+        STRATA_LOG_ERROR(diagnostics_->logger(),
+                         "renderer",
+                         "Render2D: create_descriptor_set_layout failed");
         return;
     }
 
     ubo_set_ = device_->allocate_descriptor_set(ubo_layout_);
     if (!ubo_set_)
     {
-        std::println(stderr, "Render2D: failed to allocate UBO descriptor set");
+        STRATA_LOG_ERROR(diagnostics_->logger(),
+                         "renderer",
+                         "Render2D: allocate_descriptor_set failed");
         return;
     }
 
@@ -65,7 +76,9 @@ Render2D::Render2D(IGpuDevice& device, SwapchainHandle swapchain)
     ubo_buffer_     = device_->create_buffer(buf_desc, init_bytes);
     if (!ubo_buffer_)
     {
-        std::println(stderr, "Render2D: failed to create UBO buffer");
+        STRATA_LOG_ERROR(diagnostics_->logger(),
+                         "renderer",
+                         "Render2D: create_buffer (UBO) failed");
         return;
     }
 
@@ -80,11 +93,13 @@ Render2D::Render2D(IGpuDevice& device, SwapchainHandle swapchain)
     FrameResult const upd = device_->update_descriptor_set(ubo_set_, std::span{&write, 1});
     if (upd != FrameResult::Ok)
     {
-        std::println(stderr, "Render2D: update_descriptor_set failed");
+        STRATA_LOG_ERROR(diagnostics_->logger(),
+                         "renderer",
+                         "Render2D: update_descriptor_set failed");
         return;
     }
 
-    std::println(stderr, "Render2D: UBO + descriptor set update OK");
+    STRATA_LOG_INFO(diagnostics_->logger(), "renderer", "Render2D: UBO + descriptor set update OK");
 
     // 4) Create pipeline (will use layout in next step)
     PipelineDesc desc{};
@@ -97,6 +112,19 @@ Render2D::Render2D(IGpuDevice& device, SwapchainHandle swapchain)
     desc.set_layouts                              = set_layouts;
 
     pipeline_ = device_->create_pipeline(desc);
+    if (!pipeline_)
+    {
+        STRATA_LOG_ERROR(diagnostics_->logger(), "renderer", "Render2D: create_pipeline failed");
+        return;
+    }
+
+    STRATA_LOG_INFO(diagnostics_->logger(), "renderer", "Render2D initialized");
+}
+
+bool Render2D::is_valid() const noexcept
+{
+    return diagnostics_ != nullptr && device_ != nullptr && swapchain_ && pipeline_ &&
+           ubo_layout_ && ubo_set_ && ubo_buffer_;
 }
 
 void Render2D::release() noexcept
@@ -123,7 +151,9 @@ void Render2D::release() noexcept
     ubo_buffer_ = {};
     ubo_layout_ = {};
     swapchain_  = {};
-    device_     = nullptr;
+
+    device_      = nullptr;
+    diagnostics_ = nullptr;
 }
 
 Render2D::~Render2D()
@@ -132,15 +162,21 @@ Render2D::~Render2D()
 }
 
 Render2D::Render2D(Render2D&& other) noexcept
-    : device_(other.device_), swapchain_(other.swapchain_), pipeline_(other.pipeline_),
-      ubo_layout_(other.ubo_layout_), ubo_set_(other.ubo_set_), ubo_buffer_(other.ubo_buffer_)
+      : diagnostics_(other.diagnostics_)
+      , device_(other.device_)
+      , swapchain_(other.swapchain_)
+      , pipeline_(other.pipeline_)
+      , ubo_layout_(other.ubo_layout_)
+      , ubo_set_(other.ubo_set_)
+      , ubo_buffer_(other.ubo_buffer_)
 {
-    other.device_     = nullptr;
-    other.swapchain_  = {};
-    other.pipeline_   = {};
-    other.ubo_layout_ = {};
-    other.ubo_set_    = {};
-    other.ubo_buffer_ = {};
+    other.diagnostics_ = nullptr;
+    other.device_      = nullptr;
+    other.swapchain_   = {};
+    other.pipeline_    = {};
+    other.ubo_layout_  = {};
+    other.ubo_set_     = {};
+    other.ubo_buffer_  = {};
 }
 
 Render2D& Render2D::operator=(Render2D&& other) noexcept
@@ -149,27 +185,37 @@ Render2D& Render2D::operator=(Render2D&& other) noexcept
     {
         release();
 
-        device_     = other.device_;
-        swapchain_  = other.swapchain_;
-        pipeline_   = other.pipeline_;
-        ubo_layout_ = other.ubo_layout_;
-        ubo_set_    = other.ubo_set_;
-        ubo_buffer_ = other.ubo_buffer_;
+        diagnostics_ = other.diagnostics_;
+        device_      = other.device_;
+        swapchain_   = other.swapchain_;
+        pipeline_    = other.pipeline_;
+        ubo_layout_  = other.ubo_layout_;
+        ubo_set_     = other.ubo_set_;
+        ubo_buffer_  = other.ubo_buffer_;
 
-        other.device_     = nullptr;
-        other.swapchain_  = {};
-        other.pipeline_   = {};
-        other.ubo_layout_ = {};
-        other.ubo_set_    = {};
-        other.ubo_buffer_ = {};
+        other.diagnostics_ = nullptr;
+        other.device_      = nullptr;
+        other.swapchain_   = {};
+        other.pipeline_    = {};
+        other.ubo_layout_  = {};
+        other.ubo_set_     = {};
+        other.ubo_buffer_  = {};
     }
     return *this;
 }
 
 FrameResult Render2D::draw_frame()
 {
-    if (!device_ || !swapchain_ || !pipeline_)
+    if (!is_valid())
+    {
+        if (diagnostics_)
+        {
+            STRATA_LOG_ERROR(diagnostics_->logger(),
+                             "renderer",
+                             "Render2D::draw_frame called while invalid");
+        }
         return FrameResult::Error;
+    }
 
     rhi::AcquiredImage img{};
     FrameResult const  acquire = device_->acquire_next_image(swapchain_, img);
@@ -306,10 +352,11 @@ FrameResult Render2D::recreate_pipeline()
 // Helper: draw_frame_and_handle_resize
 // -------------------------------------------------------------------------
 
-FrameResult draw_frame_and_handle_resize(IGpuDevice&      device,
-                                         SwapchainHandle& swapchain,
-                                         Render2D&        renderer,
-                                         Extent2D         framebuffer_size)
+FrameResult draw_frame_and_handle_resize(IGpuDevice&        device,
+                                         SwapchainHandle&   swapchain,
+                                         Render2D&          renderer,
+                                         Extent2D           framebuffer_size,
+                                         base::Diagnostics& diagnostics)
 {
 
     // Minimized / zero-area window: skip rendering but don't treat as error.
@@ -323,6 +370,11 @@ FrameResult draw_frame_and_handle_resize(IGpuDevice&      device,
         return result;
 
     // Any non-Ok, non-Error result is treated as "swapchain needs resize".
+    STRATA_LOG_INFO(diagnostics.logger(),
+                    "renderer",
+                    "Swapchain resize requested (result {})",
+                    static_cast<std::int32_t>(result));
+
     device.wait_idle();
 
     SwapchainDesc sc_desc{};
@@ -334,6 +386,9 @@ FrameResult draw_frame_and_handle_resize(IGpuDevice&      device,
     if (resize_result == FrameResult::Error)
     {
         // Failed to resize; treat as non-fatal (no frame rendered).
+        STRATA_LOG_WARN(diagnostics.logger(),
+                        "renderer",
+                        "resize_swapchain failed; skipping frame");
         return FrameResult::Ok;
     }
 
@@ -342,6 +397,9 @@ FrameResult draw_frame_and_handle_resize(IGpuDevice&      device,
     if (renderer.recreate_pipeline() != FrameResult::Ok)
     {
         // Treat as non-fatal: no frame rendered, but app keeps running.
+        STRATA_LOG_WARN(diagnostics.logger(),
+                        "renderer",
+                        "recreate_pipeline failed; skipping frame");
         return FrameResult::Ok;
     }
 

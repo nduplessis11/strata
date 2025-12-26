@@ -44,3 +44,9 @@ QualifierAlignment: Right
 ### Other Formatting Options ###
 Cpp11BracedListStyle: true
 SpaceBeforeParens: ControlStatements
+
+### Constructor Initializer Lists ###
+BreakConstructorInitializers: BeforeComma
+PackConstructorInitializers: Never
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+ConstructorInitializerIndentWidth: 6

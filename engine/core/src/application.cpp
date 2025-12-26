@@ -52,9 +52,14 @@ struct Application::Impl
          std::unique_ptr<gfx::rhi::IGpuDevice>&& device,
          gfx::rhi::SwapchainHandle               swapchain,
          gfx::renderer::Render2D&&               render)
-        : config(std::move(cfg)), diagnostics(std::move(diag)), window(std::move(window)),
-          surface(surface), device(std::move(device)), swapchain(swapchain),
-          renderer(std::move(render)), last_frame(clock::now())
+          : config(std::move(cfg))
+          , diagnostics(std::move(diag))
+          , window(std::move(window))
+          , surface(surface)
+          , device(std::move(device))
+          , swapchain(swapchain)
+          , renderer(std::move(render))
+          , last_frame(clock::now())
     {
     }
 
@@ -90,7 +95,7 @@ std::expected<Application, ApplicationError> Application::create(ApplicationConf
 
     auto surface = window.native_wsi();
 
-    auto device = gfx::rhi::create_device(config.device, surface);
+    auto device = gfx::rhi::create_device(*diagnostics, config.device, surface);
     if (!device)
     {
         STRATA_LOG_ERROR(diagnostics->logger(), "core", "Device creation failed");
@@ -116,7 +121,7 @@ std::expected<Application, ApplicationError> Application::create(ApplicationConf
         return std::unexpected(ApplicationError::SwapchainCreateFailed);
     }
 
-    gfx::renderer::Render2D renderer{*device, swapchain};
+    gfx::renderer::Render2D renderer{*diagnostics, *device, swapchain};
 
     std::unique_ptr<Impl, ImplDeleter> impl{new Impl{std::move(config),
                                                      std::move(diagnostics),
@@ -164,7 +169,8 @@ std::int16_t Application::run(TickFn tick)
         auto result = gfx::renderer::draw_frame_and_handle_resize(*impl_->device,
                                                                   impl_->swapchain,
                                                                   impl_->renderer,
-                                                                  framebuffer);
+                                                                  framebuffer,
+                                                                  *impl_->diagnostics);
 
         if (result == gfx::rhi::FrameResult::Error)
         {

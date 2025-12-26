@@ -11,9 +11,10 @@ target_compile_features(strata_platform PUBLIC cxx_std_23)
 enable_strict_warnings(strata_platform)
 
 # Inherit /utf-8 and UNICODE/_UNICODE from one place
-target_link_libraries(strata_platform 
-  PUBLIC 
-    engine_options 
+target_link_libraries(strata_platform
+  PUBLIC
+    engine_options
+  PRIVATE
     strata_base
 )
 
