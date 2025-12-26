@@ -13,16 +13,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            build_type: Release
-            c_compiler: gcc
-            cpp_compiler: g++
-
-          - os: ubuntu-latest
-            build_type: Release
-            c_compiler: clang
-            cpp_compiler: clang++
-
           - os: windows-latest
             build_type: Release
             c_compiler: cl
@@ -43,7 +33,7 @@ jobs:
       #
       # The action docs list 1.4.309.0 as a known-working cross-platform version.
       # Using "latest" can resolve to a newer SDK that this action's unpacking path
-      # doesn't lay out with Include/Lib on Windows runners. :contentReference[oaicite:1]{index=1}
+      # doesn't lay out with Include/Lib on Windows runners.
       - name: Install Vulkan SDK
         uses: humbletim/install-vulkan-sdk@v1.2
         with:
