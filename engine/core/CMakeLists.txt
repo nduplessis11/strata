@@ -13,6 +13,7 @@ enable_strict_warnings(strata_core)
 target_link_libraries(strata_core 
   PUBLIC 
     engine_options 
+    strata_base
     strata_platform
     strata_gfx
 )

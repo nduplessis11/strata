@@ -2,14 +2,16 @@
 // engine/core/src/application.cpp
 //
 // Purpose:
-//   Placeholder source for the engine-level application wrapper. Intended to
-//   house lifecycle management and high-level startup/shutdown code.
+//   Engine-level application wrapper. Owns platform window + graphics bring-up,
+//   drives the main loop, and owns the Diagnostics instance.
 // -----------------------------------------------------------------------------
 
 #include "strata/core/application.h"
 
-#include <print>
+#include <algorithm>
 #include <thread>
+
+#include "strata/base/diagnostics.h"
 
 namespace strata::core
 {
@@ -29,6 +31,9 @@ struct Application::Impl
     ApplicationConfig config{};
     bool              exit_requested{false};
 
+    // Explcitly owned diagnostics (stable address for the lifetime of Application).
+    std::unique_ptr<base::Diagnostics> diagnostics{};
+
     platform::Window    window;
     platform::WsiHandle surface{};
 
@@ -41,14 +46,15 @@ struct Application::Impl
     clock::time_point last_frame{};
 
     Impl(ApplicationConfig                       cfg,
+         std::unique_ptr<base::Diagnostics>&&    diag,
          platform::Window&&                      window,
          platform::WsiHandle                     surface,
          std::unique_ptr<gfx::rhi::IGpuDevice>&& device,
          gfx::rhi::SwapchainHandle               swapchain,
          gfx::renderer::Render2D&&               render)
-        : config(std::move(cfg)), window(std::move(window)), surface(surface),
-          device(std::move(device)), swapchain(swapchain), renderer(std::move(render)),
-          last_frame(clock::now())
+        : config(std::move(cfg)), diagnostics(std::move(diag)), window(std::move(window)),
+          surface(surface), device(std::move(device)), swapchain(swapchain),
+          renderer(std::move(render)), last_frame(clock::now())
     {
     }
 
@@ -72,9 +78,13 @@ std::expected<Application, ApplicationError> Application::create(ApplicationConf
 {
     using gfx::rhi::SwapchainDesc;
 
+    // Create Diagnostics first; it is explcitly owned and passed down.
+    auto diagnostics = std::make_unique<base::Diagnostics>();
+
     platform::Window window{config.window_desc};
     if (window.should_close())
     {
+        STRATA_LOG_ERROR(diagnostics->logger(), "core", "Window creation failed");
         return std::unexpected(ApplicationError::WindowCreateFailed);
     }
 
@@ -83,6 +93,7 @@ std::expected<Application, ApplicationError> Application::create(ApplicationConf
     auto device = gfx::rhi::create_device(config.device, surface);
     if (!device)
     {
+        STRATA_LOG_ERROR(diagnostics->logger(), "core", "Device creation failed");
         return std::unexpected(ApplicationError::DeviceCreateFailed);
     }
 
@@ -101,18 +112,21 @@ std::expected<Application, ApplicationError> Application::create(ApplicationConf
     auto swapchain = device->create_swapchain(sc_desc, surface);
     if (!swapchain)
     {
+        STRATA_LOG_ERROR(diagnostics->logger(), "core", "Swapchain creation failed");
         return std::unexpected(ApplicationError::SwapchainCreateFailed);
     }
 
     gfx::renderer::Render2D renderer{*device, swapchain};
 
     std::unique_ptr<Impl, ImplDeleter> impl{new Impl{std::move(config),
+                                                     std::move(diagnostics),
                                                      std::move(window),
                                                      surface,
                                                      std::move(device),
                                                      swapchain,
                                                      std::move(renderer)}};
 
+    STRATA_LOG_INFO(impl->diagnostics->logger(), "core", "Application created successfully");
     return Application{std::move(impl)};
 }
 
@@ -154,7 +168,7 @@ std::int16_t Application::run(TickFn tick)
 
         if (result == gfx::rhi::FrameResult::Error)
         {
-            std::println("Render error; exiting.");
+            STRATA_LOG_ERROR(impl_->diagnostics->logger(), "core", "Render error; exiting.");
             return 2;
         }
 
@@ -165,6 +179,7 @@ std::int16_t Application::run(TickFn tick)
     }
 
     impl_->device->wait_idle();
+    STRATA_LOG_INFO(impl_->diagnostics->logger(), "core", "Application exiting normally");
     return 0;
 }
 
@@ -198,6 +213,15 @@ gfx::renderer::Render2D& Application::renderer() noexcept
 gfx::renderer::Render2D const& Application::renderer() const noexcept
 {
     return impl_->renderer;
+}
+
+base::Diagnostics& Application::diagnostics() noexcept
+{
+    return *impl_->diagnostics;
+}
+base::Diagnostics const& Application::diagnostics() const noexcept
+{
+    return *impl_->diagnostics;
 }
 
 ApplicationConfig const& Application::config() const noexcept
