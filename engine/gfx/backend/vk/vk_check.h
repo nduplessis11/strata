@@ -15,6 +15,8 @@
 #include <format>
 #include <source_location>
 #include <string_view>
+#include <cstdint>
+
 #include <vulkan/vulkan.h>
 
 #include "strata/base/diagnostics.h"
@@ -87,7 +89,7 @@ constexpr std::string_view to_string(VkResult r) noexcept
 [[nodiscard]]
 inline std::string vk_error_message(char const* expr, VkResult r)
 {
-    return std::format("{} -> {} ({})", expr, to_string(r), static_cast<int>(r));
+    return std::format("{} -> {} ({})", expr, to_string(r), static_cast<std::int32_t>(r));
 }
 
 } // namespace strata::gfx::vk

@@ -157,6 +157,17 @@ Private implementation:
 - `*Error` -- error enums
 - `*CreateInfo` -- creation policies
 
+### Integer types
+- Prefer fixed-width integer types from `<cstdint>` over builtin `int`/`long`
+- Use `std::int32_t` instead of `int`
+- Use `std::uint32_t` instead of `unsigned int`
+- Use `std::size_t` for sizes/indices that naturally match container sizes
+- Use `std::ptrdiff_t` for pointer differences or signed indices tied to pointer math
+
+Rationale:
+- Stable size accross platforms and compilers
+- Reduces ambiguity at API boundaries (serialization, file formats, GPU/driver structs, etc.)
+
 ---
 
 ## Function and method naming
