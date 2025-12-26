@@ -19,12 +19,10 @@ jobs:
             build_type: Release
             c_compiler: cl
             cpp_compiler: cl
-
           - os: ubuntu-latest
             build_type: Release
             c_compiler: gcc
             cpp_compiler: g++
-
           - os: ubuntu-latest
             build_type: Release
             c_compiler: clang
@@ -58,15 +56,33 @@ jobs:
         run: |
           echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
-      # Optional: show Vulkan SDK layout on Windows to debug FindVulkan issues
-      - name: Verify Vulkan SDK layout (Windows)
+      # ---- Fix Vulkan SDK root on Windows (portable SDK extraction has varying layout) ----
+      - name: Locate Vulkan SDK root (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          echo "VULKAN_SDK=$VULKAN_SDK"
-          ls -la "$VULKAN_SDK" || true
-          ls -la "$VULKAN_SDK/Include" | head || true
-          ls -la "$VULKAN_SDK/Lib" | head || true
+          echo "Initial VULKAN_SDK=$VULKAN_SDK"
+
+          # Find the directory that contains Include/vulkan/vulkan.h
+          sdk_root="$(find "$VULKAN_SDK" -type f -path "*/Include/vulkan/vulkan.h" -print -quit | xargs -I{} dirname "{}" | xargs -I{} dirname "{}")"
+          if [ -z "$sdk_root" ]; then
+            echo "::error::Could not locate Vulkan headers (Include/vulkan/vulkan.h) under $VULKAN_SDK"
+            echo "Top-level contents:"
+            ls -la "$VULKAN_SDK" || true
+            echo "Tree (depth 3):"
+            find "$VULKAN_SDK" -maxdepth 3 -type d -print || true
+            exit 1
+          fi
+
+          echo "Resolved Vulkan SDK root: $sdk_root"
+          echo "VULKAN_SDK=$sdk_root" >> "$GITHUB_ENV"
+          echo "$sdk_root/Bin" >> "$GITHUB_PATH"
+          echo "$sdk_root/bin" >> "$GITHUB_PATH"
+
+          echo "SDK root contents:"
+          ls -la "$sdk_root" || true
+          ls -la "$sdk_root/Include" | head || true
+          ls -la "$sdk_root/Lib" | head || true
 
       # ---- Configure ----
       - name: Configure CMake (Windows)
@@ -77,9 +93,8 @@ jobs:
           -S "${{ github.workspace }}"
           -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
           -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          -DVulkan_INCLUDE_DIR="$VULKAN_SDK/Include"
-          -DVulkan_LIBRARY="$VULKAN_SDK/Lib/vulkan-1.lib"
+          -DVulkan_ROOT="${VULKAN_SDK}"
+          -DCMAKE_PREFIX_PATH="${VULKAN_SDK}"
 
       - name: Configure CMake (Linux)
         if: runner.os == 'Linux'
