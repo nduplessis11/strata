@@ -34,13 +34,6 @@ void log_err(base::Diagnostics* diag, std::string_view msg)
     diag->debug_break_on_error();
 }
 
-void log_warn(base::Diagnostics* diag, std::string_view msg)
-{
-    if (!diag)
-        return;
-    diag->logger().log(base::LogLevel::Warn, "vk.device", msg, std::source_location::current());
-}
-
 void log_info(base::Diagnostics* diag, std::string_view msg)
 {
     if (!diag)
