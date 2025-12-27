@@ -77,6 +77,9 @@ VkGpuDevice::~VkGpuDevice()
     // Buffers
     cleanup_buffers();
 
+    // Textures
+    cleanup_textures();
+
     // Destroy sync primitives
     destroy_render_finished_per_image();
     destroy_frames();

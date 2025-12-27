@@ -2,7 +2,7 @@
 // engine/gfx/backend/vk/vk_gpu_device/vk_gpu_device_resources.cpp
 //
 // Purpose:
-//   Resource creation/destruction stubs (buffers, textures).
+//   Resource creation/destruction (buffers, textures).
 // -----------------------------------------------------------------------------
 
 #include "vk_gpu_device.h"
@@ -27,13 +27,22 @@ constexpr bool has_flag(rhi::BufferUsage usage, rhi::BufferUsage flag) noexcept
 }
 
 [[nodiscard]]
+constexpr bool has_flag(rhi::TextureUsage usage, rhi::TextureUsage flag) noexcept
+{
+    return (static_cast<std::uint32_t>(usage) & static_cast<std::uint32_t>(flag)) != 0;
+}
+
+[[nodiscard]]
 VkBufferUsageFlags to_vk_buffer_usage_flags(rhi::BufferUsage usage) noexcept
 {
     VkBufferUsageFlags out = 0;
+
     if (has_flag(usage, rhi::BufferUsage::Vertex))
         out |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+
     if (has_flag(usage, rhi::BufferUsage::Index))
         out |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+
     if (has_flag(usage, rhi::BufferUsage::Uniform))
         out |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 
@@ -44,9 +53,94 @@ VkBufferUsageFlags to_vk_buffer_usage_flags(rhi::BufferUsage usage) noexcept
     return out;
 }
 
-[[nodiscard]] std::optional<std::uint32_t> find_memory_type_index(VkPhysicalDevice      physical,
-                                                                  std::uint32_t         type_bits,
-                                                                  VkMemoryPropertyFlags required)
+[[nodiscard]]
+VkImageUsageFlags to_vk_image_usage_flags(rhi::TextureUsage usage) noexcept
+{
+    VkImageUsageFlags out = 0;
+
+    if (has_flag(usage, rhi::TextureUsage::Sampled))
+        out |= VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    if (has_flag(usage, rhi::TextureUsage::ColorAttachment))
+        out |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+    if (has_flag(usage, rhi::TextureUsage::DepthStencil))
+        out |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    return out;
+}
+
+[[nodiscard]]
+VkFormat to_vk_format(rhi::Format fmt) noexcept
+{
+    switch (fmt)
+    {
+    case rhi::Format::R8G8B8A8_UNorm:
+        return VK_FORMAT_R8G8B8A8_UNORM;
+    case rhi::Format::B8G8R8A8_UNorm:
+        return VK_FORMAT_B8G8R8A8_UNORM;
+    case rhi::Format::D24_UNorm_S8_UInt:
+        return VK_FORMAT_D24_UNORM_S8_UINT;
+    case rhi::Format::D32_SFloat:
+        return VK_FORMAT_D32_SFLOAT;
+    default:
+        return VK_FORMAT_UNDEFINED;
+    }
+}
+
+[[nodiscard]]
+constexpr bool is_depth_format(VkFormat fmt) noexcept
+{
+    switch (fmt)
+    {
+    case VK_FORMAT_D16_UNORM:
+    case VK_FORMAT_X8_D24_UNORM_PACK32:
+    case VK_FORMAT_D24_UNORM_S8_UINT:
+    case VK_FORMAT_D32_SFLOAT:
+    case VK_FORMAT_D16_UNORM_S8_UINT:
+    case VK_FORMAT_D32_SFLOAT_S8_UINT:
+        return true;
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]]
+constexpr bool is_stencil_format(VkFormat fmt) noexcept
+{
+    switch (fmt)
+    {
+    case VK_FORMAT_S8_UINT:
+    case VK_FORMAT_D16_UNORM_S8_UINT:
+    case VK_FORMAT_D24_UNORM_S8_UINT:
+    case VK_FORMAT_D32_SFLOAT_S8_UINT:
+        return true;
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]]
+VkImageAspectFlags infer_aspect_mask(VkFormat fmt, rhi::TextureUsage usage) noexcept
+{
+    // If caller explicitly wants a depth/stencil attachment, prefer depth/stencil aspects.
+    if (has_flag(usage, rhi::TextureUsage::DepthStencil) || is_depth_format(fmt))
+    {
+        VkImageAspectFlags aspect = 0;
+        aspect |= VK_IMAGE_ASPECT_DEPTH_BIT;
+        if (is_stencil_format(fmt))
+            aspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        return aspect;
+    }
+
+    // Otherwise assume color.
+    return VK_IMAGE_ASPECT_COLOR_BIT;
+}
+
+[[nodiscard]]
+std::optional<std::uint32_t> find_memory_type_index(VkPhysicalDevice      physical,
+                                                    std::uint32_t         type_bits,
+                                                    VkMemoryPropertyFlags required)
 {
     if (physical == VK_NULL_HANDLE)
         return std::nullopt;
@@ -328,14 +422,306 @@ VkBuffer VkGpuDevice::get_vk_buffer(rhi::BufferHandle handle) const noexcept
 
 // --- Textures ------------------------------------------------------------
 
-rhi::TextureHandle VkGpuDevice::create_texture(rhi::TextureDesc const&)
+rhi::TextureHandle VkGpuDevice::create_texture(rhi::TextureDesc const& desc)
 {
-    return allocate_texture_handle();
+    using namespace strata::base;
+
+    if (!diagnostics_)
+        return {};
+
+    auto& diag = *diagnostics_;
+
+    if (desc.size.width == 0 || desc.size.height == 0)
+    {
+        STRATA_LOG_ERROR(diag.logger(), "vk.tex", "create_texture failed: size is 0");
+        diag.debug_break_on_error();
+        return {};
+    }
+
+    if (desc.mip_levels == 0)
+    {
+        STRATA_LOG_ERROR(diag.logger(), "vk.tex", "create_texture failed: mip_levels == 0");
+        diag.debug_break_on_error();
+        return {};
+    }
+
+    VkDevice const         vk_device   = device_.device();
+    VkPhysicalDevice const vk_physical = device_.physical();
+
+    if (vk_device == VK_NULL_HANDLE || vk_physical == VK_NULL_HANDLE)
+    {
+        STRATA_LOG_ERROR(diag.logger(), "vk.tex", "create_texture failed: device/physical is null");
+        diag.debug_break_on_error();
+        return {};
+    }
+
+    VkFormat const vk_format = to_vk_format(desc.format);
+    if (vk_format == VK_FORMAT_UNDEFINED)
+    {
+        STRATA_LOG_ERROR(diag.logger(), "vk.tex", "create_texture failed: unsupported format");
+        diag.debug_break_on_error();
+        return {};
+    }
+
+    VkImageUsageFlags const usage_flags = to_vk_image_usage_flags(desc.usage);
+    if (usage_flags == 0)
+    {
+        STRATA_LOG_ERROR(diag.logger(), "vk.tex", "create_texture failed: usage flags == 0");
+        diag.debug_break_on_error();
+        return {};
+    }
+
+    rhi::TextureHandle const handle = allocate_texture_handle();
+    std::size_t const        index  = static_cast<std::size_t>(handle.value - 1);
+
+    if (index >= textures_.size())
+        textures_.resize(index + 1);
+
+    textures_[index] = TextureRecord{};
+
+    VkImage        image  = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    VkImageView    view   = VK_NULL_HANDLE;
+
+    auto fail = [&](char const* msg, VkResult res = VK_SUCCESS) -> rhi::TextureHandle
+    {
+        if (res != VK_SUCCESS)
+        {
+            STRATA_LOG_ERROR(diag.logger(),
+                             "vk.tex",
+                             "{} ({})",
+                             msg,
+                             ::strata::gfx::vk::to_string(res));
+        }
+        else
+        {
+            STRATA_LOG_ERROR(diag.logger(), "vk.tex", "{}", msg);
+        }
+        diag.debug_break_on_error();
+
+        if (view != VK_NULL_HANDLE)
+        {
+            vkDestroyImageView(vk_device, view, nullptr);
+            view = VK_NULL_HANDLE;
+        }
+        if (image != VK_NULL_HANDLE)
+        {
+            vkDestroyImage(vk_device, image, nullptr);
+            image = VK_NULL_HANDLE;
+        }
+        if (memory != VK_NULL_HANDLE)
+        {
+            vkFreeMemory(vk_device, memory, nullptr);
+            memory = VK_NULL_HANDLE;
+        }
+
+        textures_[index] = TextureRecord{};
+        return {};
+    };
+
+    // 1) Create image (optimal tiling, device local)
+    VkImageCreateInfo ici{};
+    ici.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    ici.imageType     = VK_IMAGE_TYPE_2D;
+    ici.format        = vk_format;
+    ici.extent.width  = desc.size.width;
+    ici.extent.height = desc.size.height;
+    ici.extent.depth  = 1;
+    ici.mipLevels     = desc.mip_levels;
+    ici.arrayLayers   = 1;
+    ici.samples       = VK_SAMPLE_COUNT_1_BIT;
+    ici.tiling        = VK_IMAGE_TILING_OPTIMAL;
+    ici.usage         = usage_flags;
+    ici.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+    ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VkResult res = vkCreateImage(vk_device, &ici, nullptr, &image);
+    if (res != VK_SUCCESS)
+        return fail("vkCreateImage failed", res);
+
+    // 2) Allocate memory
+    VkMemoryRequirements req{};
+    vkGetImageMemoryRequirements(vk_device, image, &req);
+
+    VkMemoryPropertyFlags const required_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+    auto const mem_type_index =
+        find_memory_type_index(vk_physical, req.memoryTypeBits, required_flags);
+    if (!mem_type_index.has_value())
+        return fail("No DEVICE_LOCAL memory type found for image");
+
+    VkMemoryAllocateInfo mai{};
+    mai.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    mai.allocationSize  = req.size;
+    mai.memoryTypeIndex = mem_type_index.value();
+
+    res = vkAllocateMemory(vk_device, &mai, nullptr, &memory);
+    if (res != VK_SUCCESS)
+        return fail("vkAllocateMemory failed", res);
+
+    res = vkBindImageMemory(vk_device, image, memory, 0);
+    if (res != VK_SUCCESS)
+        return fail("vkBindImageMemory failed", res);
+
+    // 3) Create view
+    VkImageAspectFlags const aspect = infer_aspect_mask(vk_format, desc.usage);
+
+    VkImageViewCreateInfo vci{};
+    vci.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    vci.image                           = image;
+    vci.viewType                        = VK_IMAGE_VIEW_TYPE_2D;
+    vci.format                          = vk_format;
+    vci.subresourceRange.aspectMask     = aspect;
+    vci.subresourceRange.baseMipLevel   = 0;
+    vci.subresourceRange.levelCount     = desc.mip_levels;
+    vci.subresourceRange.baseArrayLayer = 0;
+    vci.subresourceRange.layerCount     = 1;
+
+    res = vkCreateImageView(vk_device, &vci, nullptr, &view);
+    if (res != VK_SUCCESS)
+        return fail("vkCreateImageView failed", res);
+
+    // 4) Commit record
+    TextureRecord rec{};
+    rec.image       = image;
+    rec.memory      = memory;
+    rec.view        = view;
+    rec.extent      = {desc.size.width, desc.size.height};
+    rec.format      = vk_format;
+    rec.aspect_mask = aspect;
+    rec.layout      = VK_IMAGE_LAYOUT_UNDEFINED;
+    rec.usage       = desc.usage;
+    rec.mip_levels  = desc.mip_levels;
+
+    textures_[index] = rec;
+
+    STRATA_LOG_DEBUG(diag.logger(),
+                     "vk.tex",
+                     "create_texture({}, {}x{}, fmt={}, usage=0x{:x}, mip={}) OK",
+                     handle.value,
+                     desc.size.width,
+                     desc.size.height,
+                     static_cast<std::int32_t>(vk_format),
+                     static_cast<std::uint32_t>(usage_flags),
+                     desc.mip_levels);
+
+    return handle;
 }
 
-void VkGpuDevice::destroy_texture(rhi::TextureHandle)
+void VkGpuDevice::destroy_texture(rhi::TextureHandle handle)
 {
-    // Stub
+    if (!handle)
+        return;
+
+    std::size_t const index = static_cast<std::size_t>(handle.value - 1);
+    if (index >= textures_.size())
+        return;
+
+    TextureRecord& rec = textures_[index];
+
+    VkDevice vk_device = device_.device();
+    if (vk_device == VK_NULL_HANDLE)
+    {
+        // Can't call Vulkan, but we MUST invalidate our registry entry.
+        rec = TextureRecord{};
+        return;
+    }
+
+    if (rec.view != VK_NULL_HANDLE)
+    {
+        vkDestroyImageView(vk_device, rec.view, nullptr);
+        rec.view = VK_NULL_HANDLE;
+    }
+
+    if (rec.image != VK_NULL_HANDLE)
+    {
+        vkDestroyImage(vk_device, rec.image, nullptr);
+        rec.image = VK_NULL_HANDLE;
+    }
+
+    if (rec.memory != VK_NULL_HANDLE)
+    {
+        vkFreeMemory(vk_device, rec.memory, nullptr);
+        rec.memory = VK_NULL_HANDLE;
+    }
+
+    rec = TextureRecord{};
+}
+
+void VkGpuDevice::cleanup_textures()
+{
+    VkDevice vk_device = device_.device();
+    if (vk_device != VK_NULL_HANDLE)
+    {
+        for (auto& rec : textures_)
+        {
+            if (rec.view != VK_NULL_HANDLE)
+            {
+                vkDestroyImageView(vk_device, rec.view, nullptr);
+                rec.view = VK_NULL_HANDLE;
+            }
+            if (rec.image != VK_NULL_HANDLE)
+            {
+                vkDestroyImage(vk_device, rec.image, nullptr);
+                rec.image = VK_NULL_HANDLE;
+            }
+            if (rec.memory != VK_NULL_HANDLE)
+            {
+                vkFreeMemory(vk_device, rec.memory, nullptr);
+                rec.memory = VK_NULL_HANDLE;
+            }
+            rec = TextureRecord{};
+        }
+    }
+    textures_.clear();
+}
+
+VkImage VkGpuDevice::get_vk_image(rhi::TextureHandle handle) const noexcept
+{
+    if (!handle)
+        return VK_NULL_HANDLE;
+
+    std::size_t const index = static_cast<std::size_t>(handle.value - 1);
+    if (index >= textures_.size())
+        return VK_NULL_HANDLE;
+
+    return textures_[index].image;
+}
+
+VkImageView VkGpuDevice::get_vk_image_view(rhi::TextureHandle handle) const noexcept
+{
+    if (!handle)
+        return VK_NULL_HANDLE;
+
+    std::size_t const index = static_cast<std::size_t>(handle.value - 1);
+    if (index >= textures_.size())
+        return VK_NULL_HANDLE;
+
+    return textures_[index].view;
+}
+
+VkImageLayout VkGpuDevice::get_vk_image_layout(rhi::TextureHandle handle) const noexcept
+{
+    if (!handle)
+        return VK_IMAGE_LAYOUT_UNDEFINED;
+
+    std::size_t const index = static_cast<std::size_t>(handle.value - 1);
+    if (index >= textures_.size())
+        return VK_IMAGE_LAYOUT_UNDEFINED;
+
+    return textures_[index].layout;
+}
+
+void VkGpuDevice::set_vk_image_layout(rhi::TextureHandle handle, VkImageLayout layout) noexcept
+{
+    if (!handle)
+        return;
+
+    std::size_t const index = static_cast<std::size_t>(handle.value - 1);
+    if (index >= textures_.size())
+        return;
+
+    textures_[index].layout = layout;
 }
 
 } // namespace strata::gfx::vk
