@@ -141,6 +141,23 @@ class VkGpuDevice final : public rhi::IGpuDevice
         bool           host_visible{false};
     };
 
+    // --- Texture registry -----------------------------------------------------
+    struct TextureRecord
+    {
+        VkImage        image{VK_NULL_HANDLE};
+        VkDeviceMemory memory{VK_NULL_HANDLE};
+        VkImageView    view{VK_NULL_HANDLE};
+
+        VkExtent2D extent{0, 0};
+        VkFormat   format{VK_FORMAT_UNDEFINED};
+
+        VkImageAspectFlags aspect_mask{0};
+        VkImageLayout      layout{VK_IMAGE_LAYOUT_UNDEFINED};
+
+        rhi::TextureUsage usage{rhi::TextureUsage::NoFlags};
+        std::uint32_t     mip_levels{1};
+    };
+
     bool init_frames();
     void destroy_frames();
 
@@ -167,6 +184,15 @@ class VkGpuDevice final : public rhi::IGpuDevice
     // --- Buffer internals ----------------------------------------------------
     VkBuffer get_vk_buffer(rhi::BufferHandle handle) const noexcept;
     void     cleanup_buffers();
+
+    // --- Texture internals ---------------------------------------------------
+    VkImage     get_vk_image(rhi::TextureHandle handle) const noexcept;
+    VkImageView get_vk_image_view(rhi::TextureHandle handle) const noexcept;
+
+    VkImageLayout get_vk_image_layout(rhi::TextureHandle handle) const noexcept;
+    void          set_vk_image_layout(rhi::TextureHandle handle, VkImageLayout layout) noexcept;
+
+    void cleanup_textures();
 
     // --- Diagnostics (explicitly provided by Application) ---------------------
     base::Diagnostics* diagnostics_{nullptr}; // non-owning
@@ -205,7 +231,8 @@ class VkGpuDevice final : public rhi::IGpuDevice
     std::vector<VkDescriptorSetLayout> descriptor_set_layouts_{};
     std::vector<VkDescriptorSet>       descriptor_sets_{};
 
-    std::vector<BufferRecord> buffers_{};
+    std::vector<BufferRecord>  buffers_{};
+    std::vector<TextureRecord> textures_{};
 
     // Single global pool (simple v1): lazily created.
     // Stored as optional because VkDescriptorPoolWrapper is move-only and not
