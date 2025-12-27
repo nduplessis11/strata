@@ -44,7 +44,7 @@ debug_callback([[maybe_unused]] VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     if (!diag)
         return VK_FALSE;
 
-    std::string_view msg =
+    std::string_view const msg =
         (callback_data && callback_data->pMessage) ? callback_data->pMessage : "(null)";
 
     // Pass default source_location (line==0) so sinks can omit useless file:line.

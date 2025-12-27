@@ -7,27 +7,37 @@
 
 #include "vk_gpu_device.h"
 
+#include "../vk_check.h"
+#include "strata/base/diagnostics.h"
+
 #include <limits>
-#include <print>
 
 namespace strata::gfx::vk
 {
 
 namespace
 {
+
 constexpr std::uint64_t fence_timeout = std::numeric_limits<std::uint64_t>::max();
 }
 
 rhi::SwapchainHandle VkGpuDevice::create_swapchain(rhi::SwapchainDesc const& desc,
                                                    strata::platform::WsiHandle const&)
 {
-    // We have only one swapchain; ignore the handle value and always use {1}.
+    using namespace strata::base;
+
+    if (!diagnostics_)
+        return {};
+
+    auto& diag = *diagnostics_;
+
     if (!device_.device())
     {
-        return rhi::SwapchainHandle{};
+        return {};
     }
 
     wait_idle();
+
     swapchain_.cleanup();
     swapchain_image_layouts_.clear();
 
@@ -38,7 +48,10 @@ rhi::SwapchainHandle VkGpuDevice::create_swapchain(rhi::SwapchainDesc const& des
                          device_.present_family(),
                          desc))
     {
-        return rhi::SwapchainHandle{};
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.swapchain",
+                         "create_swapchain: VkSwapchainWrapper::init failed");
+        return {};
     }
 
     std::size_t const image_count = swapchain_.images().size();
@@ -48,26 +61,38 @@ rhi::SwapchainHandle VkGpuDevice::create_swapchain(rhi::SwapchainDesc const& des
 
     if (!init_render_finished_per_image(image_count))
     {
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.swapchain",
+                         "create_swapchain: init_render_finished_per_image failed");
         swapchain_.cleanup();
         swapchain_image_layouts_.clear();
         images_in_flight_.clear();
-        return rhi::SwapchainHandle{};
+        destroy_render_finished_per_image();
+        return {};
     }
 
-    // Pipeline is created separately via create_pipeline().
     return rhi::SwapchainHandle{1};
 }
 
 rhi::FrameResult VkGpuDevice::resize_swapchain(rhi::SwapchainHandle, rhi::SwapchainDesc const& desc)
 {
+    using namespace strata::base;
+    using rhi::FrameResult;
+
+    if (!diagnostics_)
+        return FrameResult::Error;
+
+    auto& diag = *diagnostics_;
+
     if (!device_.device())
-    {
-        return rhi::FrameResult::Error;
-    }
+        return FrameResult::Error;
 
     wait_idle();
+
     swapchain_.cleanup();
     swapchain_image_layouts_.clear();
+    images_in_flight_.clear();
+    destroy_render_finished_per_image();
 
     if (!swapchain_.init(device_.physical(),
                          device_.device(),
@@ -76,7 +101,10 @@ rhi::FrameResult VkGpuDevice::resize_swapchain(rhi::SwapchainHandle, rhi::Swapch
                          device_.present_family(),
                          desc))
     {
-        return rhi::FrameResult::Error;
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.swapchain",
+                         "resize_swapchain: VkSwapchainWrapper::init failed");
+        return FrameResult::Error;
     }
 
     std::size_t const image_count = swapchain_.images().size();
@@ -86,21 +114,31 @@ rhi::FrameResult VkGpuDevice::resize_swapchain(rhi::SwapchainHandle, rhi::Swapch
 
     if (!init_render_finished_per_image(image_count))
     {
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.swapchain",
+                         "resize_swapchain: init_render_finished_per_image failed");
         swapchain_.cleanup();
         swapchain_image_layouts_.clear();
         images_in_flight_.clear();
-        return rhi::FrameResult::Error;
+        destroy_render_finished_per_image();
+        return FrameResult::Error;
     }
 
-    // The renderer will recreate the pipeline after resize via Render2D.
+    // Invalidate pipeline; renderer will recreate.
     basic_pipeline_ = BasicPipeline{};
 
-    return rhi::FrameResult::Ok;
+    return FrameResult::Ok;
 }
 
 rhi::FrameResult VkGpuDevice::acquire_next_image(rhi::SwapchainHandle, rhi::AcquiredImage& out)
 {
+    using namespace strata::base;
     using rhi::FrameResult;
+
+    if (!diagnostics_)
+        return FrameResult::Error;
+
+    auto& diag = *diagnostics_;
 
     if (!swapchain_.valid() || !device_.device())
         return FrameResult::Error;
@@ -111,8 +149,14 @@ rhi::FrameResult VkGpuDevice::acquire_next_image(rhi::SwapchainHandle, rhi::Acqu
     FrameSlot const& frame     = frames_[frame_index_];
 
     // Wait for this frame slot to be available
-    if (vkWaitForFences(vk_device, 1, &frame.in_flight, VK_TRUE, fence_timeout) != VK_SUCCESS)
+    VkResult const wr = vkWaitForFences(vk_device, 1, &frame.in_flight, VK_TRUE, fence_timeout);
+    if (wr != VK_SUCCESS)
     {
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.swapchain",
+                         "vkWaitForFences(frame.in_flight) failed: {}",
+                         ::strata::gfx::vk::to_string(wr));
+        diag.debug_break_on_error();
         return FrameResult::Error;
     }
 
@@ -127,8 +171,16 @@ rhi::FrameResult VkGpuDevice::acquire_next_image(rhi::SwapchainHandle, rhi::Acqu
 
     if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR)
         return FrameResult::ResizeNeeded;
+
     if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR)
+    {
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.swapchain",
+                         "vkAcquireNextImageKHR failed: {}",
+                         ::strata::gfx::vk::to_string(acquire_result));
+        diag.debug_break_on_error();
         return FrameResult::Error;
+    }
 
     // Wait if this swapchain image is still in flight
     if (image_index < images_in_flight_.size())
@@ -136,11 +188,19 @@ rhi::FrameResult VkGpuDevice::acquire_next_image(rhi::SwapchainHandle, rhi::Acqu
         VkFence img_fence = images_in_flight_[image_index];
         if (img_fence != VK_NULL_HANDLE)
         {
-            if (vkWaitForFences(vk_device, 1, &img_fence, VK_TRUE, fence_timeout) != VK_SUCCESS)
+            VkResult const iw = vkWaitForFences(vk_device, 1, &img_fence, VK_TRUE, fence_timeout);
+            if (iw != VK_SUCCESS)
             {
+                STRATA_LOG_ERROR(diag.logger(),
+                                 "vk.swapchain",
+                                 "vkWaitForFences(images_in_flight_[{}]) failed: {}",
+                                 image_index,
+                                 ::strata::gfx::vk::to_string(iw));
+                diag.debug_break_on_error();
                 return FrameResult::Error;
             }
         }
+
         images_in_flight_[image_index] = frame.in_flight;
     }
 
@@ -154,12 +214,22 @@ rhi::FrameResult VkGpuDevice::acquire_next_image(rhi::SwapchainHandle, rhi::Acqu
 
 rhi::FrameResult VkGpuDevice::present(rhi::SwapchainHandle, std::uint32_t image_index)
 {
+    using namespace strata::base;
     using rhi::FrameResult;
+
+    if (!diagnostics_)
+        return FrameResult::Error;
+
+    auto& diag = *diagnostics_;
 
     if (!swapchain_.valid() || !device_.device())
         return FrameResult::Error;
+
     if (image_index >= swapchain_sync_.render_finished_per_image.size())
+    {
+        STRATA_LOG_ERROR(diag.logger(), "vk.swapchain", "present: image_index out of range");
         return FrameResult::Error;
+    }
 
     VkSemaphore    render_finished = swapchain_sync_.render_finished_per_image[image_index];
     VkSwapchainKHR sw              = swapchain_.swapchain();
@@ -179,42 +249,61 @@ rhi::FrameResult VkGpuDevice::present(rhi::SwapchainHandle, std::uint32_t image_
     if (pres == VK_SUBOPTIMAL_KHR)
         return FrameResult::Suboptimal;
     if (pres != VK_SUCCESS)
+    {
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.swapchain",
+                         "vkQueuePresentKHR failed: {}",
+                         ::strata::gfx::vk::to_string(pres));
+        diag.debug_break_on_error();
         return FrameResult::Error;
+    }
 
     return FrameResult::Ok;
 }
 
 bool VkGpuDevice::init_render_finished_per_image(std::size_t image_count)
 {
+    using namespace strata::base;
+
+    if (!diagnostics_)
+        return false;
+
+    auto& diag = *diagnostics_;
+
     VkDevice vk_device = device_.device();
     if (!vk_device)
         return false;
 
-    // destroy old
-    for (auto s : swapchain_sync_.render_finished_per_image)
-    {
-        if (s != VK_NULL_HANDLE)
-        {
-            vkDestroySemaphore(vk_device, s, nullptr);
-        }
-    }
-
-    swapchain_sync_.render_finished_per_image.clear();
-    swapchain_sync_.render_finished_per_image.resize(image_count, VK_NULL_HANDLE);
+    // Build new semaphores in a temporary vector to avoid partial state leaks.
+    std::vector<VkSemaphore> new_sems(image_count, VK_NULL_HANDLE);
 
     VkSemaphoreCreateInfo sem_ci{};
     sem_ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-    for (auto& sem : swapchain_sync_.render_finished_per_image)
+    for (std::size_t i = 0; i < image_count; ++i)
     {
-        if (vkCreateSemaphore(vk_device, &sem_ci, nullptr, &sem) != VK_SUCCESS)
+        VkResult const r = vkCreateSemaphore(vk_device, &sem_ci, nullptr, &new_sems[i]);
+        if (r != VK_SUCCESS)
         {
-            std::println(stderr,
-                         "VkGpuDevice: failed to create per-image render_finished semaphore");
+            STRATA_LOG_ERROR(diag.logger(),
+                             "vk.swapchain",
+                             "vkCreateSemaphore(render_finished_per_image[{}]) failed: {}",
+                             i,
+                             ::strata::gfx::vk::to_string(r));
+            diag.debug_break_on_error();
+
+            for (auto s : new_sems)
+            {
+                if (s != VK_NULL_HANDLE)
+                    vkDestroySemaphore(vk_device, s, nullptr);
+            }
             return false;
         }
     }
 
+    // Replace the old set.
+    destroy_render_finished_per_image();
+    swapchain_sync_.render_finished_per_image = std::move(new_sems);
     return true;
 }
 

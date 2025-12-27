@@ -96,8 +96,9 @@ QueueFamilySelection find_queue_families(base::Diagnostics* diag,
             result.graphics_family = i;
         }
 
-        VkBool32 present_supported = VK_FALSE;
-        VkResult pr = vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &present_supported);
+        VkBool32       present_supported = VK_FALSE;
+        VkResult const pr =
+            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &present_supported);
         if (!vk_ok(diag, pr, "vkGetPhysicalDeviceSurfaceSupportKHR"))
         {
             // Can't evaluate presentation support correctly; treat as not supported.
@@ -379,7 +380,7 @@ bool VkDeviceWrapper::init(VkInstance instance, VkSurfaceKHR surface)
     dci.ppEnabledExtensionNames = device_extensions.data();
     dci.pEnabledFeatures        = nullptr;
 
-    VkResult dres = vkCreateDevice(selection.physical, &dci, nullptr, &device_);
+    VkResult const dres = vkCreateDevice(selection.physical, &dci, nullptr, &device_);
     if (dres != VK_SUCCESS)
     {
         log_err(diagnostics_, vk_error_message("vkCreateDevice", dres));

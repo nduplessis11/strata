@@ -7,18 +7,20 @@
 
 #include "vk_gpu_device.h"
 
-#include <print>
+#include "strata/base/diagnostics.h"
 
 namespace strata::gfx::vk
 {
 
 namespace
 {
+
 inline VkImageLayout safe_old_layout(std::vector<VkImageLayout> const& layouts,
                                      std::uint32_t                     image_index)
 {
     return (image_index < layouts.size()) ? layouts[image_index] : VK_IMAGE_LAYOUT_UNDEFINED;
 }
+
 } // namespace
 
 rhi::FrameResult VkGpuDevice::cmd_bind_descriptor_set(rhi::CommandBufferHandle /*cmd*/,
@@ -26,55 +28,53 @@ rhi::FrameResult VkGpuDevice::cmd_bind_descriptor_set(rhi::CommandBufferHandle /
                                                       std::uint32_t            set_index,
                                                       rhi::DescriptorSetHandle set)
 {
-
+    using namespace strata::base;
     using rhi::FrameResult;
+
+    if (!diagnostics_)
+        return FrameResult::Error;
+    auto& diag = *diagnostics_;
 
     if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
         return FrameResult::Error;
 
     VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
-
     if (vk_cmd == VK_NULL_HANDLE || !device_.device())
         return FrameResult::Error;
 
-    if (!pipeline)
-    {
-        std::println(stderr, "cmd_bind_descriptor_set: invalid PipelineHandle");
+    STRATA_ASSERT_MSG(diag, pipeline, "cmd_bind_descriptor_set: invalid PipelineHandle");
+    STRATA_ASSERT_MSG(diag, set, "cmd_bind_descriptor_set: invalid DescriptorSetHandle");
+
+    if (!pipeline || !set)
         return FrameResult::Error;
-    }
-    if (!set)
-    {
-        std::println(stderr, "cmd_bind_descriptor_set: invalid DescriptorSetHandle");
-        return FrameResult::Error;
-    }
+
+    STRATA_ASSERT_MSG(diag,
+                      basic_pipeline_.valid(),
+                      "cmd_bind_descriptor_set: bind pipeline before binding sets");
 
     if (!basic_pipeline_.valid())
-    {
-        std::println(stderr, "cmd_bind_descriptor_set: pipeline not valid (bind pipeline first)");
         return FrameResult::Error;
-    }
 
     VkDescriptorSet const vk_set = get_vk_descriptor_set(set);
     if (vk_set == VK_NULL_HANDLE)
     {
-        std::println(stderr, "cmd_bind_descriptor_set: descriptor set not found");
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.record",
+                         "cmd_bind_descriptor_set: descriptor set not found");
+        diag.debug_break_on_error();
         return FrameResult::Error;
     }
 
     if (set_index >= pipeline_set_layout_handles_.size())
     {
-        std::println(stderr,
-                     "cmd_bind_descriptor_set: set_index {} out of range (pipeline has {} sets)",
-                     set_index,
-                     pipeline_set_layout_handles_.size());
+        STRATA_LOG_ERROR(
+            diag.logger(),
+            "vk.record",
+            "cmd_bind_descriptor_set: set_index {} out of range (pipeline has {} sets)",
+            set_index,
+            pipeline_set_layout_handles_.size());
+        diag.debug_break_on_error();
         return FrameResult::Error;
-    }
-
-    if (pipeline_set_layout_handles_.empty())
-    {
-        std::println(stderr,
-                     "cmd_bind_descriptor_set: pipeline has no set layouts (missing recipe)");
-        return rhi::FrameResult::Error;
     }
 
     vkCmdBindDescriptorSets(vk_cmd,
@@ -95,41 +95,43 @@ rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
     std::uint32_t                             image_index,
     rhi::ClearColor const&                    clear)
 {
-
+    using namespace strata::base;
     using rhi::FrameResult;
 
-    if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
-    {
+    if (!diagnostics_)
         return FrameResult::Error;
-    }
+    auto& diag = *diagnostics_;
+
+    if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
+        return FrameResult::Error;
+
     VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
 
     if (vk_cmd == VK_NULL_HANDLE || !device_.device() || !swapchain_.valid())
-    {
-        std::println(stderr, "cmd_begin_swapchain_pass: invalid device/swapchain/cmd");
         return FrameResult::Error;
-    }
 
     auto const& images = swapchain_.images();
     auto const& views  = swapchain_.image_views();
 
     if (image_index >= images.size() || image_index >= views.size())
     {
-        std::println(stderr, "cmd_begin_swapchain_pass: image_index out of range");
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.record",
+                         "cmd_begin_swapchain_pass: image_index out of range");
+        diag.debug_break_on_error();
         return FrameResult::Error;
     }
 
     VkImage     image = images[image_index];
     VkImageView view  = views[image_index];
 
-    // --- Pre barrier: oldLayout -> COLOR_ATTACHMENT_OPTIMAL ----------------
+    // Pre barrier: oldLayout -> COLOR_ATTACHMENT_OPTIMAL
     VkImageLayout old_layout = safe_old_layout(swapchain_image_layouts_, image_index);
 
     VkPipelineStageFlags2 src_stage2  = VK_PIPELINE_STAGE_2_NONE;
     VkAccessFlags2        src_access2 = 0;
 
     // Current model: UNDEFINED first use, PRESENT_SRC thereafter.
-    // Be defensive to keep validation happy during transitions/refactors.
     if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED)
     {
         src_stage2  = VK_PIPELINE_STAGE_2_NONE;
@@ -148,9 +150,10 @@ rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
     }
     else
     {
-        std::println(stderr,
-                     "cmd_begin_swapchain_pass: unexpected old layout {}, treating as UNDEFINED",
-                     static_cast<std::int32_t>(old_layout));
+        STRATA_LOG_WARN(diag.logger(),
+                        "vk.record",
+                        "cmd_begin_swapchain_pass: unexpected old layout {}; treating as UNDEFINED",
+                        static_cast<std::int32_t>(old_layout));
         old_layout  = VK_IMAGE_LAYOUT_UNDEFINED;
         src_stage2  = VK_PIPELINE_STAGE_2_NONE;
         src_access2 = 0;
@@ -180,7 +183,6 @@ rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
 
     vkCmdPipelineBarrier2(vk_cmd, &dep_pre);
 
-    // Clear color & dynamic rendering setup
     VkClearValue clear_value{};
     clear_value.color = {{clear.r, clear.g, clear.b, clear.a}};
 
@@ -208,7 +210,6 @@ rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
     render_info.pStencilAttachment   = nullptr;
 
     vkCmdBeginRendering(vk_cmd, &render_info);
-
     return FrameResult::Ok;
 }
 
@@ -217,26 +218,28 @@ rhi::FrameResult VkGpuDevice::cmd_end_swapchain_pass(
     [[maybe_unused]] rhi::SwapchainHandle     swapchain,
     std::uint32_t                             image_index)
 {
-
+    using namespace strata::base;
     using rhi::FrameResult;
 
-    if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
-    {
+    if (!diagnostics_)
         return FrameResult::Error;
-    }
-    VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
+    auto& diag = *diagnostics_;
 
+    if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
+        return FrameResult::Error;
+
+    VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
     if (vk_cmd == VK_NULL_HANDLE || !device_.device() || !swapchain_.valid())
-    {
-        std::println(stderr, "cmd_end_swapchain_pass: invalid device/swapchain/cmd");
-        return rhi::FrameResult::Error;
-    }
+        return FrameResult::Error;
 
     auto const& images = swapchain_.images();
     if (image_index >= images.size())
     {
-        std::println(stderr, "cmd_end_swapchain_pass: image_index out of range");
-        return rhi::FrameResult::Error;
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.record",
+                         "cmd_end_swapchain_pass: image_index out of range");
+        diag.debug_break_on_error();
+        return FrameResult::Error;
     }
 
     VkImage image = images[image_index];
@@ -276,25 +279,24 @@ rhi::FrameResult VkGpuDevice::cmd_end_swapchain_pass(
 rhi::FrameResult VkGpuDevice::cmd_bind_pipeline([[maybe_unused]] rhi::CommandBufferHandle cmd,
                                                 rhi::PipelineHandle                       pipeline)
 {
-
+    using namespace strata::base;
     using rhi::FrameResult;
 
-    if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
-    {
+    if (!diagnostics_)
         return FrameResult::Error;
-    }
+    auto& diag = *diagnostics_;
+
+    if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
+        return FrameResult::Error;
+
     VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
 
     if (vk_cmd == VK_NULL_HANDLE || !device_.device() || !swapchain_.valid())
-    {
-        std::println(stderr, "cmd_bind_pipeline: invalid device/swapchain/cmd");
         return FrameResult::Error;
-    }
+
+    STRATA_ASSERT_MSG(diag, pipeline, "cmd_bind_pipeline: invalid PipelineHandle");
     if (!pipeline)
-    {
-        std::println(stderr, "cmd_bind_pipeline: invalid PipelineHandle");
         return FrameResult::Error;
-    }
 
     // Lazily rebuild backend pipeline if needed (e.g., after swapchain resize).
     if (!basic_pipeline_.valid())
@@ -307,8 +309,10 @@ rhi::FrameResult VkGpuDevice::cmd_bind_pipeline([[maybe_unused]] rhi::CommandBuf
             VkDescriptorSetLayout const vk_layout = get_vk_descriptor_set_layout(h);
             if (vk_layout == VK_NULL_HANDLE)
             {
-                std::println(stderr,
-                             "cmd_bind_pipeline: cannot rebuild pipeline (set layout invalid)");
+                STRATA_LOG_ERROR(diag.logger(),
+                                 "vk.record",
+                                 "cmd_bind_pipeline: cannot rebuild pipeline (set layout invalid)");
+                diag.debug_break_on_error();
                 return FrameResult::Error;
             }
             vk_layouts.push_back(vk_layout);
@@ -319,7 +323,10 @@ rhi::FrameResult VkGpuDevice::cmd_bind_pipeline([[maybe_unused]] rhi::CommandBuf
                                                 std::span{vk_layouts});
         if (!basic_pipeline_.valid())
         {
-            std::println(stderr, "cmd_bind_pipeline: failed to (re)create BasicPipeline");
+            STRATA_LOG_ERROR(diag.logger(),
+                             "vk.record",
+                             "cmd_bind_pipeline: failed to create BasicPipeline");
+            diag.debug_break_on_error();
             return FrameResult::Error;
         }
     }
@@ -332,20 +339,18 @@ rhi::FrameResult VkGpuDevice::cmd_set_viewport_scissor(
     [[maybe_unused]] rhi::CommandBufferHandle cmd,
     rhi::Extent2D                             extent)
 {
-
+    using namespace strata::base;
     using rhi::FrameResult;
 
-    if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
-    {
+    if (!diagnostics_)
         return FrameResult::Error;
-    }
-    VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
 
-    if (vk_cmd == VK_NULL_HANDLE)
-    {
-        std::println(stderr, "cmd_set_viewport_scissor: invalid cmd");
+    if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
         return FrameResult::Error;
-    }
+
+    VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
+    if (vk_cmd == VK_NULL_HANDLE)
+        return FrameResult::Error;
 
     VkViewport viewport{};
     viewport.x        = 0.0f;
@@ -371,23 +376,16 @@ rhi::FrameResult VkGpuDevice::cmd_draw([[maybe_unused]] rhi::CommandBufferHandle
                                        std::uint32_t                             first_vertex,
                                        std::uint32_t                             first_instance)
 {
-
     using rhi::FrameResult;
 
     if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
-    {
         return FrameResult::Error;
-    }
-    VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
 
+    VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
     if (vk_cmd == VK_NULL_HANDLE)
-    {
-        std::println(stderr, "cmd_draw: invalid cmd");
         return FrameResult::Error;
-    }
 
     vkCmdDraw(vk_cmd, vertex_count, instance_count, first_vertex, first_instance);
-
     return FrameResult::Ok;
 }
 

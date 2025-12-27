@@ -78,7 +78,7 @@ bool VkCommandBufferPool::init(VkDevice device, std::uint32_t queue_family_index
     ci.flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     ci.queueFamilyIndex = queue_family_index;
 
-    VkResult r = vkCreateCommandPool(device, &ci, nullptr, &pool_);
+    VkResult const r = vkCreateCommandPool(device, &ci, nullptr, &pool_);
     if (r != VK_SUCCESS)
     {
         pool_ = VK_NULL_HANDLE;
@@ -132,7 +132,7 @@ VkCommandBuffer VkCommandBufferPool::allocate(VkDevice device)
     ai.commandBufferCount = 1;
 
     VkCommandBuffer cmd{VK_NULL_HANDLE};
-    VkResult        r = vkAllocateCommandBuffers(device, &ai, &cmd);
+    VkResult const  r = vkAllocateCommandBuffers(device, &ai, &cmd);
     if (r != VK_SUCCESS)
     {
         log_vk_error(diagnostics_, "vkAllocateCommandBuffers", r);
