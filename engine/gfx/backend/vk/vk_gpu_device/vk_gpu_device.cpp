@@ -22,6 +22,11 @@ std::unique_ptr<VkGpuDevice> VkGpuDevice::create(base::Diagnostics&             
     auto dev          = std::unique_ptr<VkGpuDevice>(new VkGpuDevice());
     dev->diagnostics_ = &diagnostics;
 
+    // Push diagnostics into wrappers that wnat to log (explicit, still no globals)
+    dev->device_.set_diagnostics(&diagnostics);
+    dev->swapchain_.set_diagnostics(&diagnostics);
+    dev->command_pool_.set_diagnostics(&diagnostics);
+
     // 1) Instance + surface
     if (!dev->instance_.init(diagnostics, surface))
     {
@@ -94,7 +99,7 @@ void VkGpuDevice::wait_idle()
 {
     if (device_.device() != VK_NULL_HANDLE)
     {
-        VkResult res = vkDeviceWaitIdle(device_.device());
+        VkResult const res = vkDeviceWaitIdle(device_.device());
         if (res != VK_SUCCESS)
         {
             if (diagnostics_)

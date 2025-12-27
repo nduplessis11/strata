@@ -13,6 +13,11 @@
 
 #include "strata/gfx/rhi/gpu_types.h"
 
+namespace strata::base
+{
+class Diagnostics;
+}
+
 namespace strata::gfx::vk
 {
 
@@ -32,6 +37,12 @@ class VkSwapchainWrapper
 
     VkSwapchainWrapper(VkSwapchainWrapper&&) noexcept;
     VkSwapchainWrapper& operator=(VkSwapchainWrapper&&) noexcept;
+
+    // Explicit injection (no globals). Safe to call multiple times.
+    void set_diagnostics(base::Diagnostics* diagnostics) noexcept
+    {
+        diagnostics_ = diagnostics;
+    }
 
     // Create a swapchain for the given surface + device.
     // Uses the RHI SwapchainDesc (size/format/vsync) and queues to decide sharing mode.
@@ -72,6 +83,8 @@ class VkSwapchainWrapper
     }
 
   private:
+    base::Diagnostics* diagnostics_{nullptr}; // non-owning
+
     VkDevice       device_{VK_NULL_HANDLE}; // non-owning; used for destruction
     VkSwapchainKHR swapchain_{VK_NULL_HANDLE};
 
