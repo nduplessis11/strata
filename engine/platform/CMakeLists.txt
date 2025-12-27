@@ -14,7 +14,6 @@ enable_strict_warnings(strata_platform)
 target_link_libraries(strata_platform
   PUBLIC
     engine_options
-  PRIVATE
     strata_base
 )
 

@@ -20,6 +20,5 @@ target_link_libraries(strata_gfx_renderer
     PUBLIC
         engine_options
         strata_gfx_rhi
-    PRIVATE
         strata_base
 )
