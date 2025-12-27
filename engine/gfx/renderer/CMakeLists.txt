@@ -19,5 +19,6 @@ enable_strict_warnings(strata_gfx_renderer)
 target_link_libraries(strata_gfx_renderer
     PUBLIC
         engine_options
-        strata_gfx_rhi     
+        strata_gfx_rhi
+        strata_base
 )

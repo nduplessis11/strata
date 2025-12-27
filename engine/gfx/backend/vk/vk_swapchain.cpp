@@ -7,78 +7,123 @@
 
 #include "vk_swapchain.h"
 
+#include "strata/base/diagnostics.h"
+#include "vk_check.h"
+
 #include <algorithm>
 #include <limits>
-#include <print>
+#include <vector>
 
 namespace strata::gfx::vk
 {
+
 namespace
 {
 
 using u32 = std::uint32_t;
 
-// Choose a surface format (we prefer SRGB BGRA if available)
-VkSurfaceFormatKHR choose_surface_format(VkPhysicalDevice physical, VkSurfaceKHR surface)
+void log_err(base::Diagnostics* diag, std::string_view msg)
 {
-    u32 count = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &count, nullptr);
+    if (!diag)
+        return;
+    diag->logger().log(base::LogLevel::Error, "vk.swapchain", msg, std::source_location::current());
+    diag->debug_break_on_error();
+}
+
+[[nodiscard]]
+bool vk_ok(base::Diagnostics* diag, VkResult r, char const* what)
+{
+    if (r == VK_SUCCESS)
+        return true;
+
+    log_err(diag, vk_error_message(what, r));
+    return false;
+}
+
+// Choose a surface format (we prefer SRGB BGRA if available)
+[[nodiscard]]
+bool choose_surface_format(base::Diagnostics*  diag,
+                           VkPhysicalDevice    physical,
+                           VkSurfaceKHR        surface,
+                           VkSurfaceFormatKHR& out)
+{
+    u32      count = 0;
+    VkResult r     = vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &count, nullptr);
+    if (!vk_ok(diag, r, "vkGetPhysicalDeviceSurfaceFormatsKHR(count)"))
+        return false;
+
     if (count == 0)
     {
-        // Fallback to something sensible if the driver is weird.
-        return VkSurfaceFormatKHR{VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
+        log_err(diag, "vkGetPhysicalDeviceSurfaceFormatsKHR returned 0 formats");
+        return false;
     }
 
     std::vector<VkSurfaceFormatKHR> formats(count);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &count, formats.data());
+    r = vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface, &count, formats.data());
+    if (!vk_ok(diag, r, "vkGetPhysicalDeviceSurfaceFormatsKHR(list)"))
+        return false;
 
-    // If the surface has no preferred format, just pick one
+    // If the surface has no preferred format, pick something sensible.
     if (formats.size() == 1 && formats[0].format == VK_FORMAT_UNDEFINED)
     {
-        return VkSurfaceFormatKHR{VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
+        out = VkSurfaceFormatKHR{VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
+        return true;
     }
 
-    // Prefer SRGB BGRA if available
+    // Prefer SRGB-like output path (UNORM + SRGB colorspace is common).
     for (auto const& f : formats)
     {
         if (f.format == VK_FORMAT_B8G8R8A8_UNORM &&
             f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
         {
-            return f;
+            out = f;
+            return true;
         }
     }
 
-    // Fallback: first format
-    return formats[0];
+    out = formats[0];
+    return true;
 }
 
 // Choose present mode (prefer MAILBOX, else FIFO)
-VkPresentModeKHR choose_present_mode(VkPhysicalDevice physical, VkSurfaceKHR surface, bool vsync)
+[[nodiscard]] bool choose_present_mode(base::Diagnostics* diag,
+                                       VkPhysicalDevice   physical,
+                                       VkSurfaceKHR       surface,
+                                       bool               vsync,
+                                       VkPresentModeKHR&  out)
 {
-    u32 count = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &count, nullptr);
+    u32      count = 0;
+    VkResult r     = vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &count, nullptr);
+    if (!vk_ok(diag, r, "vkGetPhysicalDeviceSurfacePresentModesKHR(count)"))
+        return false;
+
     if (count == 0)
     {
-        return VK_PRESENT_MODE_FIFO_KHR;
+        // Spec says FIFO is always supported; be robust.
+        out = VK_PRESENT_MODE_FIFO_KHR;
+        return true;
     }
 
     std::vector<VkPresentModeKHR> modes(count);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &count, modes.data());
+    r = vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface, &count, modes.data());
+    if (!vk_ok(diag, r, "vkGetPhysicalDeviceSurfacePresentModesKHR(list)"))
+        return false;
 
-    // If vsync == false we might prefer MAILBOX or IMMEDIATE later.
     if (!vsync)
     {
         for (auto m : modes)
         {
             if (m == VK_PRESENT_MODE_MAILBOX_KHR)
             {
-                return m;
+                out = m;
+                return true;
             }
         }
+        // Consider IMMEDIATE later; FIFO is fine as fallback.
     }
 
-    // FIFO is always supported.
-    return VK_PRESENT_MODE_FIFO_KHR;
+    out = VK_PRESENT_MODE_FIFO_KHR;
+    return true;
 }
 
 VkExtent2D choose_extent(VkSurfaceCapabilitiesKHR const& capabilities,
@@ -111,10 +156,15 @@ VkSwapchainWrapper::~VkSwapchainWrapper()
 }
 
 VkSwapchainWrapper::VkSwapchainWrapper(VkSwapchainWrapper&& other) noexcept
-    : device_(other.device_), swapchain_(other.swapchain_), image_format_(other.image_format_),
-      extent_(other.extent_), images_(std::move(other.images_)),
-      image_views_(std::move(other.image_views_))
+      : diagnostics_(other.diagnostics_)
+      , device_(other.device_)
+      , swapchain_(other.swapchain_)
+      , image_format_(other.image_format_)
+      , extent_(other.extent_)
+      , images_(std::move(other.images_))
+      , image_views_(std::move(other.image_views_))
 {
+    other.diagnostics_  = nullptr;
     other.device_       = VK_NULL_HANDLE;
     other.swapchain_    = VK_NULL_HANDLE;
     other.image_format_ = VK_FORMAT_UNDEFINED;
@@ -127,6 +177,7 @@ VkSwapchainWrapper& VkSwapchainWrapper::operator=(VkSwapchainWrapper&& other) no
     {
         cleanup();
 
+        diagnostics_  = other.diagnostics_;
         device_       = other.device_;
         swapchain_    = other.swapchain_;
         image_format_ = other.image_format_;
@@ -134,6 +185,7 @@ VkSwapchainWrapper& VkSwapchainWrapper::operator=(VkSwapchainWrapper&& other) no
         images_       = std::move(other.images_);
         image_views_  = std::move(other.image_views_);
 
+        other.diagnostics_  = nullptr;
         other.device_       = VK_NULL_HANDLE;
         other.swapchain_    = VK_NULL_HANDLE;
         other.image_format_ = VK_FORMAT_UNDEFINED;
@@ -179,11 +231,28 @@ bool VkSwapchainWrapper::init(VkPhysicalDevice          physical,
 
     // 1) Query surface capabilities
     VkSurfaceCapabilitiesKHR capabilities{};
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical, surface, &capabilities);
+    VkResult const cr = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical, surface, &capabilities);
+    if (!vk_ok(diagnostics_, cr, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR"))
+    {
+        cleanup();
+        return false;
+    }
 
-    VkSurfaceFormatKHR const surface_format = choose_surface_format(physical, surface);
-    VkPresentModeKHR const   present_mode   = choose_present_mode(physical, surface, desc.vsync);
-    VkExtent2D const         extent         = choose_extent(capabilities, desc.size);
+    VkSurfaceFormatKHR surface_format{};
+    if (!choose_surface_format(diagnostics_, physical, surface, surface_format))
+    {
+        cleanup();
+        return false;
+    }
+
+    VkPresentModeKHR present_mode{};
+    if (!choose_present_mode(diagnostics_, physical, surface, desc.vsync, present_mode))
+    {
+        cleanup();
+        return false;
+    }
+
+    VkExtent2D const extent = choose_extent(capabilities, desc.size);
 
     image_format_ = surface_format.format;
     extent_       = extent;
@@ -231,22 +300,29 @@ bool VkSwapchainWrapper::init(VkPhysicalDevice          physical,
     ci.oldSwapchain   = VK_NULL_HANDLE; // for simplicity; we recreate from scratch
 
     // 4) Create the swapchain
-    VkSwapchainKHR swapchain = VK_NULL_HANDLE;
-    VkResult       result    = vkCreateSwapchainKHR(device, &ci, nullptr, &swapchain);
-    if (result != VK_SUCCESS)
+    VkResult const sr = vkCreateSwapchainKHR(device, &ci, nullptr, &swapchain_);
+    if (!vk_ok(diagnostics_, sr, "vkCreateSwapchainKHR"))
     {
-        std::println(stderr, "vkCreateSwapchainKHR failed: {}", static_cast<int>(result));
         cleanup();
         return false;
     }
 
-    swapchain_ = swapchain;
-
     // 5) Get swapchain images
-    u32 actual_image_count = 0;
-    vkGetSwapchainImagesKHR(device, swapchain_, &actual_image_count, nullptr);
+    u32      actual_image_count = 0;
+    VkResult ir = vkGetSwapchainImagesKHR(device, swapchain_, &actual_image_count, nullptr);
+    if (!vk_ok(diagnostics_, ir, "vkGetSwapchainImagesKHR(count)"))
+    {
+        cleanup();
+        return false;
+    }
+
     images_.resize(actual_image_count);
-    vkGetSwapchainImagesKHR(device, swapchain_, &actual_image_count, images_.data());
+    ir = vkGetSwapchainImagesKHR(device, swapchain_, &actual_image_count, images_.data());
+    if (!vk_ok(diagnostics_, ir, "vkGetSwapchainImagesKHR(list)"))
+    {
+        cleanup();
+        return false;
+    }
 
     // 6) Create image views
     image_views_.clear();
@@ -269,30 +345,27 @@ bool VkSwapchainWrapper::init(VkPhysicalDevice          physical,
         ivci.subresourceRange.baseArrayLayer = 0;
         ivci.subresourceRange.layerCount     = 1;
 
-        VkImageView view = VK_NULL_HANDLE;
-        if (vkCreateImageView(device, &ivci, nullptr, &view) != VK_SUCCESS)
+        VkImageView    view = VK_NULL_HANDLE;
+        VkResult const vr   = vkCreateImageView(device, &ivci, nullptr, &view);
+        if (!vk_ok(diagnostics_, vr, "vkCreateImageView(swapchain)"))
         {
-            std::println(stderr, "vkCreateImageView failed for swapchain image");
-            // Cleanup partially created state
-            vkDestroySwapchainKHR(device_, swapchain_, nullptr);
-            swapchain_ = VK_NULL_HANDLE;
-            for (VkImageView v : image_views_)
-            {
-                if (v != VK_NULL_HANDLE)
-                {
-                    vkDestroyImageView(device_, v, nullptr);
-                }
-            }
-            image_views_.clear();
-            images_.clear();
-            device_       = VK_NULL_HANDLE;
-            image_format_ = VK_FORMAT_UNDEFINED;
-            extent_       = {};
+            cleanup(); // safe: destroys views created so far + swapchain
             return false;
         }
+
         image_views_.push_back(view);
     }
 
+    if (diagnostics_)
+    {
+        STRATA_LOG_INFO(diagnostics_->logger(),
+                        "vk.swapchain",
+                        "Swapchain created: {} images, extent {}x{}, vsync {}",
+                        static_cast<int>(images_.size()),
+                        static_cast<int>(extent_.width),
+                        static_cast<int>(extent_.height),
+                        desc.vsync ? "on" : "off");
+    }
     return true;
 }
 

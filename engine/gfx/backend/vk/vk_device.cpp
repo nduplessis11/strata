@@ -6,8 +6,8 @@
 // -----------------------------------------------------------------------------
 
 #include "vk_device.h"
-
-#include <vulkan/vulkan.h>
+#include "strata/base/diagnostics.h"
+#include "vk_check.h"
 
 #include <array>
 #include <cstdint>
@@ -19,11 +19,37 @@
 
 namespace strata::gfx::vk
 {
+
 namespace
 {
 
 using u32                   = std::uint32_t;
 constexpr u32 invalid_index = std::numeric_limits<u32>::max();
+
+void log_err(base::Diagnostics* diag, std::string_view msg)
+{
+    if (!diag)
+        return;
+    diag->logger().log(base::LogLevel::Error, "vk.device", msg, std::source_location::current());
+    diag->debug_break_on_error();
+}
+
+void log_info(base::Diagnostics* diag, std::string_view msg)
+{
+    if (!diag)
+        return;
+    diag->logger().log(base::LogLevel::Info, "vk.device", msg, std::source_location::current());
+}
+
+[[nodiscard]]
+bool vk_ok(base::Diagnostics* diag, VkResult r, char const* what)
+{
+    if (r == VK_SUCCESS)
+        return true;
+
+    log_err(diag, vk_error_message(what, r));
+    return false;
+}
 
 struct QueueFamilySelection
 {
@@ -31,14 +57,17 @@ struct QueueFamilySelection
     u32              graphics_family{invalid_index};
     u32              present_family{invalid_index};
 
-    [[nodiscard]] bool complete() const noexcept
+    [[nodiscard]]
+    bool complete() const noexcept
     {
         return graphics_family != invalid_index && present_family != invalid_index;
     }
 };
 
-[[nodiscard]] QueueFamilySelection find_queue_families(VkPhysicalDevice device,
-                                                       VkSurfaceKHR     surface)
+[[nodiscard]]
+QueueFamilySelection find_queue_families(base::Diagnostics* diag,
+                                         VkPhysicalDevice   device,
+                                         VkSurfaceKHR       surface)
 {
     QueueFamilySelection result{};
     result.physical = device;
@@ -60,8 +89,15 @@ struct QueueFamilySelection
             result.graphics_family = i;
         }
 
-        VkBool32 present_supported = VK_FALSE;
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &present_supported);
+        VkBool32       present_supported = VK_FALSE;
+        VkResult const pr =
+            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &present_supported);
+        if (!vk_ok(diag, pr, "vkGetPhysicalDeviceSurfaceSupportKHR"))
+        {
+            // Can't evaluate presentation support correctly; treat as not supported.
+            present_supported = VK_FALSE;
+        }
+
         if (present_supported)
         {
             result.present_family = i;
@@ -77,18 +113,24 @@ struct QueueFamilySelection
 // Keep extensions as C-strings from the start (no string_view/span conversion).
 inline constexpr std::array<char const*, 1> device_extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
-[[nodiscard]] bool has_required_device_extensions(VkPhysicalDevice             device,
-                                                  std::span<char const* const> required_exts)
+[[nodiscard]]
+bool has_required_device_extensions(base::Diagnostics*           diag,
+                                    VkPhysicalDevice             device,
+                                    std::span<char const* const> required_exts)
 {
-    u32 ext_count = 0;
-    vkEnumerateDeviceExtensionProperties(device, nullptr, &ext_count, nullptr);
+    u32      ext_count = 0;
+    VkResult r         = vkEnumerateDeviceExtensionProperties(device, nullptr, &ext_count, nullptr);
+    if (!vk_ok(diag, r, "vkEnumerateDeviceExtensionProperties(count)"))
+        return false;
+
     if (ext_count == 0)
         return required_exts.empty();
 
     std::vector<VkExtensionProperties> available(ext_count);
-    vkEnumerateDeviceExtensionProperties(device, nullptr, &ext_count, available.data());
+    r = vkEnumerateDeviceExtensionProperties(device, nullptr, &ext_count, available.data());
+    if (!vk_ok(diag, r, "vkEnumerateDeviceExtensionProperties(list)"))
+        return false;
 
-    // Simple O(N*M) scan is fine here (device ext counts are small).
     for (char const* req : required_exts)
     {
         bool found = false;
@@ -128,17 +170,20 @@ struct Vulkan13Support
         .shaderIntegerDotProduct                            = VK_FALSE,
         .maintenance4                                       = VK_FALSE};
 
-    [[nodiscard]] bool dynamic_rendering() const noexcept
+    [[nodiscard]]
+    bool dynamic_rendering() const noexcept
     {
         return f13.dynamicRendering == VK_TRUE;
     }
-    [[nodiscard]] bool synchronization2() const noexcept
+    [[nodiscard]]
+    bool synchronization2() const noexcept
     {
         return f13.synchronization2 == VK_TRUE;
     }
 };
 
-[[nodiscard]] Vulkan13Support query_vulkan13_support(VkPhysicalDevice physical)
+[[nodiscard]]
+Vulkan13Support query_vulkan13_support(VkPhysicalDevice physical)
 {
     Vulkan13Support out{};
 
@@ -150,26 +195,32 @@ struct Vulkan13Support
     return out;
 }
 
-[[nodiscard]] QueueFamilySelection pick_physical_device_and_queues(
-    VkInstance                   instance,
-    VkSurfaceKHR                 surface,
-    std::span<char const* const> required_exts)
+[[nodiscard]]
+QueueFamilySelection pick_physical_device_and_queues(base::Diagnostics*           diag,
+                                                     VkInstance                   instance,
+                                                     VkSurfaceKHR                 surface,
+                                                     std::span<char const* const> required_exts)
 {
-    u32 count = 0;
-    vkEnumeratePhysicalDevices(instance, &count, nullptr);
+    u32      count = 0;
+    VkResult r     = vkEnumeratePhysicalDevices(instance, &count, nullptr);
+    if (!vk_ok(diag, r, "vkEnumeratePhysicalDevices(count)"))
+        return {};
+
     if (count == 0)
         return {};
 
     std::vector<VkPhysicalDevice> devices(count);
-    vkEnumeratePhysicalDevices(instance, &count, devices.data());
+    r = vkEnumeratePhysicalDevices(instance, &count, devices.data());
+    if (!vk_ok(diag, r, "vkEnumeratePhysicalDevices(list)"))
+        return {};
 
     for (VkPhysicalDevice device : devices)
     {
-        QueueFamilySelection q = find_queue_families(device, surface);
+        QueueFamilySelection q = find_queue_families(diag, device, surface);
         if (!q.complete())
             continue;
 
-        if (!has_required_device_extensions(device, required_exts))
+        if (!has_required_device_extensions(diag, device, required_exts))
             continue;
 
         // If you want: prefer discrete GPU here by checking VkPhysicalDeviceProperties.
@@ -191,6 +242,7 @@ VkDeviceWrapper::~VkDeviceWrapper()
 
 VkDeviceWrapper::VkDeviceWrapper(VkDeviceWrapper&& other) noexcept
 {
+    diagnostics_     = other.diagnostics_;
     device_          = other.device_;
     physical_        = other.physical_;
     graphics_family_ = other.graphics_family_;
@@ -198,6 +250,7 @@ VkDeviceWrapper::VkDeviceWrapper(VkDeviceWrapper&& other) noexcept
     graphics_queue_  = other.graphics_queue_;
     present_queue_   = other.present_queue_;
 
+    other.diagnostics_     = nullptr;
     other.device_          = VK_NULL_HANDLE;
     other.physical_        = VK_NULL_HANDLE;
     other.graphics_family_ = invalid_index;
@@ -212,6 +265,7 @@ VkDeviceWrapper& VkDeviceWrapper::operator=(VkDeviceWrapper&& other) noexcept
     {
         cleanup();
 
+        diagnostics_     = other.diagnostics_;
         device_          = other.device_;
         physical_        = other.physical_;
         graphics_family_ = other.graphics_family_;
@@ -219,6 +273,7 @@ VkDeviceWrapper& VkDeviceWrapper::operator=(VkDeviceWrapper&& other) noexcept
         graphics_queue_  = other.graphics_queue_;
         present_queue_   = other.present_queue_;
 
+        other.diagnostics_     = nullptr;
         other.device_          = VK_NULL_HANDLE;
         other.physical_        = VK_NULL_HANDLE;
         other.graphics_family_ = invalid_index;
@@ -244,38 +299,44 @@ void VkDeviceWrapper::cleanup()
     present_queue_   = VK_NULL_HANDLE;
 }
 
-// --- init(): pick physical device, create logical device + queues ----------
-
 bool VkDeviceWrapper::init(VkInstance instance, VkSurfaceKHR surface)
 {
     cleanup();
 
-    auto selection = pick_physical_device_and_queues(instance, surface, device_extensions);
+    auto selection =
+        pick_physical_device_and_queues(diagnostics_, instance, surface, device_extensions);
     if (!selection.complete())
     {
-        std::println(stderr, "VkDeviceWrapper: no suitable physical device found.");
+        log_err(diagnostics_, "VkDeviceWrapper: no suitable physical device found");
         return false;
+    }
+
+    // Log device name (helpful for debugging)
+    VkPhysicalDeviceProperties props{};
+    vkGetPhysicalDeviceProperties(selection.physical, &props);
+    if (diagnostics_)
+    {
+        STRATA_LOG_INFO(diagnostics_->logger(), "vk.device", "Selected GPU: {}", props.deviceName);
     }
 
     auto support = query_vulkan13_support(selection.physical);
 
     if (!support.dynamic_rendering())
     {
-        std::println(stderr,
-                     "Selected physical device does not support Vulkan 1.3 dynamic rendering.");
+        log_err(diagnostics_,
+                "Selected physical device does not support Vulkan 1.3 dynamic rendering");
         return false;
     }
     if (!support.synchronization2())
     {
-        std::println(stderr,
-                     "Selected physical device does not support Vulkan 1.3 synchronization2.");
+        log_err(diagnostics_,
+                "Selected physical device does not support Vulkan 1.3 synchronization2");
         return false;
     }
 
-    // Queues
+    // Queues: create one queue per unique family.
     std::vector<VkDeviceQueueCreateInfo> queue_infos;
 
-    // We will create 1 queue per unique family (graphics, present)
     std::vector<u32> unique_families;
     unique_families.reserve(2);
     unique_families.push_back(selection.graphics_family);
@@ -312,10 +373,10 @@ bool VkDeviceWrapper::init(VkInstance instance, VkSurfaceKHR surface)
     dci.ppEnabledExtensionNames = device_extensions.data();
     dci.pEnabledFeatures        = nullptr;
 
-    VkResult dres = vkCreateDevice(selection.physical, &dci, nullptr, &device_);
+    VkResult const dres = vkCreateDevice(selection.physical, &dci, nullptr, &device_);
     if (dres != VK_SUCCESS)
     {
-        std::println(stderr, "vkCreateDevice failed: {}", static_cast<int>(dres));
+        log_err(diagnostics_, vk_error_message("vkCreateDevice", dres));
         cleanup();
         return false;
     }
@@ -327,6 +388,7 @@ bool VkDeviceWrapper::init(VkInstance instance, VkSurfaceKHR surface)
     vkGetDeviceQueue(device_, graphics_family_, 0, &graphics_queue_);
     vkGetDeviceQueue(device_, present_family_, 0, &present_queue_);
 
+    log_info(diagnostics_, "Vulkan logical device created");
     return true;
 }
 

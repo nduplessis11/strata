@@ -33,14 +33,14 @@
 namespace strata::base
 {
 
-enum class LogLevel
+enum class LogLevel : std::uint8_t
 {
     Trace,
     Debug,
     Info,
     Warn,
     Error,
-    Fatal
+    Fatal,
 };
 
 [[nodiscard]]
@@ -111,7 +111,10 @@ class StderrSink final : public ILogSink
     };
 
     StderrSink() = default;
-    explicit StderrSink(Config config) : config_(config) {}
+    explicit StderrSink(Config config)
+          : config_(config)
+    {
+    }
 
     void write(LogRecord const& record) override
     {
@@ -151,7 +154,10 @@ class Logger final
     };
 
     Logger() = default;
-    explicit Logger(Config config) : min_level_(config.min_level) {}
+    explicit Logger(Config config)
+          : min_level_(config.min_level)
+    {
+    }
 
     void add_sink(std::unique_ptr<ILogSink> sink)
     {

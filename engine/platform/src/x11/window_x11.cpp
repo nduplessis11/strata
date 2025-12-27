@@ -11,6 +11,7 @@
 #include <string>
 #include <utility>
 
+#include "strata/base/diagnostics.h"
 #include "strata/platform/window.h"
 #include "strata/platform/wsi_handle.h"
 
@@ -19,6 +20,8 @@ namespace strata::platform
 
 struct Window::Impl
 {
+    base::Diagnostics* diagnostics{nullptr};
+
     Display* display{};
     ::Window window{};
     Atom     wm_delete{};
@@ -26,11 +29,12 @@ struct Window::Impl
     bool     visible{false};
     bool     minimized{false};
 
-    Impl(WindowDesc const& desc)
+    Impl(base::Diagnostics& diag, WindowDesc const& desc) : diagnostics(&diag)
     {
         display = ::XOpenDisplay(nullptr);
         if (!display)
         {
+            STRATA_LOG_ERROR(diagnostics->logger(), "platform", "X11: XOpenDisplay failed");
             closing = true;
             return;
         }
@@ -60,6 +64,7 @@ struct Window::Impl
 
         if (!window)
         {
+            STRATA_LOG_ERROR(diagnostics->logger(), "platform", "X11: XCreateWindow failed");
             closing = true;
             return;
         }
@@ -184,7 +189,10 @@ struct Window::Impl
     }
 };
 
-Window::Window(WindowDesc const& desc) : p_(std::make_unique<Impl>(desc)) {}
+Window::Window(base::Diagnostics& diagnostics, WindowDesc const& desc)
+    : p_(std::make_unique<Impl>(diagnostics, desc))
+{
+}
 
 Window::~Window() = default;
 

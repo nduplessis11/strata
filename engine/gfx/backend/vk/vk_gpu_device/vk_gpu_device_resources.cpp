@@ -7,10 +7,12 @@
 
 #include "vk_gpu_device.h"
 
+#include "../vk_check.h"
+#include "strata/base/diagnostics.h"
+
 #include <cstdint>
 #include <cstring> // std::memcpy
 #include <optional>
-#include <print>
 
 namespace strata::gfx::vk
 {
@@ -18,12 +20,14 @@ namespace strata::gfx::vk
 namespace
 {
 
-[[nodiscard]] constexpr bool has_flag(rhi::BufferUsage usage, rhi::BufferUsage flag) noexcept
+[[nodiscard]]
+constexpr bool has_flag(rhi::BufferUsage usage, rhi::BufferUsage flag) noexcept
 {
     return (static_cast<std::uint32_t>(usage) & static_cast<std::uint32_t>(flag)) != 0;
 }
 
-[[nodiscard]] VkBufferUsageFlags to_vk_buffer_usage_flags(rhi::BufferUsage usage) noexcept
+[[nodiscard]]
+VkBufferUsageFlags to_vk_buffer_usage_flags(rhi::BufferUsage usage) noexcept
 {
     VkBufferUsageFlags out = 0;
     if (has_flag(usage, rhi::BufferUsage::Vertex))
@@ -70,6 +74,13 @@ namespace
 rhi::BufferHandle VkGpuDevice::create_buffer(rhi::BufferDesc const&     desc,
                                              std::span<std::byte const> initial_data)
 {
+    using namespace strata::base;
+
+    if (!diagnostics_)
+        return {};
+
+    auto& diag = *diagnostics_;
+
     // Keep handle allocation + registry slot creation consistent
     rhi::BufferHandle const handle = allocate_buffer_handle();
     std::size_t const       index  = static_cast<std::size_t>(handle.value - 1);
@@ -83,23 +94,24 @@ rhi::BufferHandle VkGpuDevice::create_buffer(rhi::BufferDesc const&     desc,
     // Basic validation
     if (desc.size_bytes == 0)
     {
-        std::println(stderr, "VkGpuDevice: create_buffer failed (size_bytes == 0)");
+        STRATA_LOG_ERROR(diag.logger(), "vk.buf", "create_buffer failed: size_bytes == 0");
         return {};
     }
 
-    // v1: only implement the "host-visible" path (UBO bring-up)
-    // Non-host-visible can remain stubbed for now without breaking existing callers.
+    // v1: Non-host-visible can remain stubbed for now without breaking existing callers.
     if (!desc.host_visible)
     {
+        STRATA_LOG_WARN(diag.logger(),
+                        "vk.buf",
+                        "create_buffer({}, {} bytes): non-host-visible buffers not implemented yet",
+                        handle.value,
+                        desc.size_bytes);
+
         BufferRecord& rec = buffers_[index];
         rec.size_bytes    = desc.size_bytes;
         rec.host_visible  = false;
         // rec.buffer/memory/mapped remain null
-        std::println(stderr,
-                     "VkGpuDevice: create_buffer({}, {} bytes): non-host-visible buffers not "
-                     "implemented yet",
-                     handle.value,
-                     desc.size_bytes);
+
         return handle;
     }
 
@@ -108,7 +120,7 @@ rhi::BufferHandle VkGpuDevice::create_buffer(rhi::BufferDesc const&     desc,
 
     if (vk_device == VK_NULL_HANDLE || vk_physical == VK_NULL_HANDLE)
     {
-        std::println(stderr, "VkGpuDevice: create_buffer failed (device/physical is null)");
+        STRATA_LOG_ERROR(diag.logger(), "vk.buf", "create_buffer failed: device/physical is null");
         buffers_[index] = BufferRecord{};
         return {};
     }
@@ -116,7 +128,7 @@ rhi::BufferHandle VkGpuDevice::create_buffer(rhi::BufferDesc const&     desc,
     VkBufferUsageFlags const usage_flags = to_vk_buffer_usage_flags(desc.usage);
     if (usage_flags == 0)
     {
-        std::println(stderr, "VkGpuDevice: create_buffer failed (usage flags are NoFlags/unsupported");
+        STRATA_LOG_ERROR(diag.logger(), "vk.buf", "create_buffer failed: unsupported usage flags");
         buffers_[index] = BufferRecord{};
         return {};
     }
@@ -129,15 +141,17 @@ rhi::BufferHandle VkGpuDevice::create_buffer(rhi::BufferDesc const&     desc,
     {
         if (res != VK_SUCCESS)
         {
-            std::println(stderr,
-                         "VkGpuDevice: create_buffer failed: {} ({})",
-                         msg,
-                         (std::int32_t)res);
+            STRATA_LOG_ERROR(diag.logger(),
+                             "vk.buf",
+                             "{} ({})",
+                             msg,
+                             ::strata::gfx::vk::to_string(res));
         }
         else
         {
-            std::println(stderr, "VkGpuDevice: create_buffer failed: {}", msg);
+            STRATA_LOG_ERROR(diag.logger(), "vk.buf", "{}", msg);
         }
+        diag.debug_break_on_error();
 
         if (mapped != nullptr && memory != VK_NULL_HANDLE)
         {
@@ -160,20 +174,15 @@ rhi::BufferHandle VkGpuDevice::create_buffer(rhi::BufferDesc const&     desc,
     };
 
     // 1) Create buffer
-    VkBufferCreateInfo const bci{
-        .sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .pNext                 = nullptr,
-        .flags                 = 0,
-        .size                  = static_cast<VkDeviceSize>(desc.size_bytes),
-        .usage                 = usage_flags,
-        .sharingMode           = VK_SHARING_MODE_EXCLUSIVE,
-        .queueFamilyIndexCount = 0,
-        .pQueueFamilyIndices   = nullptr,
-    };
+    VkBufferCreateInfo bci{};
+    bci.sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bci.size        = static_cast<VkDeviceSize>(desc.size_bytes);
+    bci.usage       = usage_flags;
+    bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
     VkResult res = vkCreateBuffer(vk_device, &bci, nullptr, &buffer);
     if (res != VK_SUCCESS)
-        return fail("vkCreateBuffer", res);
+        return fail("vkCreateBuffer failed", res);
 
     // 2) Allocate memory (one allocation per buffer, v1)
     VkMemoryRequirements req{};
@@ -186,29 +195,26 @@ rhi::BufferHandle VkGpuDevice::create_buffer(rhi::BufferDesc const&     desc,
         find_memory_type_index(vk_physical, req.memoryTypeBits, required_flags);
     if (!mem_type_index.has_value())
     {
-        return fail(
-            "v1: requires HOST_VISIBLE|HOST_COHERENT; add flush path for non-coherent memory");
+        return fail("No HOST_VISIBLE|HOST_COHERENT memory type found (v1 requires coherent)");
     }
 
-    VkMemoryAllocateInfo const mai{
-        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .pNext           = nullptr,
-        .allocationSize  = req.size,
-        .memoryTypeIndex = mem_type_index.value(),
-    };
+    VkMemoryAllocateInfo mai{};
+    mai.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    mai.allocationSize  = req.size;
+    mai.memoryTypeIndex = mem_type_index.value();
 
     res = vkAllocateMemory(vk_device, &mai, nullptr, &memory);
     if (res != VK_SUCCESS)
-        return fail("vkAllocateMemory", res);
+        return fail("vkAllocateMemory failed", res);
 
     res = vkBindBufferMemory(vk_device, buffer, memory, 0);
     if (res != VK_SUCCESS)
-        return fail("vkBindBufferMemory", res);
+        return fail("vkBindBufferMemory failed", res);
 
     // 3) Map once and keep mapped (v1 UBO simplicity)
     res = vkMapMemory(vk_device, memory, 0, req.size, 0, &mapped);
     if (res != VK_SUCCESS || mapped == nullptr)
-        return fail("vkMapMemory", res);
+        return fail("vkMapMemory failed", res);
 
     // 4) Initial data upload (host coherent so no flush needed)
     if (!initial_data.empty())
@@ -229,12 +235,13 @@ rhi::BufferHandle VkGpuDevice::create_buffer(rhi::BufferDesc const&     desc,
 
     buffers_[index] = rec;
 
-    std::println(stderr,
-                 "VkGpuDevice: create_buffer({}, {} bytes) OK (memType={}, usage=0x{:x})",
-                 handle.value,
-                 desc.size_bytes,
-                 mem_type_index.value(),
-                 static_cast<std::uint32_t>(usage_flags));
+    STRATA_LOG_DEBUG(diag.logger(),
+                     "vk.buf",
+                     "create_buffer({}, {} bytes) OK (memType={}, usage=0x{:x})",
+                     handle.value,
+                     desc.size_bytes,
+                     mem_type_index.value(),
+                     static_cast<std::uint32_t>(usage_flags));
 
     return handle;
 }

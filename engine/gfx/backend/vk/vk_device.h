@@ -11,6 +11,11 @@
 #include <limits>
 #include <vulkan/vulkan.h>
 
+namespace strata::base
+{
+class Diagnostics;
+}
+
 namespace strata::gfx::vk
 {
 
@@ -22,6 +27,12 @@ class VkDeviceWrapper
 
     VkDeviceWrapper(VkDeviceWrapper&&) noexcept;
     VkDeviceWrapper& operator=(VkDeviceWrapper&&) noexcept;
+
+    // Explicit injection (no globals). Safe to call multiple times.
+    void set_diagnostics(base::Diagnostics* diagnostics) noexcept
+    {
+        diagnostics_ = diagnostics;
+    }
 
     // Creates a logical device and queues for the given instance + surface.
     bool init(VkInstance instance, VkSurfaceKHR surface);
@@ -53,6 +64,8 @@ class VkDeviceWrapper
     }
 
   private:
+    base::Diagnostics* diagnostics_{nullptr}; // non-owning
+
     VkDevice         device_{VK_NULL_HANDLE};
     VkPhysicalDevice physical_{VK_NULL_HANDLE};
     std::uint32_t    graphics_family_{std::numeric_limits<std::uint32_t>::max()};

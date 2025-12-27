@@ -54,7 +54,7 @@ Key types:
 Responsibilities:
 - Window creation & event polling (pImpl keeps OS headers out of public headers).
 - WSI integration (Win32/X11/Wayland) via a **platform-neutral handle type**: `platform::WsiHandle`.
-- Platform-facing types like `WindowDesc`, `Extent2D`.
+- Platform-facing types like `WindowDesc`, `Extent2d`.
 
 Key types:
 - `strata::platform::Window` (PImpl; move-only; owns native window resources)
@@ -66,6 +66,7 @@ Key types:
 ### `engine/core`
 Responsibilities:
 - The *application shell* that wires platform + graphics together.
+- Owns a `base::Diagnostics` instance and passes it down intentionally (no global state).
 - Runtime loop and per-frame context.
 - High-level config and error propagation.
 
@@ -122,6 +123,14 @@ This is the main “production-leaning” constraint: it forces clean seams and 
 
 ---
 
+## Third-party dependency policy
+
+Strata is learning-focused: **avoid third-party libraries by default** so the codebase stays readable end-to-end and you’re forced to understand the full stack.
+
+- Prefer the C++ standard library + platform APIs over external wrappers.
+- Exceptions are intentional and explicit: **Vulkan** (required) and (optionally) a small **audio** backend if/when needed.
+- If a third-party library feels necessary, treat it as a design decision and document the rationale (and keep it behind a narrow boundary).
+
 ## WSI bridging (platform ↔ Vulkan)
 
 Strata intentionally separates:
@@ -141,6 +150,7 @@ This keeps OS and Vulkan headers out of public headers, while still supporting m
 
 At runtime, `strata::core::Application` owns the high-level system objects and connects them:
 
+- `base::Diagnostics` (owns logging + assertions; passed explicitly)
 - `platform::Window` (owns native window)
 - `platform::WsiHandle` (non-owning descriptor derived from the native window)
 - `gfx::rhi::IGpuDevice` (backend-agnostic device interface; owned via `unique_ptr`)
@@ -166,6 +176,7 @@ Inside the Vulkan backend (`gfx::vk::VkGpuDevice`):
 ```mermaid
 flowchart LR
   A[core::Application] --> W[platform::Window]
+  A --> Diag[base::Diagnostics]
   A --> WH[platform::WsiHandle]
   A --> D[gfx::rhi::IGpuDevice]
   A --> SC[gfx::rhi::SwapchainHandle]

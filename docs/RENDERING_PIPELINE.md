@@ -11,7 +11,7 @@ It is intentionally scoped to the **current** implementation (single pass, fulls
 The frame path looks like this:
 
 1. `core::Application::run()` drives the loop and calls a helper:
-   - `gfx::renderer::draw_frame_and_handle_resize(device, swapchain, renderer, framebuffer_size)`
+   - `gfx::renderer::draw_frame_and_handle_resize(device, swapchain, renderer, framebuffer_size, diagnostics)`
 2. `Render2D::draw_frame()` now owns the frame:
    - **acquire → begin cmd → record pass → end cmd → submit → present**
 3. The Vulkan backend (`vk::VkGpuDevice`) provides the building blocks:
@@ -26,7 +26,7 @@ The frame path looks like this:
 ## Key design choices
 
 - **Vulkan is contained** in `engine/gfx/backend/vk/*` (`namespace strata::gfx::vk`).
-- The renderer (`Render2D`) depends only on the **RHI** (`IGpuDevice`) and opaque handles.
+- The renderer (`Render2D`) depends only on the **RHI** (`IGpuDevice`), `base::Diagnostics`, and opaque handles.
 - The backend uses a **frames-in-flight ring** (per-frame command buffers + fences + image-available semaphores).
 - Rendering uses **Vulkan 1.3 dynamic rendering** (`vkCmdBeginRendering`) and **dynamic viewport/scissor**.
 - Barriers use **Synchronization2** (`vkCmdPipelineBarrier2`).
@@ -41,18 +41,22 @@ The frame path looks like this:
 
 `Application::create(config)` performs:
 
-1. Create `platform::Window` using `config.window_desc`
-2. Create a `platform::WsiHandle` from the window: `window.native_wsi()`
-3. Create device via RHI factory:
-   - `gfx::rhi::create_device(config.device, wsi_handle)`
-4. Choose initial framebuffer size and build a `SwapchainDesc`
-5. Create swapchain:
+1. Create `base::Diagnostics`
+   - `auto diagnostics = std::make_unique<base::Diagnostics>();`
+2. Create `platform::Window` using `config.window_desc`
+   - `platform::Window window{ *diagnostics, config.window_desc }`
+3. Create a `platform::WsiHandle` from the window: `window.native_wsi()`
+4. Create device via RHI factory:
+   - `gfx::rhi::create_device(*diagnostics, config.device, wsi_handle)`
+5. Choose initial framebuffer size and build a `SwapchainDesc`
+6. Create swapchain:
    - `swapchain = device->create_swapchain(sc_desc, wsi_handle)`
-6. Create renderer:
-   - `gfx::renderer::Render2D renderer{ *device, swapchain }`
+7. Create renderer:
+   - `gfx::renderer::Render2D renderer{ *diagnostics, *device, swapchain }`
+
 
 Ownership is explicit (PImpl inside `Application`):
-- `Application::Impl` owns the window, the `WsiHandle` value, the device, the swapchain handle, and the renderer.
+- `Application::Impl` owns the diagnostics, the window, the `WsiHandle` value, the device, the swapchain handle, and the renderer.
 - `~Application::Impl` calls `device->wait_idle()` before member destruction so backend resources are safe to destroy.
 
 > Note: `platform::WsiHandle` is not a Vulkan surface. The Vulkan backend creates and owns `VkSurfaceKHR`.
@@ -67,7 +71,7 @@ Per iteration:
 4. Query framebuffer size and clamp:
    - `auto framebuffer = clamp_framebuffer(fbw, fbh)`
 5. Render + resize handling:
-   - `draw_frame_and_handle_resize(*device, swapchain, renderer, framebuffer)`
+   - `draw_frame_and_handle_resize(*device, swapchain, renderer, framebuffer, *diagnostics)`
 6. Optional CPU throttle sleep
 
 On exit, `device->wait_idle()` is called once more.
@@ -82,10 +86,11 @@ On exit, `device->wait_idle()` is called once more.
 - `rhi::DescriptorSetLayoutHandle ubo_layout_` (opaque)
 - `rhi::DescriptorSetHandle ubo_set_` (opaque)
 - `rhi::BufferHandle ubo_buffer_` (opaque; host-visible uniform buffer)
+- a non-owning `base::Diagnostics* diagnostics_`
 - a non-owning `rhi::IGpuDevice* device_`
 
 ### Pipeline setup (`Render2D::Render2D`)
-Constructor creates a simple pipeline:
+Constructor (given a `base::Diagnostics&`, `IGpuDevice&`, and `SwapchainHandle`) creates a simple pipeline:
 - vertex shader: `shaders/fullscreen_triangle.vert.spv`
 - fragment shader: `shaders/flat_color.frag.spv`
 - no blending
@@ -100,7 +105,7 @@ and calls:
 
 ### Frame rendering (`Render2D::draw_frame`)
 `draw_frame()` now drives the full frame:
-- validates `device_`, `swapchain_`, `pipeline_`
+- validates `diagnostics_`, `device_`, `swapchain_`, `pipeline_`
 - `device_->acquire_next_image(...)`
 - `cmd = device_->begin_commands()`
 - record a swapchain pass via:

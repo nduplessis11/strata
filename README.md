@@ -175,7 +175,7 @@ At a high level, the codebase is split into layered targets:
 - `strata_gfx_renderer` (STATIC): renderer layer built on the RHI
 - `strata_gfx_backend_vk` (STATIC): Vulkan backend implementation
 - `strata_gfx` (INTERFACE): aggregator target (`strata_gfx_rhi` + `strata_gfx_renderer` + active backend(s))
-- `strata_core` (STATIC): `Application` wrapper and orchestration (links `strata_platform` + `strata_gfx`)
+- `strata_core` (STATIC): `Application` wrapper and orchestration (links `strata_base` + `strata_platform` + `strata_gfx`)
 - `strata_shooter` (EXECUTABLE): example “game” that links `strata_core`
 
 ---
@@ -189,6 +189,11 @@ If you’re adding code, please follow:
 Also keep Vulkan containment intact:
 - **No raw `Vk*` types outside** `engine/gfx/backend/vk/*` (`namespace strata::gfx::vk`).
 
+**Third-party dependency policy**
+- Strata avoids third-party libraries by default for hands-on learning and to keep the codebase readable end-to-end.
+- Prefer the C++ standard library + platform APIs over external wrappers.
+- Exceptions are intentional and explicit: **Vulkan** (required) and (optionally) a small **audio** backend if/when needed.
+- If a third-party library feels necessary, treat it as a design decision and document the rationale.
 ---
 
 ## Roadmap (high level)

@@ -8,15 +8,19 @@
 
 #include "vk_gpu_device.h"
 
-#include <print>
+#include "../vk_check.h"
+#include "strata/base/diagnostics.h"
+
 #include <vector>
 
 namespace strata::gfx::vk
 {
+
 namespace
 {
 
-[[nodiscard]] VkDescriptorType to_vk_descriptor_type(rhi::DescriptorType type)
+[[nodiscard]]
+VkDescriptorType to_vk_descriptor_type(rhi::DescriptorType type)
 {
     switch (type)
     {
@@ -27,7 +31,8 @@ namespace
     }
 }
 
-[[nodiscard]] VkShaderStageFlags to_vk_shader_stage_flags(rhi::ShaderStage stages)
+[[nodiscard]]
+VkShaderStageFlags to_vk_shader_stage_flags(rhi::ShaderStage stages)
 {
     VkShaderStageFlags out = 0;
 
@@ -45,22 +50,30 @@ namespace
 
 bool VkGpuDevice::ensure_descriptor_pool()
 {
+    using namespace strata::base;
+
+    if (!diagnostics_)
+        return false;
+    auto& diag = *diagnostics_;
+
     if (descriptor_pool_.has_value())
         return true;
 
     VkDevice vk_device = device_.device();
     if (vk_device == VK_NULL_HANDLE)
     {
-        std::println(stderr, "VkGpuDevice: ensure_descriptor_pool() failed (device is null)");
+        STRATA_LOG_ERROR(diag.logger(), "vk.desc", "ensure_descriptor_pool failed: device is null");
         return false;
     }
 
     auto pool_or_err = VkDescriptorPoolWrapper::create(vk_device);
     if (!pool_or_err.has_value())
     {
-        std::println(stderr,
-                     "VkGpuDevice: VkDescriptorPoolWrapper::create failed({})",
-                     static_cast<std::uint32_t>(pool_or_err.error()));
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.desc",
+                         "VkDescriptorPoolWrapper::create failed ({})",
+                         static_cast<std::uint32_t>(pool_or_err.error()));
+        diag.debug_break_on_error();
         return false;
     }
 
@@ -71,11 +84,11 @@ bool VkGpuDevice::ensure_descriptor_pool()
 void VkGpuDevice::cleanup_descriptors()
 {
     // IMPORTANT:
+    // This function must be called before device_.cleanup().
+    //
     // VkGpuDevice::~VkGpuDevice() calls device_.cleanup() in its destructor body.
     // Member destructors run AFTER the destructor body, so any RAII wrappers that
     // destroy Vulkan objects using VkDevice must be reset BEFORE device_.cleanup().
-    //
-    // This function must be called before device_.cleanup().
 
     VkDevice vk_device = device_.device();
 
@@ -131,10 +144,18 @@ VkDescriptorSet VkGpuDevice::get_vk_descriptor_set(rhi::DescriptorSetHandle hand
 rhi::DescriptorSetLayoutHandle VkGpuDevice::create_descriptor_set_layout(
     rhi::DescriptorSetLayoutDesc const& desc)
 {
+    using namespace strata::base;
+
+    if (!diagnostics_)
+        return {};
+    auto& diag = *diagnostics_;
+
     VkDevice vk_device = device_.device();
     if (vk_device == VK_NULL_HANDLE)
     {
-        std::println(stderr, "VkGpuDevice: create_descriptor_set_layout failed (device is null)");
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.desc",
+                         "create_descriptor_set_layout failed: device is null");
         return {};
     }
 
@@ -145,24 +166,15 @@ rhi::DescriptorSetLayoutHandle VkGpuDevice::create_descriptor_set_layout(
     for (auto const& b : desc.bindings)
     {
         VkDescriptorType const vk_type = to_vk_descriptor_type(b.type);
-        if (vk_type == VK_DESCRIPTOR_TYPE_MAX_ENUM)
-        {
-            std::println(
-                stderr,
-                "VkGpuDevice: create_descriptor_set_layout unsupported DescriptorType ({})",
-                static_cast<std::uint32_t>(b.type));
-            return {};
-        }
+        STRATA_ASSERT_MSG(diag,
+                          vk_type != VK_DESCRIPTOR_TYPE_MAX_ENUM,
+                          "Unsupported DescriptorType");
 
         VkShaderStageFlags const stage_flags = to_vk_shader_stage_flags(b.stages);
-        if (stage_flags == 0)
-        {
-            std::println(
-                stderr,
-                "VkGpuDevice: create_descriptor_set_layout binding {} has no shader stages",
-                b.binding);
+        STRATA_ASSERT_MSG(diag, stage_flags != 0, "Descriptor binding has no shader stages");
+
+        if (vk_type == VK_DESCRIPTOR_TYPE_MAX_ENUM || stage_flags == 0)
             return {};
-        }
 
         vk_bindings.push_back(VkDescriptorSetLayoutBinding{
             .binding            = b.binding,
@@ -173,21 +185,20 @@ rhi::DescriptorSetLayoutHandle VkGpuDevice::create_descriptor_set_layout(
         });
     }
 
-    VkDescriptorSetLayoutCreateInfo const ci{
-        .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .pNext        = nullptr,
-        .flags        = 0,
-        .bindingCount = static_cast<std::uint32_t>(vk_bindings.size()),
-        .pBindings    = vk_bindings.empty() ? nullptr : vk_bindings.data(),
-    };
+    VkDescriptorSetLayoutCreateInfo ci{};
+    ci.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    ci.bindingCount = static_cast<std::uint32_t>(vk_bindings.size());
+    ci.pBindings    = vk_bindings.empty() ? nullptr : vk_bindings.data();
 
     VkDescriptorSetLayout layout = VK_NULL_HANDLE;
     VkResult const        res    = vkCreateDescriptorSetLayout(vk_device, &ci, nullptr, &layout);
     if (res != VK_SUCCESS)
     {
-        std::println(stderr,
-                     "VkGpuDevice: vkCreateDescriptorSetLayout failed({})",
-                     static_cast<std::uint32_t>(res));
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.desc",
+                         "vkCreateDescriptorSetLayout failed: {}",
+                         to_string(res));
+        diag.debug_break_on_error();
         return {};
     }
 
@@ -203,8 +214,13 @@ rhi::DescriptorSetLayoutHandle VkGpuDevice::create_descriptor_set_layout(
 
 void VkGpuDevice::destroy_descriptor_set_layout(rhi::DescriptorSetLayoutHandle handle)
 {
+    using namespace strata::base;
+
     if (!handle)
         return;
+    if (!diagnostics_)
+        return;
+    auto& diag = *diagnostics_;
 
     VkDevice vk_device = device_.device();
     if (vk_device == VK_NULL_HANDLE)
@@ -225,11 +241,11 @@ void VkGpuDevice::destroy_descriptor_set_layout(rhi::DescriptorSetLayoutHandle h
     {
         if (h.value == handle.value)
         {
-            std::println(stderr,
-                         "destroy_descriptor_set_layout: layout {} is used by current pipeline; "
-                         "invalidating pipeline",
-                         handle.value);
-
+            STRATA_LOG_WARN(diag.logger(),
+                            "vk.desc",
+                            "destroy_descriptor_set_layout: layout {} used by current pipeline; "
+                            "invalidating pipeline",
+                            handle.value);
             basic_pipeline_ = BasicPipeline{};
             pipeline_set_layout_handles_.clear();
             break;
@@ -242,51 +258,52 @@ void VkGpuDevice::destroy_descriptor_set_layout(rhi::DescriptorSetLayoutHandle h
 
 rhi::DescriptorSetHandle VkGpuDevice::allocate_descriptor_set(rhi::DescriptorSetLayoutHandle layout)
 {
-    if (!layout)
-    {
-        std::println(stderr, "VkGpuDevice: allocate_descriptor_set called with invalid layout");
+    using namespace strata::base;
+
+    if (!diagnostics_)
         return {};
-    }
+    auto& diag = *diagnostics_;
+
+    STRATA_ASSERT_MSG(diag, layout, "allocate_descriptor_set called with invalid layout");
+    if (!layout)
+        return {};
 
     if (!ensure_descriptor_pool())
         return {};
 
     VkDevice vk_device = device_.device();
     if (vk_device == VK_NULL_HANDLE)
-    {
-        std::println(stderr, "VkGpuDevice: allocate_descriptor_set failed (device is null)");
         return {};
-    }
 
     VkDescriptorSetLayout const vk_layout = get_vk_descriptor_set_layout(layout);
     if (vk_layout == VK_NULL_HANDLE)
     {
-        std::println(stderr, "VkGpuDevice: allocate_descriptor_set failed (layout not found)");
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.desc",
+                         "allocate_descriptor_set failed: layout not found");
+        diag.debug_break_on_error();
         return {};
     }
 
     VkDescriptorPool const pool = descriptor_pool_->descriptor_pool();
     if (pool == VK_NULL_HANDLE)
-    {
-        std::println(stderr, "VkGpuDevice: allocate_descriptor_set failed (pool is null)");
         return {};
-    }
 
-    VkDescriptorSetAllocateInfo const ai{
-        .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .pNext              = nullptr,
-        .descriptorPool     = pool,
-        .descriptorSetCount = 1,
-        .pSetLayouts        = &vk_layout,
-    };
+    VkDescriptorSetAllocateInfo ai{};
+    ai.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    ai.descriptorPool     = pool;
+    ai.descriptorSetCount = 1;
+    ai.pSetLayouts        = &vk_layout;
 
     VkDescriptorSet vk_set = VK_NULL_HANDLE;
     VkResult const  res    = vkAllocateDescriptorSets(vk_device, &ai, &vk_set);
     if (res != VK_SUCCESS)
     {
-        std::println(stderr,
-                     "VkGpuDevice: vkAllocateDescriptorSets failed({})",
-                     static_cast<std::uint32_t>(res));
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.desc",
+                         "vkAllocateDescriptorSets failed: {}",
+                         to_string(res));
+        diag.debug_break_on_error();
         return {};
     }
 
@@ -304,12 +321,14 @@ void VkGpuDevice::free_descriptor_set(rhi::DescriptorSetHandle set)
 {
     if (!set)
         return;
-
-    if (!descriptor_pool_.has_value())
-        return; // Nothing to free from.
+    if (!diagnostics_)
+        return;
 
     VkDevice vk_device = device_.device();
     if (vk_device == VK_NULL_HANDLE)
+        return;
+
+    if (!descriptor_pool_.has_value())
         return;
 
     std::size_t const index = static_cast<std::size_t>(set.value - 1);
@@ -327,9 +346,11 @@ void VkGpuDevice::free_descriptor_set(rhi::DescriptorSetHandle set)
     VkResult const res = vkFreeDescriptorSets(vk_device, pool, 1, &vk_set);
     if (res != VK_SUCCESS)
     {
-        std::println(stderr,
-                     "VkGpuDevice: vkFreeDescriptorSets failed({})",
-                     static_cast<std::uint32_t>(res));
+        auto& diag = *diagnostics_;
+        STRATA_LOG_WARN(diag.logger(),
+                        "vk.desc",
+                        "vkFreeDescriptorSets failed: {}",
+                        to_string(res));
         // Keep going; still invalidate the handle-side entry to avoid double free attempts.
     }
 
@@ -339,17 +360,21 @@ void VkGpuDevice::free_descriptor_set(rhi::DescriptorSetHandle set)
 rhi::FrameResult VkGpuDevice::update_descriptor_set(rhi::DescriptorSetHandle              set,
                                                     std::span<rhi::DescriptorWrite const> writes)
 {
+    using namespace strata::base;
+
+    if (!diagnostics_)
+        return rhi::FrameResult::Error;
+    auto& diag = *diagnostics_;
+
     VkDevice vk_device = device_.device();
     if (vk_device == VK_NULL_HANDLE)
-    {
-        std::println(stderr, "VkGpuDevice: update_descriptor_set failed (device is null)");
         return rhi::FrameResult::Error;
-    }
 
     VkDescriptorSet const vk_set = get_vk_descriptor_set(set);
     if (vk_set == VK_NULL_HANDLE)
     {
-        std::println(stderr, "VkGpuDevice: update_descriptor_set failed (set not found)");
+        STRATA_LOG_ERROR(diag.logger(), "vk.desc", "update_descriptor_set failed: set not found");
+        diag.debug_break_on_error();
         return rhi::FrameResult::Error;
     }
 
@@ -365,18 +390,20 @@ rhi::FrameResult VkGpuDevice::update_descriptor_set(rhi::DescriptorSetHandle    
     {
         if (w.type != rhi::DescriptorType::UniformBuffer)
         {
-            std::println(stderr,
-                         "VkGpuDevice: update_descriptor_set unsupported DescriptorType ({})",
-                         static_cast<std::uint32_t>(w.type));
+            STRATA_LOG_ERROR(diag.logger(),
+                             "vk.desc",
+                             "update_descriptor_set: unsupported DescriptorType");
+            diag.debug_break_on_error();
             return rhi::FrameResult::Error;
         }
 
         VkBuffer const vk_buffer = get_vk_buffer(w.buffer.buffer);
         if (vk_buffer == VK_NULL_HANDLE)
         {
-            std::println(
-                stderr,
-                "VkGpuDevice: update_descriptor_set failed (BufferHandle not resolvable yet)");
+            STRATA_LOG_ERROR(diag.logger(),
+                             "vk.desc",
+                             "update_descriptor_set: BufferHandle not resolvable");
+            diag.debug_break_on_error();
             return rhi::FrameResult::Error;
         }
 
@@ -395,18 +422,15 @@ rhi::FrameResult VkGpuDevice::update_descriptor_set(rhi::DescriptorSetHandle    
         if (vk_type == VK_DESCRIPTOR_TYPE_MAX_ENUM)
             return rhi::FrameResult::Error;
 
-        vk_writes.push_back(VkWriteDescriptorSet{
-            .sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext            = nullptr,
-            .dstSet           = vk_set,
-            .dstBinding       = w.binding,
-            .dstArrayElement  = 0,
-            .descriptorCount  = 1,
-            .descriptorType   = vk_type,
-            .pImageInfo       = nullptr,
-            .pBufferInfo      = &vk_buffer_infos.back(),
-            .pTexelBufferView = nullptr,
-        });
+        VkWriteDescriptorSet write{};
+        write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet          = vk_set;
+        write.dstBinding      = w.binding;
+        write.descriptorCount = 1;
+        write.descriptorType  = vk_type;
+        write.pBufferInfo     = &vk_buffer_infos.back();
+
+        vk_writes.push_back(write);
     }
 
     vkUpdateDescriptorSets(vk_device,

@@ -6,14 +6,14 @@
 // -----------------------------------------------------------------------------
 
 #include "vk_instance.h"
+#include "vk_check.h"
 #include "vk_wsi_bridge.h"
 
 #include <algorithm>
-#include <print>
-#include <vector>
 #include <cstring>
+#include <vector>
 
-#include <vulkan/vulkan.h>
+#include "strata/base/diagnostics.h"
 
 namespace strata::gfx::vk
 {
@@ -21,25 +21,38 @@ namespace
 {
 
 inline constexpr bool vk_validation_requested = (STRATA_VK_VALIDATION != 0);
+constexpr char const* validation_layers[]     = {"VK_LAYER_KHRONOS_validation"};
 
-constexpr char const* validation_layers[] = {"VK_LAYER_KHRONOS_validation"};
+base::LogLevel map_vk_severity(VkDebugUtilsMessageSeverityFlagBitsEXT severity) noexcept
+{
+    if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+        return base::LogLevel::Error;
+    if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+        return base::LogLevel::Warn;
+    if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+        return base::LogLevel::Info;
+    return base::LogLevel::Debug; // VERBOSE -> Debug (avoid Trace spam by default)
+}
 
 VKAPI_ATTR VkBool32 VKAPI_CALL
 debug_callback([[maybe_unused]] VkDebugUtilsMessageSeverityFlagBitsEXT severity,
                [[maybe_unused]] VkDebugUtilsMessageTypeFlagsEXT        type,
                VkDebugUtilsMessengerCallbackDataEXT const*             callback_data,
-               void* /*user_data*/)
+               void*                                                   user_data)
 {
+    auto* diag = static_cast<base::Diagnostics*>(user_data);
+    if (!diag)
+        return VK_FALSE;
 
-    // Filter severity/type here if needed.
-    std::println(stderr,
-                 "[vk] {}",
-                 (callback_data && callback_data->pMessage) ? callback_data->pMessage : "(null)");
+    std::string_view const msg =
+        (callback_data && callback_data->pMessage) ? callback_data->pMessage : "(null)";
 
+    // Pass default source_location (line==0) so sinks can omit useless file:line.
+    diag->logger().log(map_vk_severity(severity), "vk.validation", msg, std::source_location{});
     return VK_FALSE;
 }
 
-void populate_debug_messenger_ci(VkDebugUtilsMessengerCreateInfoEXT& ci)
+void populate_debug_messenger_ci(VkDebugUtilsMessengerCreateInfoEXT& ci, base::Diagnostics* diag)
 {
     ci                 = {};
     ci.sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -51,15 +64,20 @@ void populate_debug_messenger_ci(VkDebugUtilsMessengerCreateInfoEXT& ci)
                      VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                      VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     ci.pfnUserCallback = debug_callback;
-    ci.pUserData       = nullptr;
+    ci.pUserData       = diag;
 }
 
-bool has_layer_support()
+bool has_layer_support(base::Diagnostics& diagnostics)
 {
     std::uint32_t count = 0;
-    vkEnumerateInstanceLayerProperties(&count, nullptr);
+    STRATA_VK_ASSERT_RETURN(diagnostics,
+                            vkEnumerateInstanceLayerProperties(&count, nullptr),
+                            false);
+
     std::vector<VkLayerProperties> props(count);
-    vkEnumerateInstanceLayerProperties(&count, props.data());
+    STRATA_VK_ASSERT_RETURN(diagnostics,
+                            vkEnumerateInstanceLayerProperties(&count, props.data()),
+                            false);
 
     for (char const* want : validation_layers)
     {
@@ -105,8 +123,12 @@ VkInstanceWrapper::~VkInstanceWrapper()
 }
 
 VkInstanceWrapper::VkInstanceWrapper(VkInstanceWrapper&& other) noexcept
-    : instance_(other.instance_), surface_(other.surface_), debug_messenger_(other.debug_messenger_)
+      : diagnostics_(other.diagnostics_)
+      , instance_(other.instance_)
+      , surface_(other.surface_)
+      , debug_messenger_(other.debug_messenger_)
 {
+    other.diagnostics_     = nullptr;
     other.instance_        = VK_NULL_HANDLE;
     other.surface_         = VK_NULL_HANDLE;
     other.debug_messenger_ = VK_NULL_HANDLE;
@@ -117,10 +139,13 @@ VkInstanceWrapper& VkInstanceWrapper::operator=(VkInstanceWrapper&& other) noexc
     if (this != &other)
     {
         cleanup();
+
+        diagnostics_     = other.diagnostics_;
         instance_        = other.instance_;
         surface_         = other.surface_;
         debug_messenger_ = other.debug_messenger_;
 
+        other.diagnostics_     = nullptr;
         other.instance_        = VK_NULL_HANDLE;
         other.surface_         = VK_NULL_HANDLE;
         other.debug_messenger_ = VK_NULL_HANDLE;
@@ -128,9 +153,10 @@ VkInstanceWrapper& VkInstanceWrapper::operator=(VkInstanceWrapper&& other) noexc
     return *this;
 }
 
-bool VkInstanceWrapper::init(strata::platform::WsiHandle const& wsi)
+bool VkInstanceWrapper::init(base::Diagnostics& diagnostics, strata::platform::WsiHandle const& wsi)
 {
     cleanup();
+    diagnostics_ = &diagnostics;
 
     // --- Instance extensions from vk_wsi_bridge -------------------------
     auto                     ext_span = required_instance_extensions(wsi);
@@ -144,19 +170,22 @@ bool VkInstanceWrapper::init(strata::platform::WsiHandle const& wsi)
     }
 
     bool const want_validation    = vk_validation_requested;
-    bool const have_validation    = want_validation && has_layer_support();
+    bool const have_validation    = want_validation && has_layer_support(diagnostics);
     bool const validation_enabled = want_validation && have_validation;
 
+    VkDebugUtilsMessengerCreateInfoEXT debug_ci{};
     if (want_validation && !have_validation)
     {
-        std::println(stderr,
-                     "[vk] Validation requested, but VK_LAYER_KHRONOS_validation not found. "
-                     "Continuing without layers.");
+        STRATA_LOG_WARN(diagnostics.logger(),
+                        "vk",
+                        "Validation requested but VK_LAYER_KHRONOS_validation not found; "
+                        "continuing without layers.");
     }
 
     if (validation_enabled)
     {
         exts.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        populate_debug_messenger_ci(debug_ci, diagnostics_);
     }
 
     // --- Application info -----------------------------------------------
@@ -167,13 +196,6 @@ bool VkInstanceWrapper::init(strata::platform::WsiHandle const& wsi)
     app.pEngineName        = "strata";
     app.engineVersion      = VK_MAKE_API_VERSION(0, 0, 1, 0);
     app.apiVersion         = VK_API_VERSION_1_3;
-
-    // Optional: allow validation messages during vkCreateInstance
-    VkDebugUtilsMessengerCreateInfoEXT debug_ci{};
-    if (validation_enabled)
-    {
-        populate_debug_messenger_ci(debug_ci);
-    }
 
     // --- Instance create info -------------------------------------------
     VkInstanceCreateInfo ci{};
@@ -186,7 +208,7 @@ bool VkInstanceWrapper::init(strata::platform::WsiHandle const& wsi)
     {
         ci.enabledLayerCount   = static_cast<std::uint32_t>(std::size(validation_layers));
         ci.ppEnabledLayerNames = validation_layers;
-        ci.pNext               = &debug_ci; // hook messages from instance creation
+        ci.pNext               = &debug_ci; // enable messages during vkCreateInstance
     }
     else
     {
@@ -198,7 +220,10 @@ bool VkInstanceWrapper::init(strata::platform::WsiHandle const& wsi)
     VkResult res = vkCreateInstance(&ci, nullptr, &instance_);
     if (res != VK_SUCCESS)
     {
-        std::println(stderr, "vkCreateInstance failed: {}", static_cast<int>(res));
+        diagnostics.logger().log(base::LogLevel::Error,
+                                 "vk",
+                                 vk_error_message("vkCreateInstance", res),
+                                 std::source_location{});
         cleanup();
         return false;
     }
@@ -209,11 +234,16 @@ bool VkInstanceWrapper::init(strata::platform::WsiHandle const& wsi)
         res = create_debug_utils_messenger_ext(instance_, &debug_ci, nullptr, &debug_messenger_);
         if (res != VK_SUCCESS)
         {
-            std::println(
-                stderr,
-                "[vk] vkCreateDebugUtilsMessengerEXT failed: {} (continuing without messenger)",
+            STRATA_LOG_WARN(
+                diagnostics.logger(),
+                "vk",
+                "vkCreateDebugUtilsMessengerEXT failed: {} (continuing without messenger)",
                 static_cast<int>(res));
             debug_messenger_ = VK_NULL_HANDLE;
+        }
+        else
+        {
+            STRATA_LOG_INFO(diagnostics.logger(), "vk", "Vulkan validation messenger enabled");
         }
     }
 
@@ -221,11 +251,12 @@ bool VkInstanceWrapper::init(strata::platform::WsiHandle const& wsi)
     surface_ = create_surface(instance_, wsi);
     if (surface_ == VK_NULL_HANDLE)
     {
-        std::println(stderr, "vk_wsi_bridge::create_surface failed");
+        STRATA_LOG_ERROR(diagnostics.logger(), "vk", "vk_wsi_bridge::create_surface failed");
         cleanup();
         return false;
     }
 
+    STRATA_LOG_INFO(diagnostics.logger(), "vk", "Vulkan instance + surface created");
     return true;
 }
 

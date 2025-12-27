@@ -37,6 +37,7 @@ target_link_libraries(strata_gfx_backend_vk
     PUBLIC
         Vulkan::Vulkan
     PRIVATE
+        strata_base
         strata_gfx_rhi
 )
 

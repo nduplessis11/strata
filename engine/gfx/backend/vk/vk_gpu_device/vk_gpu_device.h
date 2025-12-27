@@ -25,6 +25,11 @@
 #include "../vk_pipeline_basic.h"
 #include "../vk_swapchain.h"
 
+namespace strata::base
+{
+class Diagnostics;
+}
+
 namespace strata::gfx::vk
 {
 
@@ -34,7 +39,8 @@ class VkGpuDevice final : public rhi::IGpuDevice
     ~VkGpuDevice() override;
 
     // Factory (backend uses explicit creation; VkGpuDevice ctor is private)
-    static std::unique_ptr<VkGpuDevice> create(rhi::DeviceCreateInfo const& info,
+    static std::unique_ptr<VkGpuDevice> create(base::Diagnostics&           diagnostics,
+                                               rhi::DeviceCreateInfo const& info,
                                                platform::WsiHandle const&   surface);
 
     // --- Swapchain -----------------------------------------------------------
@@ -158,6 +164,9 @@ class VkGpuDevice final : public rhi::IGpuDevice
     // --- Buffer internals ----------------------------------------------------
     VkBuffer get_vk_buffer(rhi::BufferHandle handle) const noexcept;
     void     cleanup_buffers();
+
+    // --- Diagnostics (explicitly provided by Application) ---------------------
+    base::Diagnostics* diagnostics_{nullptr}; // non-owning
 
     // --- Backend state -------------------------------------------------------
     VkInstanceWrapper                           instance_{};

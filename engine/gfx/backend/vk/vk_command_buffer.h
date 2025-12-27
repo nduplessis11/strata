@@ -10,6 +10,11 @@
 #include <cstdint>
 #include <vulkan/vulkan.h>
 
+namespace strata::base
+{
+class Diagnostics;
+}
+
 namespace strata::gfx::vk
 {
 
@@ -22,6 +27,12 @@ class VkCommandBufferPool
     VkCommandBufferPool(VkCommandBufferPool&&) noexcept;
     VkCommandBufferPool& operator=(VkCommandBufferPool&&) noexcept;
 
+    // Explicit injection (no globals). Safe to call multiple times.
+    void set_diagnostics(base::Diagnostics* diagnostics) noexcept
+    {
+        diagnostics_ = diagnostics;
+    }
+
     // Create a pool for a given queue family
     bool init(VkDevice device, std::uint32_t queue_family_index);
     void cleanup(VkDevice device);
@@ -30,7 +41,8 @@ class VkCommandBufferPool
     VkCommandBuffer allocate(VkDevice device);
 
   private:
-    VkCommandPool pool_{VK_NULL_HANDLE};
+    base::Diagnostics* diagnostics_{nullptr}; // non-owning
+    VkCommandPool      pool_{VK_NULL_HANDLE};
 };
 
 } // namespace strata::gfx::vk

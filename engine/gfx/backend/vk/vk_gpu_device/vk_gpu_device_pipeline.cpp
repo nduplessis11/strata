@@ -7,19 +7,22 @@
 
 #include "vk_gpu_device.h"
 
-#include <print>
+#include "strata/base/diagnostics.h"
 
 namespace strata::gfx::vk
 {
 
-// --- Pipelines -----------------------------------------------------------
-
 rhi::PipelineHandle VkGpuDevice::create_pipeline(rhi::PipelineDesc const& desc)
 {
-    if (!swapchain_.valid() || !device_.device())
-    {
+    using namespace strata::base;
+
+    if (!diagnostics_)
         return {};
-    }
+
+    auto& diag = *diagnostics_;
+
+    if (!swapchain_.valid() || !device_.device())
+        return {};
 
     // Remember the layout handles so cmd_bind_pipeline can rebuild if needed.
     pipeline_set_layout_handles_.assign(desc.set_layouts.begin(), desc.set_layouts.end());
@@ -32,8 +35,10 @@ rhi::PipelineHandle VkGpuDevice::create_pipeline(rhi::PipelineDesc const& desc)
         VkDescriptorSetLayout const vk_layout = get_vk_descriptor_set_layout(h);
         if (vk_layout == VK_NULL_HANDLE)
         {
-            std::println(stderr,
-                         "VkGpuDevice: create_pipeline failed (DescriptorSetLayoutHandle invalid)");
+            STRATA_LOG_ERROR(diag.logger(),
+                             "vk.pipeline",
+                             "create_pipeline: invalid DescriptorSetLayoutHandle in recipe");
+            diag.debug_break_on_error();
             pipeline_set_layout_handles_.clear();
             return {};
         }
@@ -42,9 +47,13 @@ rhi::PipelineHandle VkGpuDevice::create_pipeline(rhi::PipelineDesc const& desc)
 
     basic_pipeline_ =
         create_basic_pipeline(device_.device(), swapchain_.image_format(), std::span{vk_layouts});
+
     if (!basic_pipeline_.valid())
     {
-        std::println(stderr, "VkGpuDevice: failed to create basic pipeline");
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.pipeline",
+                         "create_pipeline: create_basic_pipeline failed");
+        diag.debug_break_on_error();
         pipeline_set_layout_handles_.clear();
         return {};
     }
@@ -58,9 +67,7 @@ void VkGpuDevice::destroy_pipeline(rhi::PipelineHandle)
     basic_pipeline_ = BasicPipeline{};
 
     // IMPORTANT:
-    // Do NOT clear pipeline_set_layout_handles_ here.
-    // These handles are the "recipe" for rebuilding the pipeline layout after
-    // swapchain resize / pipeline invalidation.
+    // Do NOT clear pipeline_set_layout_handles_ (it is the rebuild recipe).
 }
 
 } // namespace strata::gfx::vk

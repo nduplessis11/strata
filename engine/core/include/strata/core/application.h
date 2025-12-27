@@ -16,12 +16,17 @@
 
 #include <chrono>
 #include <cstdint>
+#include <expected>
 #include <functional>
 
 #include "strata/gfx/renderer/render_2d.h"
 #include "strata/gfx/rhi/gpu_device.h"
 #include "strata/platform/window.h"
-#include <expected>
+
+namespace strata::base
+{
+class Diagnostics;
+}
 
 namespace strata::core
 {
@@ -83,6 +88,11 @@ class Application
     std::int16_t run(TickFn tick = {});
     void         request_exit() noexcept;
 
+    // --- Accessors -----------------------------------------------------------------
+    //
+    // Const-propagating accessors: constness of Application controls whether subsystems are
+    // returned as T& or T const&.
+
     [[nodiscard]] strata::platform::Window&       window() noexcept;
     [[nodiscard]] strata::platform::Window const& window() const noexcept;
 
@@ -93,6 +103,9 @@ class Application
 
     [[nodiscard]] strata::gfx::renderer::Render2D&       renderer() noexcept;
     [[nodiscard]] strata::gfx::renderer::Render2D const& renderer() const noexcept;
+
+    [[nodiscard]] strata::base::Diagnostics&       diagnostics() noexcept;
+    [[nodiscard]] strata::base::Diagnostics const& diagnostics() const noexcept;
 
     [[nodiscard]] ApplicationConfig const& config() const noexcept;
 
