@@ -43,7 +43,13 @@ Consistency is still valued, and cleverness is a last resort.
 5. **Avoid leaking heavy dependencies**
    - Public headers should not pull in OS headers or `<vulkan/vulkan.h>` unless the header is explicitly backend-only.
 
-6. **Use east const**
+6. **Avoid third-party libraries**
+   - Strata is learning-focused: keep dependencies minimal so the codebase is readable end-to-end.
+   - Prefer the C++ standard library + platform APIs over external wrappers.
+   - Exceptions are intentional and explicit: **Vulkan** (required) and (optionally) a small **audio** backend if/when needed.
+   - If a third-party library feels necessary, treat it as a design decision and document the rationale.
+
+7. **Use east const**
    - Prefer `Type const&` / `Type const*` over `const Type&` / `const Type*`.
 
 ---

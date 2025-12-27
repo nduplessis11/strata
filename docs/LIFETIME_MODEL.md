@@ -7,7 +7,7 @@ It reflects the current “production-leaning, learning-first” approach:
 - Prefer **RAII cleanup**
 - Prefer **safe destruction** (often via `wait_idle()`), even if it’s not the most performant yet
 
-> Scope: what exists in `core::Application`, `platform::Window`, `platform::WsiHandle`, `gfx::renderer::Render2D`, `gfx::rhi::IGpuDevice`, and the Vulkan backend (`gfx/backend/vk/*`).  
+> Scope: what exists in `core::Application`, `base::Diagnostics`, `platform::Window`, `platform::WsiHandle`, `gfx::renderer::Render2D`, `gfx::rhi::IGpuDevice`, and the Vulkan backend (`gfx/backend/vk/*`).  
 > Non-scope: future ECS lifetimes, asset systems, multithreading, streaming, etc.
 
 ---
@@ -16,6 +16,7 @@ It reflects the current “production-leaning, learning-first” approach:
 
 ### No partially-initialized `Application`
 `Application::create()` returns `std::expected<Application, ApplicationError>`. If we get an `Application`, these are expected to be valid and usable:
+- `base::Diagnostics`
 - `platform::Window`
 - `rhi::IGpuDevice`
 - `rhi::SwapchainHandle`
@@ -45,12 +46,14 @@ flowchart TD
   A[core::Application] --> I[Application::Impl]
 
   I --> W[platform::Window]
+  I --> DIAG["base::Diagnostics (unique_ptr)"]
   I --> WH["platform::WsiHandle (value copy)"]
   I --> D["rhi::IGpuDevice (unique_ptr)"]
   I --> SC["rhi::SwapchainHandle (value)"]
   I --> R["gfx::renderer::Render2D (value)"]
 
   R -->|non-owning ptr| D
+  R -->|non-owning ptr| DIAG
   R -->|value handle| SC
 ```
 
@@ -86,6 +89,7 @@ flowchart TD
 
 ### `platform::Window` (owner)
 `platform::Window` is a **move-only owner** implemented with a `pImpl`:
+- Takes a `base::Diagnostics&` explicitly (no globals)
 - Keeps OS headers out of public headers
 - Hides native window types (`HWND`, `Display*`, etc.)
 - Owns the native window resources for the current platform
@@ -157,18 +161,21 @@ Lifetime requirement (again):
 ### `core::Application::create()` bring-up
 Creation happens in a strict “bring-up” sequence:
 
-1. **Window**
-   - `platform::Window window{ config.window_desc }`
-2. **WSI handle**
+1. **Diagnostics**
+   - `auto diagnostics = std::make_unique<base::Diagnostics>();`
+2. **Window**
+   - `platform::Window window{ *diagnostics, config.window_desc }`
+3. **WSI handle**
    - `auto surface = window.native_wsi()` (typed native handle bundle)
-3. **Device**
-   - `auto device = gfx::rhi::create_device(config.device, surface)`
-4. **Swapchain**
+4. **Device**
+   - `auto device = gfx::rhi::create_device(*diagnostics, config.device, surface)`
+5. **Swapchain**
    - Determine framebuffer size
    - `swapchain = device->create_swapchain(sc_desc, surface)`
-5. **Renderer**
-   - `Render2D renderer{ *device, swapchain }`
+6. **Renderer**
+   - `Render2D renderer{ *diagnostics, *device, swapchain }`
    - This calls `device.create_pipeline(...)` inside the constructor
+
 
 Only after all of the above succeed is `Application` returned as a valid value.
 
@@ -176,7 +183,7 @@ Only after all of the above succeed is `Application` returned as a valid value.
 Backend bring-up sequence:
 
 1. **Instance + surface**
-   - `instance_.init(wsi)`
+   - `instance_.init(diagnostics, wsi)`
    - this:
      - queries required instance extensions via `required_instance_extensions(wsi)`
      - creates `VkInstance`
