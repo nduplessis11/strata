@@ -72,6 +72,13 @@ struct PipelineDesc
     char const* fragment_shader_path{};
     bool        alpha_blend{false};
 
+    // Optional depth state (for dynamic rendering).
+    // If depth_format == Format::Unknown, backends should treat this pipeline as
+    // "no depth attachment"
+    Format depth_format{Format::Unknown};
+    bool   depth_test{false};
+    bool   depth_write{false};
+
     std::span<DescriptorSetLayoutHandle const> set_layouts{};
 };
 

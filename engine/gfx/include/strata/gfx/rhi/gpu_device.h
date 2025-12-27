@@ -83,10 +83,15 @@ class IGpuDevice
     virtual FrameResult cmd_begin_swapchain_pass(CommandBufferHandle cmd,
                                                  SwapchainHandle     swapchain,
                                                  std::uint32_t       image_index,
-                                                 ClearColor const&   clear)                   = 0;
+                                                 ClearColor const&   clear,
+                                                 TextureHandle       depth_texture = {},
+                                                 float               clear_depth   = 1.0f,
+                                                 std::uint32_t       clear_stencil = 0) = 0;
+
     virtual FrameResult cmd_end_swapchain_pass(CommandBufferHandle cmd,
                                                SwapchainHandle     swapchain,
-                                               std::uint32_t       image_index)                   = 0;
+                                               std::uint32_t       image_index) = 0;
+
     virtual FrameResult cmd_bind_pipeline(CommandBufferHandle cmd, PipelineHandle pipeline) = 0;
     virtual FrameResult cmd_set_viewport_scissor(CommandBufferHandle cmd, Extent2D extent)  = 0;
     virtual FrameResult cmd_draw(CommandBufferHandle cmd,

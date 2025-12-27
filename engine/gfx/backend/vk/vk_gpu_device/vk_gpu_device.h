@@ -92,7 +92,10 @@ class VkGpuDevice final : public rhi::IGpuDevice
     rhi::FrameResult cmd_begin_swapchain_pass(rhi::CommandBufferHandle cmd,
                                               rhi::SwapchainHandle     swapchain,
                                               std::uint32_t            image_index,
-                                              rhi::ClearColor const&   clear) override;
+                                              rhi::ClearColor const&   clear,
+                                              rhi::TextureHandle       depth_texture,
+                                              float                    clear_depth,
+                                              std::uint32_t            clear_stencil) override;
 
     rhi::FrameResult cmd_end_swapchain_pass(rhi::CommandBufferHandle cmd,
                                             rhi::SwapchainHandle     swapchain,

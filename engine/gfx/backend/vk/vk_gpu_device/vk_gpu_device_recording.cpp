@@ -93,14 +93,29 @@ rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
     [[maybe_unused]] rhi::CommandBufferHandle cmd,
     [[maybe_unused]] rhi::SwapchainHandle     swapchain,
     std::uint32_t                             image_index,
-    rhi::ClearColor const&                    clear)
+    rhi::ClearColor const&                    clear,
+    [[maybe_unused]] rhi::TextureHandle       depth_texture,
+    [[maybe_unused]] float                    clear_depth,
+    [[maybe_unused]] std::uint32_t            clear_stencil)
 {
     using namespace strata::base;
     using rhi::FrameResult;
 
     if (!diagnostics_)
         return FrameResult::Error;
+
     auto& diag = *diagnostics_;
+
+    // Depth is not wired up in the Vulkan backend yet.
+    // This guard prevents silent ignores if a caller starts passing a depth attachment.
+    if (depth_texture)
+    {
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.record",
+                         "cmd_begin_swapchain_pass: depth attachment not implemented yet");
+        diag.debug_break_on_error();
+        return FrameResult::Error;
+    }
 
     if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
         return FrameResult::Error;
