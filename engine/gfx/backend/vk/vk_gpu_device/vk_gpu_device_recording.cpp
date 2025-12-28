@@ -131,6 +131,28 @@ rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
         return FrameResult::Error;
     }
 
+    bool const pipeline_expects_depth = (basic_pipeline_depth_format_ != VK_FORMAT_UNDEFINED);
+
+    if (pipeline_expects_depth && !depth_texture)
+    {
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.record",
+                         "cmd_begin_swapchain_pass: pipeline expects depth format {} but no "
+                         "depth_texture provided",
+                         static_cast<std::int32_t>(basic_pipeline_depth_format_));
+        diag.debug_break_on_error();
+        return FrameResult::Error;
+    }
+    if (!pipeline_expects_depth && depth_texture)
+    {
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.record",
+                         "cmd_begin_swapchain_pass: depth_texture provided but pipeline expects no "
+                         "depth (VK_FORMAT_UNDEFINED)");
+        diag.debug_break_on_error();
+        return FrameResult::Error;
+    }
+
     VkImage     image = images[image_index];
     VkImageView view  = views[image_index];
 
@@ -153,15 +175,6 @@ rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
         }
 
         TextureRecord const& trec = textures_[tindex];
-        if (basic_pipeline_depth_format_ == VK_FORMAT_UNDEFINED)
-        {
-            STRATA_LOG_ERROR(
-                diag.logger(),
-                "vk.record",
-                "Depth attachment provided but pipeline expects no depth (VK_FORMAT_UNDEFINED)");
-            diag.debug_break_on_error();
-            return FrameResult::Error;
-        }
 
         if (trec.format != basic_pipeline_depth_format_)
         {
