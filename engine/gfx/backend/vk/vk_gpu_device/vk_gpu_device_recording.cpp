@@ -153,10 +153,31 @@ rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
         }
 
         TextureRecord const& trec = textures_[tindex];
-        depth_image               = trec.image;
-        depth_view                = trec.view;
-        depth_aspect              = trec.aspect_mask;
-        depth_old_layout          = trec.layout;
+        if (basic_pipeline_depth_format_ == VK_FORMAT_UNDEFINED)
+        {
+            STRATA_LOG_ERROR(
+                diag.logger(),
+                "vk.record",
+                "Depth attachment provided but pipeline expects no depth (VK_FORMAT_UNDEFINED)");
+            diag.debug_break_on_error();
+            return FrameResult::Error;
+        }
+
+        if (trec.format != basic_pipeline_depth_format_)
+        {
+            STRATA_LOG_ERROR(diag.logger(),
+                             "vk.record",
+                             "Depth format mismatch: texture format {} != pipeline depth format {}",
+                             static_cast<std::int32_t>(trec.format),
+                             static_cast<std::int32_t>(basic_pipeline_depth_format_));
+            diag.debug_break_on_error();
+            return FrameResult::Error;
+        }
+
+        depth_image      = trec.image;
+        depth_view       = trec.view;
+        depth_aspect     = trec.aspect_mask;
+        depth_old_layout = trec.layout;
 
         if (depth_image == VK_NULL_HANDLE || depth_view == VK_NULL_HANDLE)
         {
