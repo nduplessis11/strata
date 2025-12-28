@@ -132,6 +132,9 @@ class "strata::gfx::rhi::PipelineDesc" as C_0003569144566224904043
 class C_0003569144566224904043 {
 __
 +alpha_blend : bool
++depth_format : Format
++depth_test : bool
++depth_write : bool
 +fragment_shader_path : const char *
 +set_layouts : std::span<const DescriptorSetLayoutHandle>
 +vertex_shader_path : const char *
@@ -252,7 +255,7 @@ abstract C_0017920997868415439149 {
 {abstract} +acquire_next_image(SwapchainHandle swapchain, AcquiredImage & out) = 0 : FrameResult
 {abstract} +allocate_descriptor_set(DescriptorSetLayoutHandle layout) = 0 : DescriptorSetHandle
 {abstract} +begin_commands() = 0 : CommandBufferHandle
-{abstract} +cmd_begin_swapchain_pass(CommandBufferHandle cmd, SwapchainHandle swapchain, std::uint32_t image_index, const ClearColor & clear) = 0 : FrameResult
+{abstract} +cmd_begin_swapchain_pass(CommandBufferHandle cmd, SwapchainHandle swapchain, std::uint32_t image_index, const ClearColor & clear, TextureHandle depth_texture = {}, float clear_depth = 1.0f, std::uint32_t clear_stencil = 0) = 0 : FrameResult
 {abstract} +cmd_bind_descriptor_set(CommandBufferHandle cmd, PipelineHandle pipeline, std::uint32_t set_index, DescriptorSetHandle set) = 0 : FrameResult
 {abstract} +cmd_bind_pipeline(CommandBufferHandle cmd, PipelineHandle pipeline) = 0 : FrameResult
 {abstract} +cmd_draw(CommandBufferHandle cmd, std::uint32_t vertex_count, std::uint32_t instance_count, std::uint32_t first_vertex, std::uint32_t first_instance) = 0 : FrameResult
@@ -416,6 +419,7 @@ class C_0011075689005501709456 {
 +operator=(const BasicPipeline &) = deleted : BasicPipeline &
 +operator=(BasicPipeline &&) noexcept : BasicPipeline &
 ..
++destroy() noexcept : void
 +valid() const noexcept : bool
 __
 +device : VkDevice
@@ -464,7 +468,8 @@ class C_0002997308125348651313 {
 +begin_commands() : rhi::CommandBufferHandle
 -cleanup_buffers() : void
 -cleanup_descriptors() : void
-+cmd_begin_swapchain_pass(rhi::CommandBufferHandle cmd, rhi::SwapchainHandle swapchain, std::uint32_t image_index, const rhi::ClearColor & clear) : rhi::FrameResult
+-cleanup_textures() : void
++cmd_begin_swapchain_pass(rhi::CommandBufferHandle cmd, rhi::SwapchainHandle swapchain, std::uint32_t image_index, const rhi::ClearColor & clear, rhi::TextureHandle depth_texture, float clear_depth, std::uint32_t clear_stencil) : rhi::FrameResult
 +cmd_bind_descriptor_set(rhi::CommandBufferHandle cmd, rhi::PipelineHandle pipeline, std::uint32_t set_index, rhi::DescriptorSetHandle set) : rhi::FrameResult
 +cmd_bind_pipeline(rhi::CommandBufferHandle cmd, rhi::PipelineHandle pipeline) : rhi::FrameResult
 +cmd_draw(rhi::CommandBufferHandle cmd, std::uint32_t vertex_count, std::uint32_t instance_count, std::uint32_t first_vertex, std::uint32_t first_instance) : rhi::FrameResult
@@ -488,15 +493,24 @@ class C_0002997308125348651313 {
 -get_vk_buffer(rhi::BufferHandle handle) const noexcept : VkBuffer
 -get_vk_descriptor_set(rhi::DescriptorSetHandle handle) const noexcept : VkDescriptorSet
 -get_vk_descriptor_set_layout(rhi::DescriptorSetLayoutHandle handle) const noexcept : VkDescriptorSetLayout
+-get_vk_image(rhi::TextureHandle handle) const noexcept : VkImage
+-get_vk_image_layout(rhi::TextureHandle handle) const noexcept : VkImageLayout
+-get_vk_image_view(rhi::TextureHandle handle) const noexcept : VkImageView
 -init_frames() : bool
 -init_render_finished_per_image(std::size_t image_count) : bool
 +present(rhi::SwapchainHandle swapchain, std::uint32_t image_index) : rhi::FrameResult
 +resize_swapchain(rhi::SwapchainHandle swapchain, const rhi::SwapchainDesc & desc) : rhi::FrameResult
+-set_vk_image_layout(rhi::TextureHandle handle, VkImageLayout layout) noexcept : void
 +submit(const SubmitDesc & submit) : rhi::FrameResult
 +update_descriptor_set(rhi::DescriptorSetHandle set, std::span<const rhi::DescriptorWrite> writes) : rhi::FrameResult
 +wait_idle() : void
 __
 -basic_pipeline_ : BasicPipeline
+-basic_pipeline_depth_format_ : VkFormat
+-basic_pipeline_depth_test_ : bool
+-basic_pipeline_depth_write_ : bool
+-basic_pipeline_fragment_shader_path_ : std::string
+-basic_pipeline_vertex_shader_path_ : std::string
 -buffers_ : std::vector<BufferRecord>
 -command_pool_ : VkCommandBufferPool
 -descriptor_pool_ : std::optional<VkDescriptorPoolWrapper>
@@ -521,6 +535,7 @@ __
 -swapchain_ : VkSwapchainWrapper
 -swapchain_image_layouts_ : std::vector<VkImageLayout>
 -swapchain_sync_ : SwapchainSync
+-textures_ : std::vector<TextureRecord>
 }
 class "strata::gfx::vk::VkGpuDevice::FrameSlot" as C_0007994622723758139976
 class C_0007994622723758139976 {
@@ -542,6 +557,19 @@ __
 +mapped : void *
 +memory : VkDeviceMemory
 +size_bytes : std::uint64_t
+}
+class "strata::gfx::vk::VkGpuDevice::TextureRecord" as C_0015212676209426193147
+class C_0015212676209426193147 {
+__
++aspect_mask : VkImageAspectFlags
++extent : VkExtent2D
++format : VkFormat
++image : VkImage
++layout : VkImageLayout
++memory : VkDeviceMemory
++mip_levels : std::uint32_t
++usage : rhi::TextureUsage
++view : VkImageView
 }
 class "strata::platform::wsi::Win32Instance" as C_0009843677739255298692
 class C_0009843677739255298692 {
@@ -731,6 +759,7 @@ C_0006233893228748483879 o-- C_0002710142173650316241 : +usage
 C_0003925641868641178642 o-- C_0016237545735345995570 : +size
 C_0003925641868641178642 o-- C_0011402702226009568895 : +format
 C_0003925641868641178642 o-- C_0002766783461747024134 : +usage
+C_0003569144566224904043 o-- C_0011402702226009568895 : +depth_format
 C_0003569144566224904043 o-- C_0016589488479329003951 : +set_layouts
 C_0008242555543376944237 o-- C_0016237545735345995570 : +size
 C_0008242555543376944237 o-- C_0011402702226009568895 : +format
@@ -816,6 +845,8 @@ C_0017920997868415439149 <|-- C_0002997308125348651313
 C_0007994622723758139976 --+ C_0002997308125348651313
 C_0018051402234945093614 --+ C_0002997308125348651313
 C_0001311421129333406444 --+ C_0002997308125348651313
+C_0015212676209426193147 --+ C_0002997308125348651313
+C_0015212676209426193147 o-- C_0002766783461747024134 : +usage
 C_0015867045834686762295 o-- C_0009843677739255298692 : +instance
 C_0015867045834686762295 o-- C_0018290998811736525383 : +window
 C_0009424639203119917878 o-- C_0004139216579141968676 : +display

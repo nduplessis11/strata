@@ -32,6 +32,11 @@ VkFormat to_vk_format(rhi::Format fmt) noexcept
     }
 }
 
+bool is_non_empty(char const* s) noexcept
+{
+    return (s != nullptr) && (s[0] != '\0');
+}
+
 } // namespace
 
 rhi::PipelineHandle VkGpuDevice::create_pipeline(rhi::PipelineDesc const& desc)
@@ -99,13 +104,26 @@ rhi::PipelineHandle VkGpuDevice::create_pipeline(rhi::PipelineDesc const& desc)
         basic_pipeline_depth_write_  = desc.depth_write;
     }
 
+    // Shader paths are also part of the rebuild recipe.
+    // If the caller doesn't provide them, we fall back to the historical defaults
+    // used by vk_pipeline_basic
+    basic_pipeline_vertex_shader_path_ = is_non_empty(desc.vertex_shader_path)
+                                             ? desc.vertex_shader_path
+                                             : basic_pipeline_default_vertex_shader_path;
+
+    basic_pipeline_fragment_shader_path_ = is_non_empty(desc.fragment_shader_path)
+                                               ? desc.fragment_shader_path
+                                               : basic_pipeline_default_fragment_shader_path;
+
     basic_pipeline_ = create_basic_pipeline(device_.device(),
                                             swapchain_.image_format(),
                                             &diag,
                                             std::span{vk_layouts},
                                             basic_pipeline_depth_format_,
                                             basic_pipeline_depth_test_,
-                                            basic_pipeline_depth_write_);
+                                            basic_pipeline_depth_write_,
+                                            basic_pipeline_vertex_shader_path_.c_str(),
+                                            basic_pipeline_fragment_shader_path_.c_str());
 
     if (!basic_pipeline_.valid())
     {
@@ -128,6 +146,7 @@ void VkGpuDevice::destroy_pipeline(rhi::PipelineHandle)
     // IMPORTANT:
     // Do NOT clear pipeline_set_layout_handles_ (it is the rebuild recipe).
     // Do NOT clear basic_pipeline_depth_* (it is also part of the rebuild recipe).
+    // Do NOT clear basic_pipeline_*_shader_path (it is also part of the rebuild recipe).
 }
 
 } // namespace strata::gfx::vk

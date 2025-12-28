@@ -500,7 +500,9 @@ rhi::FrameResult VkGpuDevice::cmd_bind_pipeline([[maybe_unused]] rhi::CommandBuf
                                                 std::span{vk_layouts},
                                                 basic_pipeline_depth_format_,
                                                 basic_pipeline_depth_test_,
-                                                basic_pipeline_depth_write_);
+                                                basic_pipeline_depth_write_,
+                                                basic_pipeline_vertex_shader_path_.c_str(),
+                                                basic_pipeline_fragment_shader_path_.c_str());
         if (!basic_pipeline_.valid())
         {
             STRATA_LOG_ERROR(diag.logger(),
