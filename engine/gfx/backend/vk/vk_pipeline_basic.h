@@ -43,6 +43,15 @@ struct BasicPipeline
     void destroy() noexcept;
 };
 
+// Default shader paths used by the v1 "basic pipeline".
+// These match the historical hard-coded paths so behavior remains unchanged if
+// callers don't provide shader paths explicitly.
+inline constexpr char const* basic_pipeline_default_vertex_shader_path =
+    "shaders/fullscreen_triangle.vert.spv";
+
+inline constexpr char const* basic_pipeline_default_fragment_shader_path =
+    "shaders/flat_color.frag.spv";
+
 // Build a pipeline that renders a fullscreen triangle using dynamic rendering.
 // Returns an invalid BasicPipeline on failure.
 //
@@ -52,13 +61,19 @@ struct BasicPipeline
 //
 // depth_test/depth_write
 //  - Only meaningful if depth_format != VK_FORMAT_UNDEFINED
+//
+// vertex_shader_path / fragment_shader_path:
+//  - If null/empty, defaults are used.
 [[nodiscard]]
-BasicPipeline create_basic_pipeline(VkDevice                               device,
-                                    VkFormat                               color_format,
-                                    ::strata::base::Diagnostics*           diag,
-                                    std::span<VkDescriptorSetLayout const> set_layouts = {},
-                                    VkFormat depth_format = VK_FORMAT_UNDEFINED,
-                                    bool     depth_test   = false,
-                                    bool     depth_write  = false);
+BasicPipeline create_basic_pipeline(
+    VkDevice                               device,
+    VkFormat                               color_format,
+    ::strata::base::Diagnostics*           diag,
+    std::span<VkDescriptorSetLayout const> set_layouts  = {},
+    VkFormat                               depth_format = VK_FORMAT_UNDEFINED,
+    bool                                   depth_test   = false,
+    bool                                   depth_write  = false,
+    char const* vertex_shader_path                      = basic_pipeline_default_vertex_shader_path,
+    char const* fragment_shader_path = basic_pipeline_default_fragment_shader_path);
 
 } // namespace strata::gfx::vk

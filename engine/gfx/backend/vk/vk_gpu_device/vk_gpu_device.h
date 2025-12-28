@@ -12,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 #include "strata/gfx/rhi/gpu_device.h"
@@ -209,6 +210,11 @@ class VkGpuDevice final : public rhi::IGpuDevice
     VkFormat basic_pipeline_depth_format_{VK_FORMAT_UNDEFINED};
     bool     basic_pipeline_depth_test_{false};
     bool     basic_pipeline_depth_write_{false};
+
+    // Shader paths are part of the rebuild recipe. We store owned strings here
+    // so callers don't need to provide stable storage for PipelineDesc paths.
+    std::string basic_pipeline_vertex_shader_path_{};
+    std::string basic_pipeline_fragment_shader_path_{};
 
     // Frames in flight (ring)
     std::uint32_t          frames_in_flight_{2};

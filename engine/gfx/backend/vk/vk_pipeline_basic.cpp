@@ -50,6 +50,13 @@ void log_vk_error(base::Diagnostics* diag, char const* what, VkResult r) noexcep
     diag->debug_break_on_error();
 }
 
+char const* non_empty_or_default(char const* path, char const* fallback) noexcept
+{
+    if (!path || path[0] == '\0')
+        return fallback;
+    return path;
+}
+
 // Load a binary file fully into a buffer.
 // The path is interpreted relative to the current working directory
 // (usually the executable directory).
@@ -187,7 +194,9 @@ BasicPipeline create_basic_pipeline(VkDevice                               devic
                                     std::span<VkDescriptorSetLayout const> set_layouts,
                                     VkFormat                               depth_format,
                                     bool                                   depth_test,
-                                    bool                                   depth_write)
+                                    bool                                   depth_write,
+                                    char const*                            vertex_shader_path,
+                                    char const*                            fragment_shader_path)
 {
     if (!diag)
         return {};
@@ -202,10 +211,15 @@ BasicPipeline create_basic_pipeline(VkDevice                               devic
         return out;
     }
 
-    // NOTE: These paths assume your shaders are copied to <exe>/shaders.
-    // Adjust if you're still loading from ../../engine/gfx/shaders/...
-    auto vert_bytes = read_binary_file(diag, "shaders/fullscreen_triangle.vert.spv");
-    auto frag_bytes = read_binary_file(diag, "shaders/flat_color.frag.spv");
+    // If paths are null/empty, fall back to historical defaults.
+    char const* const vert_path =
+        non_empty_or_default(vertex_shader_path, basic_pipeline_default_vertex_shader_path);
+    char const* const frag_path =
+        non_empty_or_default(fragment_shader_path, basic_pipeline_default_fragment_shader_path);
+
+    // NOTE: These paths assume shaders are copied to <exe>/shaders.
+    auto vert_bytes = read_binary_file(diag, vert_path);
+    auto frag_bytes = read_binary_file(diag, frag_path);
 
     if (vert_bytes.empty() || frag_bytes.empty())
     {
