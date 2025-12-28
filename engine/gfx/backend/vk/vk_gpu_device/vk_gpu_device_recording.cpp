@@ -462,11 +462,11 @@ rhi::FrameResult VkGpuDevice::cmd_bind_pipeline([[maybe_unused]] rhi::CommandBuf
 
         basic_pipeline_ = create_basic_pipeline(device_.device(),
                                                 swapchain_.image_format(),
+                                                &diag,
                                                 std::span{vk_layouts},
                                                 basic_pipeline_depth_format_,
                                                 basic_pipeline_depth_test_,
-                                                basic_pipeline_depth_write_,
-                                                &diag);
+                                                basic_pipeline_depth_write_);
         if (!basic_pipeline_.valid())
         {
             STRATA_LOG_ERROR(diag.logger(),

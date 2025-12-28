@@ -101,11 +101,11 @@ rhi::PipelineHandle VkGpuDevice::create_pipeline(rhi::PipelineDesc const& desc)
 
     basic_pipeline_ = create_basic_pipeline(device_.device(),
                                             swapchain_.image_format(),
+                                            &diag,
                                             std::span{vk_layouts},
                                             basic_pipeline_depth_format_,
                                             basic_pipeline_depth_test_,
-                                            basic_pipeline_depth_write_,
-                                            &diag);
+                                            basic_pipeline_depth_write_);
 
     if (!basic_pipeline_.valid())
     {

@@ -183,11 +183,11 @@ BasicPipeline& BasicPipeline::operator=(BasicPipeline&& other) noexcept
 
 BasicPipeline create_basic_pipeline(VkDevice                               device,
                                     VkFormat                               color_format,
+                                    base::Diagnostics*                     diag,
                                     std::span<VkDescriptorSetLayout const> set_layouts,
                                     VkFormat                               depth_format,
                                     bool                                   depth_test,
-                                    bool                                   depth_write,
-                                    base::Diagnostics*                     diag)
+                                    bool                                   depth_write)
 {
     if (!diag)
         return {};

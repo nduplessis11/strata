@@ -55,10 +55,10 @@ struct BasicPipeline
 [[nodiscard]]
 BasicPipeline create_basic_pipeline(VkDevice                               device,
                                     VkFormat                               color_format,
+                                    ::strata::base::Diagnostics*           diag,
                                     std::span<VkDescriptorSetLayout const> set_layouts = {},
-                                    VkFormat                     depth_format = VK_FORMAT_UNDEFINED,
-                                    bool                         depth_test   = false,
-                                    bool                         depth_write  = false,
-                                    ::strata::base::Diagnostics* diag);
+                                    VkFormat depth_format = VK_FORMAT_UNDEFINED,
+                                    bool     depth_test   = false,
+                                    bool     depth_write  = false);
 
 } // namespace strata::gfx::vk
