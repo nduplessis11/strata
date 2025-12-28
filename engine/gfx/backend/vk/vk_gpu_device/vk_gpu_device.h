@@ -205,6 +205,11 @@ class VkGpuDevice final : public rhi::IGpuDevice
     BasicPipeline                               basic_pipeline_{};
     std::vector<rhi::DescriptorSetLayoutHandle> pipeline_set_layout_handles_{};
 
+    // Pipeline rebuild recipe (v1: single pipeline)
+    VkFormat basic_pipeline_depth_format_{VK_FORMAT_UNDEFINED};
+    bool     basic_pipeline_depth_test_{false};
+    bool     basic_pipeline_depth_write_{false};
+
     // Frames in flight (ring)
     std::uint32_t          frames_in_flight_{2};
     std::uint32_t          frame_index_{0};
