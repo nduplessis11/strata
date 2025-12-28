@@ -271,7 +271,8 @@ The Vulkan backend rebuilds its `basic_pipeline_` when this is called, and also 
 - `begin_commands()` resets/begins the **current frame slot** command buffer
 - `cmd_begin_swapchain_pass(...)`:
   - transitions swapchain image to `COLOR_ATTACHMENT_OPTIMAL`
-  - begins dynamic rendering with clear color
+  - optionally transitions `depth_texture` to `DEPTH_STENCIL_ATTACHMENT_OPTIMAL`
+  - begins dynamic rendering with clear color (and optional depth/stencil clear)
 - `cmd_bind_pipeline(...)`
 - `cmd_set_viewport_scissor(...)`
 - `cmd_draw(..., 3, 1, 0, 0)` (fullscreen triangle)
@@ -301,7 +302,7 @@ The Vulkan backend rebuilds its `basic_pipeline_` when this is called, and also 
 ## Basic pipeline: `vk_pipeline_basic.*`
 
 Strata’s initial pipeline is built by:
-- `create_basic_pipeline(VkDevice device, VkFormat color_format, std::span<VkDescriptorSetLayout const> set_layouts = {})`
+- `create_basic_pipeline(VkDevice device, VkFormat color_format, base::Diagnostics* diag, std::span<VkDescriptorSetLayout const> set_layouts = {}, VkFormat depth_format = VK_FORMAT_UNDEFINED, bool depth_test = false, bool depth_write = false)`
 
 Key details:
 - Loads SPIR-V from disk:
@@ -314,7 +315,7 @@ Key details:
 - Uses dynamic rendering (`VkPipelineRenderingCreateInfo` specifies the swapchain color format)
 - `renderPass = VK_NULL_HANDLE`
 
-Because the pipeline depends on swapchain format, it is recreated when the swapchain is recreated/invalidated.
+Because the pipeline depends on swapchain format (and optional depth format/state), it is recreated when the swapchain is recreated/invalidated.
 
 ---
 
@@ -339,7 +340,7 @@ Because the pipeline depends on swapchain format, it is recreated when the swapc
 - **Fixed frames-in-flight count** (currently 2).
 - **One graphics pipeline** (fullscreen triangle).
 - **No vertex/index buffers** in the frame loop.
-- **No depth**, no MSAA, no post-processing.
+- **No depth attachment in the current renderer**, no MSAA, no post-processing.
 - **Renderer records commands explicitly**, but only for a single basic pass.
 - Swapchain recreation is done with `wait_idle()` (safe, not optimal).
 

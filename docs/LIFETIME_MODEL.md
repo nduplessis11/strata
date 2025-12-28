@@ -397,8 +397,8 @@ Natural next steps once we want more performance and complexity:
 
 2. **Real resource registries**
    - map `PipelineHandle` → `VkPipeline` (many)
-   - map `BufferHandle` → buffer allocation + device memory
-   - map `TextureHandle` → image allocation + views
+   - map `BufferHandle` → buffer allocation + device memory *(v1 exists today)*
+   - map `TextureHandle` → image allocation + views *(v1 exists today)*
    - destruction becomes reference-checked and (eventually) deferred
 
 3. **Swapchain recreation without `wait_idle()`**
