@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <vector>
+
 #include "strata/gfx/rhi/gpu_device.h"
 
 namespace
@@ -36,6 +38,9 @@ class Render2D
   private:
     void release() noexcept;
 
+    void             destroy_depth_textures() noexcept;
+    rhi::FrameResult ensure_depth_texture(std::uint32_t image_index, rhi::Extent2D extent);
+
     base::Diagnostics* diagnostics_{nullptr}; // non-owning
     rhi::IGpuDevice*   device_{nullptr};      // non-owning
 
@@ -45,6 +50,11 @@ class Render2D
     rhi::DescriptorSetLayoutHandle ubo_layout_{};
     rhi::DescriptorSetHandle       ubo_set_{};
     rhi::BufferHandle              ubo_buffer_{};
+
+    // Depth attachment (renderer-owned)
+    rhi::Format                     depth_format_{rhi::Format::D24_UNorm_S8_UInt};
+    rhi::Extent2D                   depth_extent_{};
+    std::vector<rhi::TextureHandle> depth_textures_{};
 };
 
 rhi::FrameResult draw_frame_and_handle_resize(rhi::IGpuDevice&      device,

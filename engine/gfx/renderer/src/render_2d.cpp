@@ -101,11 +101,17 @@ Render2D::Render2D(base::Diagnostics& diagnostics, IGpuDevice& device, Swapchain
 
     STRATA_LOG_INFO(diagnostics_->logger(), "renderer", "Render2D: UBO + descriptor set update OK");
 
-    // 4) Create pipeline (will use layout in next step)
+    // 4) Create pipeline (now depth-compatible)
     PipelineDesc desc{};
     desc.vertex_shader_path   = "shaders/fullscreen_triangle.vert.spv";
     desc.fragment_shader_path = "shaders/flat_color.frag.spv";
     desc.alpha_blend          = false;
+
+    // Depth attachment compatibility (we bind + clear a depth attachment every frame).
+    // For now depth test/write are diabled to keep behavior identical.
+    desc.depth_format = depth_format_;
+    desc.depth_test   = false;
+    desc.depth_write  = false;
 
     // Pass set layouts (span is consumed immediately)
     DescriptorSetLayoutHandle const set_layouts[] = {ubo_layout_};
@@ -127,6 +133,87 @@ bool Render2D::is_valid() const noexcept
            ubo_layout_ && ubo_set_ && ubo_buffer_;
 }
 
+void Render2D::destroy_depth_textures() noexcept
+{
+    if (!device_)
+    {
+        depth_textures_.clear();
+        depth_extent_ = {};
+        return;
+    }
+
+    for (auto const h : depth_textures_)
+    {
+        if (h)
+        {
+            device_->destroy_texture(h);
+        }
+    }
+
+    depth_textures_.clear();
+    depth_extent_ = {};
+}
+
+FrameResult Render2D::ensure_depth_texture(std::uint32_t image_index, Extent2D extent)
+{
+    if (!is_valid())
+    {
+        if (diagnostics_)
+        {
+            STRATA_LOG_ERROR(diagnostics_->logger(),
+                             "renderer",
+                             "Render2D::ensure_depth_texture called while invalid");
+        }
+        return FrameResult::Error;
+    }
+
+    // Treat zero extent as "no work" (should be filtered by caller already).
+    if (extent.width == 0 || extent.height == 0)
+    {
+        return FrameResult::Ok;
+    }
+
+    // If the swapchain extent changed, the depth attachment must be recreated.
+    if (depth_extent_.width != extent.width || depth_extent_.height != extent.height)
+    {
+        destroy_depth_textures();
+        depth_extent_ = extent;
+    }
+
+    if (image_index >= depth_textures_.size())
+    {
+        depth_textures_.resize(static_cast<std::size_t>(image_index) + 1);
+    }
+
+    if (depth_textures_[image_index])
+    {
+        return FrameResult::Ok;
+    }
+
+    TextureDesc depth_desc{};
+    depth_desc.size       = extent;
+    depth_desc.format     = depth_format_;
+    depth_desc.usage      = TextureUsage::DepthStencil;
+    depth_desc.mip_levels = 1;
+
+    depth_textures_[image_index] = device_->create_texture(depth_desc);
+    if (!depth_textures_[image_index])
+    {
+
+        STRATA_LOG_ERROR(
+            diagnostics_->logger(),
+            "renderer",
+            "Render2D::ensure_depth_texture: create_texture (depth) failed (image_index {}, {}x{})",
+            image_index,
+            extent.width,
+            extent.height);
+
+        return FrameResult::Error;
+    }
+
+    return FrameResult::Ok;
+}
+
 void Render2D::release() noexcept
 {
     if (device_)
@@ -134,6 +221,9 @@ void Render2D::release() noexcept
         // Pipeline first (pipeline layout may reference descriptor set layout)
         if (pipeline_)
             device_->destroy_pipeline(pipeline_);
+
+        // Depth textures are renderer-owned resources.
+        destroy_depth_textures();
 
         // Descriptor set references buffer, so free it before destroying buffer.
         if (ubo_set_)
@@ -152,6 +242,11 @@ void Render2D::release() noexcept
     ubo_layout_ = {};
     swapchain_  = {};
 
+    // Depth state
+    depth_format_ = rhi::Format::D24_UNorm_S8_UInt;
+    depth_extent_ = {};
+    depth_textures_.clear();
+
     device_      = nullptr;
     diagnostics_ = nullptr;
 }
@@ -169,6 +264,9 @@ Render2D::Render2D(Render2D&& other) noexcept
       , ubo_layout_(other.ubo_layout_)
       , ubo_set_(other.ubo_set_)
       , ubo_buffer_(other.ubo_buffer_)
+      , depth_format_(other.depth_format_)
+      , depth_extent_(other.depth_extent_)
+      , depth_textures_(std::move(other.depth_textures_))
 {
     other.diagnostics_ = nullptr;
     other.device_      = nullptr;
@@ -177,6 +275,9 @@ Render2D::Render2D(Render2D&& other) noexcept
     other.ubo_layout_  = {};
     other.ubo_set_     = {};
     other.ubo_buffer_  = {};
+
+    other.depth_extent_ = {};
+    other.depth_textures_.clear();
 }
 
 Render2D& Render2D::operator=(Render2D&& other) noexcept
@@ -193,6 +294,10 @@ Render2D& Render2D::operator=(Render2D&& other) noexcept
         ubo_set_     = other.ubo_set_;
         ubo_buffer_  = other.ubo_buffer_;
 
+        depth_format_   = other.depth_format_;
+        depth_extent_   = other.depth_extent_;
+        depth_textures_ = std::move(other.depth_textures_);
+
         other.diagnostics_ = nullptr;
         other.device_      = nullptr;
         other.swapchain_   = {};
@@ -200,6 +305,9 @@ Render2D& Render2D::operator=(Render2D&& other) noexcept
         other.ubo_layout_  = {};
         other.ubo_set_     = {};
         other.ubo_buffer_  = {};
+
+        other.depth_extent_ = {};
+        other.depth_textures_.clear();
     }
     return *this;
 }
@@ -233,6 +341,15 @@ FrameResult Render2D::draw_frame()
         hint = FrameResult::Suboptimal;
     }
 
+    // Ensure we have a depth texture corresponding to this swapchain image index.
+    if (ensure_depth_texture(img.image_index, img.extent) != FrameResult::Ok)
+    {
+        return FrameResult::Error;
+    }
+
+    rhi::TextureHandle const depth = depth_textures_[img.image_index];
+    STRATA_ASSERT(*diagnostics_, depth);
+
     rhi::CommandBufferHandle const cmd = device_->begin_commands();
     if (!cmd)
         return FrameResult::Error;
@@ -243,7 +360,8 @@ FrameResult Render2D::draw_frame()
     rhi::ClearColor const clear{0.6f, 0.4f, 0.8f, 1.0f};
 
     // --- Record -------------------------------------------------------------
-    if (device_->cmd_begin_swapchain_pass(cmd, swapchain_, img.image_index, clear) !=
+    if (device_
+            ->cmd_begin_swapchain_pass(cmd, swapchain_, img.image_index, clear, depth, 1.0f, 0) !=
         FrameResult::Ok)
     {
         goto cleanup;
@@ -340,6 +458,11 @@ FrameResult Render2D::recreate_pipeline()
     desc.vertex_shader_path   = "shaders/fullscreen_triangle.vert.spv";
     desc.fragment_shader_path = "shaders/flat_color.frag.spv";
     desc.alpha_blend          = false;
+
+    // Keep pipeline depth-compatible across resizes.
+    desc.depth_format = depth_format_;
+    desc.depth_test   = false;
+    desc.depth_write  = false;
 
     DescriptorSetLayoutHandle const set_layouts[] = {ubo_layout_};
     desc.set_layouts                              = set_layouts;
