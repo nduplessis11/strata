@@ -58,6 +58,10 @@ class VkGpuDevice final : public rhi::IGpuDevice
                                     std::span<std::byte const> initial_data = {}) override;
     void              destroy_buffer(rhi::BufferHandle handle) override;
 
+    rhi::FrameResult write_buffer(rhi::BufferHandle          dst,
+                                  std::span<std::byte const> data,
+                                  std::uint64_t              offset_bytes = 0) override;
+
     // --- Textures ------------------------------------------------------------
     rhi::TextureHandle create_texture(rhi::TextureDesc const& desc) override;
     void               destroy_texture(rhi::TextureHandle handle) override;
@@ -211,8 +215,7 @@ class VkGpuDevice final : public rhi::IGpuDevice
     bool     basic_pipeline_depth_test_{false};
     bool     basic_pipeline_depth_write_{false};
 
-    // Shader paths are part of the rebuild recipe. We store owned strings here
-    // so callers don't need to provide stable storage for PipelineDesc paths.
+    // Shader paths are part of the rebuild recipe.
     std::string basic_pipeline_vertex_shader_path_{};
     std::string basic_pipeline_fragment_shader_path_{};
 

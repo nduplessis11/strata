@@ -277,6 +277,7 @@ abstract C_0017920997868415439149 {
 {abstract} +submit(const SubmitDesc & submit) = 0 : FrameResult
 {abstract} +update_descriptor_set(DescriptorSetHandle set, std::span<const DescriptorWrite> writes) = 0 : FrameResult
 {abstract} +wait_idle() = 0 : void
+{abstract} +write_buffer(BufferHandle dst, std::span<const std::byte> data, std::uint64_t offset_bytes = 0) = 0 : FrameResult
 __
 }
 class "strata::gfx::rhi::IGpuDevice::SubmitDesc" as C_0003024045260444283542
@@ -509,6 +510,7 @@ class C_0002997308125348651313 {
 +submit(const SubmitDesc & submit) : rhi::FrameResult
 +update_descriptor_set(rhi::DescriptorSetHandle set, std::span<const rhi::DescriptorWrite> writes) : rhi::FrameResult
 +wait_idle() : void
++write_buffer(rhi::BufferHandle dst, std::span<const std::byte> data, std::uint64_t offset_bytes = 0) : rhi::FrameResult
 __
 -basic_pipeline_ : BasicPipeline
 -basic_pipeline_depth_format_ : VkFormat
