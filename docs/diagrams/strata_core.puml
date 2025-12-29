@@ -304,11 +304,16 @@ class C_0010824766815022468742 {
 ..
 +operator=(Render2D &&) noexcept : Render2D &
 ..
+-destroy_depth_textures() noexcept : void
 +draw_frame() : rhi::FrameResult
+-ensure_depth_texture(std::uint32_t image_index, rhi::Extent2D extent) : rhi::FrameResult
 +is_valid() const noexcept : bool
 +recreate_pipeline() : rhi::FrameResult
 -release() noexcept : void
 __
+-depth_extent_ : rhi::Extent2D
+-depth_format_ : rhi::Format
+-depth_textures_ : std::vector<rhi::TextureHandle>
 -device_ : rhi::IGpuDevice *
 -diagnostics_ : base::Diagnostics *
 -pipeline_ : rhi::PipelineHandle
@@ -803,6 +808,9 @@ C_0010824766815022468742 o-- C_0017877358325141258260 : -pipeline_
 C_0010824766815022468742 o-- C_0016589488479329003951 : -ubo_layout_
 C_0010824766815022468742 o-- C_0006045791603826491485 : -ubo_set_
 C_0010824766815022468742 o-- C_0008321628638204963712 : -ubo_buffer_
+C_0010824766815022468742 o-- C_0011402702226009568895 : -depth_format_
+C_0010824766815022468742 o-- C_0016237545735345995570 : -depth_extent_
+C_0010824766815022468742 o-- C_0005096713740152516201 : -depth_textures_
 C_0010554209192484980512 --> C_0015969163135226357711 : -diagnostics_
 C_0011145604038376368072 --> C_0015969163135226357711 : -diagnostics_
 C_0016636178717209631603 ..> C_0015867045834686762295

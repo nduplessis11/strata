@@ -12,10 +12,10 @@
 
 #pragma once
 
+#include <cstdint>
 #include <format>
 #include <source_location>
 #include <string_view>
-#include <cstdint>
 
 #include <vulkan/vulkan.h>
 
@@ -109,7 +109,7 @@ inline std::string vk_error_message(char const* expr, VkResult r)
 #define STRATA_VK_ASSERT_RETURN(diag, vk_call, return_value)                                       \
     do                                                                                             \
     {                                                                                              \
-        VkResult const _strata_vk_result = (vk_call);                                                    \
+        VkResult const _strata_vk_result = (vk_call);                                              \
         if (_strata_vk_result != VK_SUCCESS)                                                       \
         {                                                                                          \
             (diag).logger().log(::strata::base::LogLevel::Error,                                   \
