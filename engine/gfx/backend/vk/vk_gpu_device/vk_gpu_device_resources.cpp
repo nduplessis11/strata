@@ -340,6 +340,90 @@ rhi::BufferHandle VkGpuDevice::create_buffer(rhi::BufferDesc const&     desc,
     return handle;
 }
 
+rhi::FrameResult VkGpuDevice::write_buffer(rhi::BufferHandle          dst,
+                                           std::span<std::byte const> data,
+                                           std::uint64_t              offset_bytes)
+{
+    using namespace strata::base;
+    using rhi::FrameResult;
+
+    if (!diagnostics_)
+        return FrameResult::Error;
+
+    auto& diag = *diagnostics_;
+
+    if (!dst)
+    {
+        STRATA_LOG_ERROR(diag.logger(), "vk.buf", "write_buffer failed: dst handle is invalid");
+        diag.debug_break_on_error();
+        return FrameResult::Error;
+    }
+
+    // Writing zero bytes is a no-op (useful for callers with conditional updates)
+    if (data.empty())
+        return FrameResult::Ok;
+
+    std::size_t const index = static_cast<std::size_t>(dst.value - 1);
+    if (index >= buffers_.size())
+    {
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.buf",
+                         "write_bufffer failed: handle {} out of range (buffers={})",
+                         dst.value,
+                         buffers_.size());
+        diag.debug_break_on_error();
+        return FrameResult::Error;
+    }
+
+    BufferRecord& rec = buffers_[index];
+
+    if (!rec.host_visible || rec.mapped == nullptr)
+    {
+        STRATA_LOG_ERROR(
+            diag.logger(),
+            "vk.buf",
+            "write_buffer failed: buffer {} is not host-visible/mapped (v1 requires host_visible)",
+            dst.value);
+        diag.debug_break_on_error();
+        return FrameResult::Error;
+    }
+
+    std::uint64_t const size = static_cast<std::uint64_t>(data.size_bytes());
+
+    if (offset_bytes > rec.size_bytes)
+    {
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.buf",
+                         "write_buffer failed: offset {} out of bounds (size={}) for buffer {}",
+                         offset_bytes,
+                         rec.size_bytes,
+                         dst.value);
+        diag.debug_break_on_error();
+        return FrameResult::Error;
+    }
+
+    if (size > (rec.size_bytes - offset_bytes))
+    {
+        STRATA_LOG_ERROR(
+            diag.logger(),
+            "vk.buf",
+            "write_buffer failed: write {} bytes at offset {} exceeds buffer {} size {}",
+            size,
+            offset_bytes,
+            dst.value,
+            rec.size_bytes);
+        diag.debug_break_on_error();
+        return FrameResult::Error;
+    }
+
+    auto* dst_bytes = static_cast<std::byte*>(rec.mapped) + offset_bytes;
+    std::memcpy(dst_bytes, data.data(), data.size_bytes());
+
+    // v1 guarantee: host-visible buffers are allocated with HOST_COHERENT in create_buffer(),
+    // so no vkFlushMappedMemoryRanges is required here.
+    return FrameResult::Ok;
+}
+
 void VkGpuDevice::destroy_buffer(rhi::BufferHandle handle)
 {
     if (!handle)

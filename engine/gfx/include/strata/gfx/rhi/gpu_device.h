@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <cstddef> // for std::byte
 #include <memory>
 #include <span>
 
@@ -37,6 +38,15 @@ class IGpuDevice
     virtual BufferHandle create_buffer(BufferDesc const&          desc,
                                        std::span<std::byte const> initial_data = {}) = 0;
     virtual void         destroy_buffer(BufferHandle handle)                         = 0;
+
+    // Write bytes into an existing buffer at the given offset.
+    //
+    // v1 contract:
+    // - Only guaranteed to work on host-visible buffers (BufferDesc.host_visible == true).
+    // - Backends may return Error for non-host-visible buffers (until staging/copies exist).
+    virtual FrameResult write_buffer(BufferHandle               dst,
+                                     std::span<std::byte const> data,
+                                     std::uint64_t              offset_bytes = 0) = 0;
 
     // --- Textures ------------------------------------------------------------
     virtual TextureHandle create_texture(TextureDesc const& desc) = 0;
