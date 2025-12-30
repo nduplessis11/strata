@@ -6,7 +6,7 @@ It’s built around a simple, explicit layering model:
 
 > **base** (diagnostics + low-level utilities) → **platform** (OS/window/WSI) ← **core** (app orchestration) → **gfx** (RHI + renderer + Vulkan backend)
 
-Strata is intentionally small and pragmatic right now: the current renderer clears the swapchain and draws a **fullscreen triangle** via **Vulkan 1.3 dynamic rendering**.
+Strata is intentionally small and pragmatic right now: the current renderer clears the swapchain and draws a **spinning cube** via **Vulkan 1.3 dynamic rendering**.
 
 ---
 
@@ -31,7 +31,7 @@ Diagrams:
   - **Acquire → record → submit → present**
   - **Per-frame command buffers** (ringed with frames-in-flight)
   - **Multiple frames in flight** (currently 2; per-frame fences/semaphores)
-  - **One graphics pipeline** (fullscreen triangle)
+  - **One graphics pipeline** (spinning cube)
 - Resize handling:
   - swapchain resize triggers a **`wait_idle()`** + swapchain recreation
   - pipeline is recreated after resize
@@ -202,5 +202,5 @@ Some natural next steps (also described in the docs):
 
 - Expand **Vulkan descriptor sets** (uniform buffers now; images/samplers later)
 - Expand resource tables/registries for buffers/textures/pipelines
-- Grow beyond the single-pass fullscreen triangle (depth, MSAA, post, etc.)
+- Grow beyond the single-pass spinning cube demo (MSAA, post, etc.)
 - ECS/data-driven systems (future)

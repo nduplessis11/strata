@@ -2,7 +2,7 @@
 
 This document describes **how Strata renders a frame**, from the game loop down to Vulkan calls.
 
-It is intentionally scoped to the **current** implementation (single pass, fullscreen triangle). As the engine grows (descriptor sets, resource registries, etc.), this doc should evolve alongside it.
+It is intentionally scoped to the **current** implementation (single pass, spinning cube). As the engine grows (descriptor sets, resource registries, etc.), this doc should evolve alongside it.
 
 ---
 
@@ -30,7 +30,7 @@ The frame path looks like this:
 - The backend uses a **frames-in-flight ring** (per-frame command buffers + fences + image-available semaphores).
 - Rendering uses **Vulkan 1.3 dynamic rendering** (`vkCmdBeginRendering`) and **dynamic viewport/scissor**.
 - Barriers use **Synchronization2** (`vkCmdPipelineBarrier2`).
-- The first “render pass” is a **fullscreen triangle** with a solid clear + draw.
+- The first “render pass” is a **spinning cube** with a solid clear + draw.
 - `Render2D` now **records commands explicitly** via the RHI command interface.
 
 ---
@@ -84,8 +84,9 @@ On exit, `device->wait_idle()` is called once more.
 - `rhi::SwapchainHandle swapchain_` (opaque)
 - `rhi::PipelineHandle pipeline_` (opaque; currently functions as a “valid/created” token)
 - `rhi::DescriptorSetLayoutHandle ubo_layout_` (opaque)
-- `rhi::DescriptorSetHandle ubo_set_` (opaque)
-- `rhi::BufferHandle ubo_buffer_` (opaque; host-visible uniform buffer)
+- `std::vector<rhi::DescriptorSetHandle> ubo_sets_` (opaque; one per swapchain image)
+- `std::vector<rhi::BufferHandle> ubo_buffers_` (opaque; host-visible uniform buffers, one per swapchain image)
+- `std::vector<rhi::TextureHandle> depth_textures_` (opaque; renderer-owned depth attachment, one per swapchain image)
 - a non-owning `base::Diagnostics* diagnostics_`
 - a non-owning `rhi::IGpuDevice* device_`
 
@@ -94,23 +95,26 @@ Constructor (given a `base::Diagnostics&`, `IGpuDevice&`, and `SwapchainHandle`)
 - vertex shader: `shaders/fullscreen_triangle.vert.spv`
 - fragment shader: `shaders/flat_color.frag.spv`
 - no blending
-- descriptor set layout: set 0, binding 0 = uniform buffer (fragment-visible)
+- depth test/write enabled
+- descriptor set layout: set 0, binding 0 = uniform buffer (vertex+fragment-visible; view/proj + model + tint)
 
 and calls:
 - `ubo_layout_ = device_->create_descriptor_set_layout(layout_desc);`
-- `ubo_set_    = device_->allocate_descriptor_set(ubo_layout_);`
-- `ubo_buffer_ = device_->create_buffer(buf_desc, init_bytes);`
-- `device_->update_descriptor_set(ubo_set_, writes);`
 - `pipeline_ = device_->create_pipeline(desc);` (with `desc.set_layouts = { ubo_layout_ }`)
+
+UBO buffers + descriptor sets are created per swapchain image lazily in `draw_frame()` (after `acquire_next_image`) and updated per frame via `device_->write_buffer(...)`.
 
 ### Frame rendering (`Render2D::draw_frame`)
 `draw_frame()` now drives the full frame:
-- validates `diagnostics_`, `device_`, `swapchain_`, `pipeline_`
+- validates `diagnostics_`, `device_`, `swapchain_`, `pipeline_`, `ubo_layout_`
 - `device_->acquire_next_image(...)`
+- ensure per-image resources exist (depth texture + UBO descriptor set/buffer for the acquired `image_index`)
+- update the scene UBO via `device_->write_buffer(...)`
 - `cmd = device_->begin_commands()`
 - record a swapchain pass via:
   - `cmd_begin_swapchain_pass(...)`
   - `cmd_bind_pipeline(...)`
+  - `cmd_bind_descriptor_set(...)`
   - `cmd_set_viewport_scissor(...)`
   - `cmd_draw(...)`
   - `cmd_end_swapchain_pass(...)`
@@ -152,6 +156,7 @@ Pipeline-related:
 
 Buffers/textures:
 - `create_buffer(desc, initial_data) -> BufferHandle`
+- `write_buffer(dst, data, offset_bytes = 0) -> FrameResult` (v1: host-visible buffers only)
 - `destroy_buffer(handle)`
 - `create_texture(desc) -> TextureHandle`
 - `destroy_texture(handle)`
@@ -274,8 +279,9 @@ The Vulkan backend rebuilds its `basic_pipeline_` when this is called, and also 
   - optionally transitions `depth_texture` to `DEPTH_STENCIL_ATTACHMENT_OPTIMAL`
   - begins dynamic rendering with clear color (and optional depth/stencil clear)
 - `cmd_bind_pipeline(...)`
+- `cmd_bind_descriptor_set(...)`
 - `cmd_set_viewport_scissor(...)`
-- `cmd_draw(..., 3, 1, 0, 0)` (fullscreen triangle)
+- `cmd_draw(..., 36, 1, 0, 0)` (spinning cube)
 - `cmd_end_swapchain_pass(...)`:
   - ends dynamic rendering
   - transitions swapchain image to `PRESENT_SRC_KHR`
@@ -310,7 +316,7 @@ Key details:
   - `shaders/flat_color.frag.spv`
 - Creates shader modules, builds pipeline, then destroys shader modules
 - No vertex buffers:
-  - vertex positions are generated using `gl_VertexIndex`
+  - cube vertex positions are generated using `gl_VertexIndex`
 - Uses dynamic viewport + scissor
 - Uses dynamic rendering (`VkPipelineRenderingCreateInfo` specifies the swapchain color format)
 - `renderPass = VK_NULL_HANDLE`
@@ -338,9 +344,9 @@ Because the pipeline depends on swapchain format (and optional depth format/stat
 
 ## Current simplifications (intentional)
 - **Fixed frames-in-flight count** (currently 2).
-- **One graphics pipeline** (fullscreen triangle).
+- **One graphics pipeline** (spinning cube demo).
 - **No vertex/index buffers** in the frame loop.
-- **No depth attachment in the current renderer**, no MSAA, no post-processing.
+- **Renderer-owned depth attachment** (one per swapchain image); no MSAA, no post-processing.
 - **Renderer records commands explicitly**, but only for a single basic pass.
 - Swapchain recreation is done with `wait_idle()` (safe, not optimal).
 
