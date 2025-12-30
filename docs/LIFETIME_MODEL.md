@@ -76,7 +76,7 @@ flowchart TD
 ### Ownership rules
 - `Application::Impl` **owns** the `Window`, `IGpuDevice`, and `Render2D`.
 - `platform::WsiHandle` is a **non-owning value** describing native window system state needed to create a Vulkan surface.
-- `Render2D` **owns RHI handles** (e.g., `PipelineHandle`, plus UBO `DescriptorSetLayoutHandle` / `DescriptorSetHandle` / `BufferHandle`) but not Vulkan objects directly.
+- `Render2D` **owns RHI handles** (e.g., `PipelineHandle`, plus UBO `DescriptorSetLayoutHandle` and per-swapchain-image `DescriptorSetHandle` / `BufferHandle` collections) but not Vulkan objects directly.
 - `VkGpuDevice` **owns Vulkan objects** via RAII wrappers and explicit teardown order.
 - `VkSwapchainWrapper` owns:
   - `VkSwapchainKHR`
@@ -288,7 +288,7 @@ Then C++ destroys members in reverse declaration order. In our `Impl`, the key s
 
 1. **`Render2D` destructor**
    - calls `device->destroy_pipeline(pipeline_)`
-   - frees/destroys renderer-owned UBO descriptor resources (`free_descriptor_set`, `destroy_buffer`, `destroy_descriptor_set_layout`)
+   - frees/destroys renderer-owned UBO descriptor resources (per-swapchain-image descriptor sets + uniform buffers via `free_descriptor_set` / `destroy_buffer`, plus `destroy_descriptor_set_layout`)
 2. **`device` destructor**
    - destroys the Vulkan backend objects (through virtual destructor dispatch)
    - destroys `VkSurfaceKHR` during `VkInstanceWrapper` cleanup (inside backend lifetime)
@@ -335,7 +335,7 @@ On resize request:
    - backend destroys/recreates swapchain + image views
    - backend resets `basic_pipeline_ = {}` (invalidates pipeline)
 3. `renderer.recreate_pipeline()`
-   - swapchain-independent renderer-owned RHI resources (UBO descriptor set/buffer/layout) persist across the resize
+   - swapchain-independent renderer-owned RHI resources (UBO layout and any existing per-swapchain-image UBO buffers/descriptor sets) persist across the resize
    - only the pipeline is rebuilt for the new swapchain format; if recreation fails, the frame is skipped but the application keeps running
 
 This is safe because `wait_idle()` ensures:
