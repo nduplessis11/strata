@@ -66,8 +66,12 @@ class Camera3D
         float const cp = std::cos(pitch_radians);
         float const sp = std::sin(pitch_radians);
 
-        // yaw = 0, pitch = 0 => forward = (0, 0, -1)
-        base::math::Vec3 f{sy * cp, sp, -cy * cp};
+        // yaw=0, pitch=0 => forward = (0,0,-1)
+        base::math::Vec3 f{
+            sy * cp,
+            sp,
+            -cy * cp,
+        };
 
         return base::math::normalize(f);
     }

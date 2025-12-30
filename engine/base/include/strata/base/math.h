@@ -156,42 +156,44 @@ struct alignas(16) Mat4
         out.m[3][3] = 1.0f;
         return out;
     }
-
-    [[nodiscard]]
-    inline Mat4 mul(Mat4 const& a, Mat4 const& b) noexcept
-    {
-        // Column-major multiplication: out = a * b
-        Mat4 out{};
-
-        for (int c = 0; c < 4; ++c) // column
-        {
-            for (int r = 0; r < 4; ++r) // row
-            {
-                // clang-format off
-                out.m[c][r] = 
-                    a.m[0][r] * b.m[c][0] +
-                    a.m[1][r] * b.m[c][1] +
-                    a.m[2][r] * b.m[c][2] +
-                    a.m[3][r] * b.m[c][3];
-                // clang-format on
-            }
-        }
-
-        return out;
-    }
 };
+
+[[nodiscard]]
+inline Mat4 mul(Mat4 const& a, Mat4 const& b) noexcept
+{
+    // Column-major multiplication: out = a * b
+    Mat4 out{};
+
+    for (int c = 0; c < 4; ++c) // column
+    {
+        for (int r = 0; r < 4; ++r) // row
+        {
+            // clang-format off
+            out.m[c][r] = 
+                a.m[0][r] * b.m[c][0] +
+                a.m[1][r] * b.m[c][1] +
+                a.m[2][r] * b.m[c][2] +
+                a.m[3][r] * b.m[c][3];
+            // clang-format on
+        }
+    }
+
+    return out;
+}
 
 [[nodiscard]]
 inline Vec4 mul(Mat4 const& m, Vec4 const& v) noexcept
 {
     // v' = M * v, column vector.
-    return Vec4{m.m[0][0] * v.x + m.m[1][0] * v.y + m.m[2][0] * v.z + m.m[3][0] * v.w,
-                m.m[0][1] * v.x + m.m[1][1] * v.y + m.m[2][1] * v.z + m.m[3][1] * v.w,
-                m.m[0][2] * v.x + m.m[1][2] * v.y + m.m[2][2] * v.z + m.m[3][2] * v.w,
-                m.m[0][3] * v.x + m.m[1][3] * v.y + m.m[2][3] * v.z + m.m[3][3] * v.w};
+    return Vec4{
+        m.m[0][0] * v.x + m.m[1][0] * v.y + m.m[2][0] * v.z + m.m[3][0] * v.w,
+        m.m[0][1] * v.x + m.m[1][1] * v.y + m.m[2][1] * v.z + m.m[3][1] * v.w,
+        m.m[0][2] * v.x + m.m[1][2] * v.y + m.m[2][2] * v.z + m.m[3][2] * v.w,
+        m.m[0][3] * v.x + m.m[1][3] * v.y + m.m[2][3] * v.z + m.m[3][3] * v.w,
+    };
 }
 
-// Right handed look-at view matrix.
+// Right-handed look-at view matrix.
 // Camera looks toward (target - eye). View space looks down -Z.
 [[nodiscard]]
 inline Mat4 look_at_rh(Vec3 eye, Vec3 target, Vec3 up) noexcept
