@@ -50,3 +50,10 @@ BreakConstructorInitializers: BeforeComma
 PackConstructorInitializers: Never
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 ConstructorInitializerIndentWidth: 6
+
+### Binary expression wrapping (your matrix-multiply style) ###
+BreakBinaryOperations: RespectPrecedence
+BreakBeforeBinaryOperators: None
+AlignOperands: DontAlign
+ContinuationIndentWidth: 4
+PenaltyBreakAssignment: 0
