@@ -13,7 +13,7 @@ int main()
 {
     strata::core::ApplicationConfig cfg{};
     cfg.window_desc.size  = {1280, 720};
-    cfg.window_desc.title = "Strata - Red Triangle";
+    cfg.window_desc.title = "Strata - Spinning Cube";
 
     cfg.device.backend       = strata::gfx::rhi::BackendType::Vulkan;
     cfg.swapchain_desc.vsync = true;

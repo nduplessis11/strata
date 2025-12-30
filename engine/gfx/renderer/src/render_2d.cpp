@@ -5,10 +5,16 @@
 //   Implements the Render2D frontend on top of the RHI IGpuDevice interface.
 //   Responsible for owning a basic graphics pipeline and cooperating with the
 //   device for swapchain recreation on resize.
+//
+// Camera3D Cube:
+//   - Animated 3D cube demo using Camera3D + base::math
+//   - Per-swapchain-image UBO buffers + descriptor sets
+//   - Depth test/write enabled
 // -----------------------------------------------------------------------------
 
 #include "strata/gfx/renderer/render_2d.h"
 
+#include <cmath> // std::sin, std::cos
 #include <cstdint>
 #include <span>
 
@@ -18,6 +24,71 @@ namespace strata::gfx::renderer
 {
 
 using namespace strata::gfx::rhi;
+
+namespace
+{
+
+// Scene UBO layout must match GLSL (std140):
+// layout(set=0,binding=0) uniform SceneUbo { mat4 view_proj; mat4 model; vec4 tint; };
+struct alignas(16) UboScene
+{
+    strata::base::math::Mat4 view_proj;
+    strata::base::math::Mat4 model;
+    strata::base::math::Vec4 tint;
+};
+
+static_assert(sizeof(UboScene) % 16 == 0);
+
+[[nodiscard]]
+inline strata::base::math::Mat4 rotation_x(float radians) noexcept
+{
+    using strata::base::math::Mat4;
+
+    float const c = std::cos(radians);
+    float const s = std::sin(radians);
+
+    Mat4 out{Mat4::identity()};
+
+    // Row-major rotation X:
+    // [1 0  0 1]
+    // [0 c -s 0]
+    // [0 s  c 0]
+    // [0 0  0 1]
+    // Stored column-major: m[col][row]
+    out.m[1][1] = c;
+    out.m[1][2] = s;
+    out.m[2][1] = -s;
+    out.m[2][2] = c;
+
+    return out;
+}
+
+[[nodiscard]]
+inline strata::base::math::Mat4 rotation_y(float radians) noexcept
+{
+    using strata::base::math::Mat4;
+
+    float const c = std::cos(radians);
+    float const s = std::sin(radians);
+
+    Mat4 out{Mat4::identity()};
+
+    // Row-major rotation Y (RH):
+    // [ c 0 s 0]
+    // [ 0 1 0 0]
+    // [-s 0 c 0]
+    // [ 0 0 0 1]
+    // Stored column-major: m[col][row]
+    out.m[0][0] = c;
+    out.m[0][2] = -s;
+
+    out.m[2][0] = s;
+    out.m[2][2] = c;
+
+    return out;
+}
+
+} // namespace
 
 // -------------------------------------------------------------------------
 // Render2D
@@ -31,12 +102,16 @@ Render2D::Render2D(base::Diagnostics& diagnostics, IGpuDevice& device, Swapchain
 {
     STRATA_ASSERT(diagnostics, swapchain_);
 
-    // 1) Descriptor set layout: set 0, binding 0 = uniform buffer visible to fragment shader.
+    // Camera defaults, but push it back a bit so the cube is clearly visible.
+    camera_.position = base::math::Vec3(0.0f, 0.0f, 3.0f);
+    camera_.set_yaw_pitch(0.0f, 0.0f);
+
+    // 1) Descriptor set layout: set 0, binding 0 = uniform buffer visible to vertex+fragment.
     DescriptorBinding binding{};
     binding.binding = 0;
     binding.type    = DescriptorType::UniformBuffer;
     binding.count   = 1;
-    binding.stages  = ShaderStage::Fragment;
+    binding.stages  = ShaderStage::Vertex | ShaderStage::Fragment;
 
     DescriptorSetLayoutDesc layout_desc{};
     layout_desc.bindings = std::span{&binding, 1};
@@ -50,70 +125,20 @@ Render2D::Render2D(base::Diagnostics& diagnostics, IGpuDevice& device, Swapchain
         return;
     }
 
-    ubo_set_ = device_->allocate_descriptor_set(ubo_layout_);
-    if (!ubo_set_)
-    {
-        STRATA_LOG_ERROR(diagnostics_->logger(),
-                         "renderer",
-                         "Render2D: allocate_descriptor_set failed");
-        return;
-    }
+    // NOTE (Camera3D Cube):
+    // We create UBO buffers + descriptor sets per swapchain image index lazily in draw_frame().
+    // This avoids overwritting a single UBO while another frame is still in flight.
 
-    // 2) Create host-visible UBO with initial data.
-    struct alignas(16) UboColor
-    {
-        float rgba[4];
-    };
-
-    UboColor const ubo_init{{0.0f, 1.0f, 0.0f, 1.0f}}; // green
-
-    BufferDesc buf_desc{};
-    buf_desc.size_bytes   = sizeof(UboColor);
-    buf_desc.usage        = BufferUsage::Uniform | BufferUsage::Upload;
-    buf_desc.host_visible = true;
-
-    auto init_bytes = std::as_bytes(std::span{&ubo_init, 1});
-    ubo_buffer_     = device_->create_buffer(buf_desc, init_bytes);
-    if (!ubo_buffer_)
-    {
-        STRATA_LOG_ERROR(diagnostics_->logger(),
-                         "renderer",
-                         "Render2D: create_buffer (UBO) failed");
-        return;
-    }
-
-    // 3) Write descriptor set
-    DescriptorWrite write{};
-    write.binding             = 0;
-    write.type                = DescriptorType::UniformBuffer;
-    write.buffer.buffer       = ubo_buffer_;
-    write.buffer.offset_bytes = 0;
-    write.buffer.range_bytes  = sizeof(UboColor);
-
-    FrameResult const upd = device_->update_descriptor_set(ubo_set_, std::span{&write, 1});
-    if (upd != FrameResult::Ok)
-    {
-        STRATA_LOG_ERROR(diagnostics_->logger(),
-                         "renderer",
-                         "Render2D: update_descriptor_set failed");
-        return;
-    }
-
-    STRATA_LOG_INFO(diagnostics_->logger(), "renderer", "Render2D: UBO + descriptor set update OK");
-
-    // 4) Create pipeline (now depth-compatible)
+    // 2) Create pipeline (depth-compatible. depth test/write enabled for 3D demo)
     PipelineDesc desc{};
     desc.vertex_shader_path   = "shaders/fullscreen_triangle.vert.spv";
     desc.fragment_shader_path = "shaders/flat_color.frag.spv";
     desc.alpha_blend          = false;
 
-    // Depth attachment compatibility (we bind + clear a depth attachment every frame).
-    // For now depth test/write are diabled to keep behavior identical.
     desc.depth_format = depth_format_;
-    desc.depth_test   = false;
-    desc.depth_write  = false;
+    desc.depth_test   = true;
+    desc.depth_write  = true;
 
-    // Pass set layouts (span is consumed immediately)
     DescriptorSetLayoutHandle const set_layouts[] = {ubo_layout_};
     desc.set_layouts                              = set_layouts;
 
@@ -124,13 +149,12 @@ Render2D::Render2D(base::Diagnostics& diagnostics, IGpuDevice& device, Swapchain
         return;
     }
 
-    STRATA_LOG_INFO(diagnostics_->logger(), "renderer", "Render2D initialized");
+    STRATA_LOG_INFO(diagnostics_->logger(), "renderer", "Render2D initialized: 3D cube demo");
 }
 
 bool Render2D::is_valid() const noexcept
 {
-    return diagnostics_ != nullptr && device_ != nullptr && swapchain_ && pipeline_ &&
-           ubo_layout_ && ubo_set_ && ubo_buffer_;
+    return diagnostics_ != nullptr && device_ != nullptr && swapchain_ && pipeline_ && ubo_layout_;
 }
 
 void Render2D::destroy_depth_textures() noexcept
@@ -167,7 +191,6 @@ FrameResult Render2D::ensure_depth_texture(std::uint32_t image_index, Extent2D e
         return FrameResult::Error;
     }
 
-    // Treat zero extent as "no work" (should be filtered by caller already).
     if (extent.width == 0 || extent.height == 0)
     {
         return FrameResult::Ok;
@@ -199,7 +222,6 @@ FrameResult Render2D::ensure_depth_texture(std::uint32_t image_index, Extent2D e
     depth_textures_[image_index] = device_->create_texture(depth_desc);
     if (!depth_textures_[image_index])
     {
-
         STRATA_LOG_ERROR(
             diagnostics_->logger(),
             "renderer",
@@ -214,38 +236,161 @@ FrameResult Render2D::ensure_depth_texture(std::uint32_t image_index, Extent2D e
     return FrameResult::Ok;
 }
 
+void Render2D::destroy_ubo_resources() noexcept
+{
+    if (!device_)
+    {
+        ubo_sets_.clear();
+        ubo_buffers_.clear();
+        return;
+    }
+
+    // Free sets first (they reference the buffers).
+    for (auto const s : ubo_sets_)
+    {
+        if (s)
+        {
+            device_->free_descriptor_set(s);
+        }
+    }
+
+    for (auto const b : ubo_buffers_)
+    {
+        if (b)
+        {
+            device_->destroy_buffer(b);
+        }
+    }
+
+    ubo_sets_.clear();
+    ubo_buffers_.clear();
+}
+
+FrameResult Render2D::ensure_ubo_resources(std::uint32_t image_index)
+{
+    if (!is_valid())
+    {
+        if (diagnostics_)
+        {
+            STRATA_LOG_ERROR(diagnostics_->logger(),
+                             "renderer",
+                             "Render2D::ensure_ubo_resources called while invalid");
+        }
+        return FrameResult::Error;
+    }
+
+    if (image_index >= ubo_sets_.size())
+    {
+        ubo_sets_.resize(static_cast<std::size_t>(image_index) + 1);
+        ubo_buffers_.resize(static_cast<std::size_t>(image_index) + 1);
+    }
+
+    // Already created?
+    if (ubo_sets_[image_index] && ubo_buffers_[image_index])
+        return FrameResult::Ok;
+
+    // Clean up any partial state (defensive).
+    if (ubo_sets_[image_index])
+    {
+        device_->free_descriptor_set(ubo_sets_[image_index]);
+        ubo_sets_[image_index] = {};
+    }
+    if (ubo_buffers_[image_index])
+    {
+        device_->destroy_buffer(ubo_buffers_[image_index]);
+        ubo_buffers_[image_index] = {};
+    }
+
+    // Create initial UBO contents (identity matrices, white tint).
+    UboScene init{};
+    init.view_proj = base::math::Mat4::identity();
+    init.model     = base::math::Mat4::identity();
+    init.tint      = base::math::Vec4{1.0f, 1.0f, 1.0f, 1.0f};
+
+    BufferDesc buf_desc{};
+    buf_desc.size_bytes   = sizeof(UboScene);
+    buf_desc.usage        = BufferUsage::Uniform | BufferUsage::Upload;
+    buf_desc.host_visible = true;
+
+    auto init_bytes           = std::as_bytes(std::span{&init, 1});
+    ubo_buffers_[image_index] = device_->create_buffer(buf_desc, init_bytes);
+    if (!ubo_buffers_[image_index])
+    {
+        STRATA_LOG_ERROR(diagnostics_->logger(),
+                         "renderer",
+                         "Render2D: create_buffer (per-image UBO) failed (image_index {})",
+                         image_index);
+        return FrameResult::Error;
+    }
+
+    ubo_sets_[image_index] = device_->allocate_descriptor_set(ubo_layout_);
+    if (!ubo_sets_[image_index])
+    {
+        STRATA_LOG_ERROR(diagnostics_->logger(),
+                         "renderer",
+                         "Render2D: allocate_descriptor_set failed (image_index {})",
+                         image_index);
+
+        device_->destroy_buffer(ubo_buffers_[image_index]);
+        ubo_buffers_[image_index] = {};
+        return FrameResult::Error;
+    }
+
+    DescriptorWrite write{};
+    write.binding             = 0;
+    write.type                = DescriptorType::UniformBuffer;
+    write.buffer.buffer       = ubo_buffers_[image_index];
+    write.buffer.offset_bytes = 0;
+    write.buffer.range_bytes  = sizeof(UboScene);
+
+    FrameResult const upd =
+        device_->update_descriptor_set(ubo_sets_[image_index], std::span{&write, 1});
+    if (upd != FrameResult::Ok)
+    {
+        STRATA_LOG_ERROR(diagnostics_->logger(),
+                         "renderer",
+                         "Render2D: update_descriptor_set failed (image_index {})",
+                         image_index);
+
+        device_->free_descriptor_set(ubo_sets_[image_index]);
+        ubo_sets_[image_index] = {};
+
+        device_->destroy_buffer(ubo_buffers_[image_index]);
+        ubo_buffers_[image_index] = {};
+
+        return FrameResult::Error;
+    }
+
+    return FrameResult::Ok;
+}
+
 void Render2D::release() noexcept
 {
     if (device_)
     {
-        // Pipeline first (pipeline layout may reference descriptor set layout)
         if (pipeline_)
             device_->destroy_pipeline(pipeline_);
 
-        // Depth textures are renderer-owned resources.
         destroy_depth_textures();
-
-        // Descriptor set references buffer, so free it before destroying buffer.
-        if (ubo_set_)
-            device_->free_descriptor_set(ubo_set_);
-
-        if (ubo_buffer_)
-            device_->destroy_buffer(ubo_buffer_);
+        destroy_ubo_resources();
 
         if (ubo_layout_)
             device_->destroy_descriptor_set_layout(ubo_layout_);
     }
 
     pipeline_   = {};
-    ubo_set_    = {};
-    ubo_buffer_ = {};
     ubo_layout_ = {};
     swapchain_  = {};
 
-    // Depth state
     depth_format_ = rhi::Format::D24_UNorm_S8_UInt;
     depth_extent_ = {};
     depth_textures_.clear();
+
+    ubo_sets_.clear();
+    ubo_buffers_.clear();
+
+    camera_        = {};
+    frame_counter_ = 0;
 
     device_      = nullptr;
     diagnostics_ = nullptr;
@@ -262,22 +407,28 @@ Render2D::Render2D(Render2D&& other) noexcept
       , swapchain_(other.swapchain_)
       , pipeline_(other.pipeline_)
       , ubo_layout_(other.ubo_layout_)
-      , ubo_set_(other.ubo_set_)
-      , ubo_buffer_(other.ubo_buffer_)
+      , ubo_sets_(std::move(other.ubo_sets_))
+      , ubo_buffers_(std::move(other.ubo_buffers_))
       , depth_format_(other.depth_format_)
       , depth_extent_(other.depth_extent_)
       , depth_textures_(std::move(other.depth_textures_))
+      , camera_(other.camera_)
+      , frame_counter_(other.frame_counter_)
 {
     other.diagnostics_ = nullptr;
     other.device_      = nullptr;
     other.swapchain_   = {};
     other.pipeline_    = {};
     other.ubo_layout_  = {};
-    other.ubo_set_     = {};
-    other.ubo_buffer_  = {};
+
+    other.ubo_sets_.clear();
+    other.ubo_buffers_.clear();
 
     other.depth_extent_ = {};
     other.depth_textures_.clear();
+
+    other.camera_        = {};
+    other.frame_counter_ = 0;
 }
 
 Render2D& Render2D::operator=(Render2D&& other) noexcept
@@ -291,23 +442,31 @@ Render2D& Render2D::operator=(Render2D&& other) noexcept
         swapchain_   = other.swapchain_;
         pipeline_    = other.pipeline_;
         ubo_layout_  = other.ubo_layout_;
-        ubo_set_     = other.ubo_set_;
-        ubo_buffer_  = other.ubo_buffer_;
+
+        ubo_sets_    = std::move(other.ubo_sets_);
+        ubo_buffers_ = std::move(other.ubo_buffers_);
 
         depth_format_   = other.depth_format_;
         depth_extent_   = other.depth_extent_;
         depth_textures_ = std::move(other.depth_textures_);
+
+        camera_        = other.camera_;
+        frame_counter_ = other.frame_counter_;
 
         other.diagnostics_ = nullptr;
         other.device_      = nullptr;
         other.swapchain_   = {};
         other.pipeline_    = {};
         other.ubo_layout_  = {};
-        other.ubo_set_     = {};
-        other.ubo_buffer_  = {};
+
+        other.ubo_sets_.clear();
+        other.ubo_buffers_.clear();
 
         other.depth_extent_ = {};
         other.depth_textures_.clear();
+
+        other.camera_        = {};
+        other.frame_counter_ = 0;
     }
     return *this;
 }
@@ -328,8 +487,6 @@ FrameResult Render2D::draw_frame()
     rhi::AcquiredImage img{};
     FrameResult const  acquire = device_->acquire_next_image(swapchain_, img);
 
-    // If acquire says "Suboptimal", we should still render the frame,
-    // but bubble up Suboptimal afterward so the caller can choose to resize.
     FrameResult hint = FrameResult::Ok;
 
     if (acquire == FrameResult::Error || acquire == FrameResult::ResizeNeeded)
@@ -347,17 +504,54 @@ FrameResult Render2D::draw_frame()
         return FrameResult::Error;
     }
 
+    // Ensure per-image UBO resources exist (buffers + descriptor sets).
+    if (ensure_ubo_resources(img.image_index) != FrameResult::Ok)
+    {
+        return FrameResult::Error;
+    }
+
     rhi::TextureHandle const depth = depth_textures_[img.image_index];
     STRATA_ASSERT(*diagnostics_, depth);
+
+    rhi::DescriptorSetHandle const ubo_set    = ubo_sets_[img.image_index];
+    rhi::BufferHandle const        ubo_buffer = ubo_buffers_[img.image_index];
+    STRATA_ASSERT(*diagnostics_, ubo_set);
+    STRATA_ASSERT(*diagnostics_, ubo_buffer);
+
+    // --- Update scene UBO (Camera 3D Cub) -----------------------------------
+    {
+        float const aspect = (img.extent.height != 0)
+            ? (static_cast<float>(img.extent.width) / static_cast<float>(img.extent.height))
+            : 1.0f;
+
+        // Simple animation: rotate cube in place.
+        float const t  = static_cast<float>(frame_counter_) * 0.015f;
+        float const t2 = static_cast<float>(frame_counter_) * 0.010f;
+        frame_counter_++;
+
+        UboScene ubo{};
+        ubo.view_proj = camera_.view_proj(aspect, true);
+        ubo.model     = base::math::mul(rotation_y(t), rotation_x(t2));
+        ubo.tint      = base::math::Vec4{1.0f, 1.0f, 1.0f, 1.0f};
+
+        auto bytes = std::as_bytes(std::span{&ubo, 1});
+        if (device_->write_buffer(ubo_buffer, bytes, 0) != FrameResult::Ok)
+        {
+            STRATA_LOG_ERROR(diagnostics_->logger(),
+                             "renderer",
+                             "Render2D: write_buffer(UBO) failed");
+            return FrameResult::Error;
+        }
+    }
 
     rhi::CommandBufferHandle const cmd = device_->begin_commands();
     if (!cmd)
         return FrameResult::Error;
 
     bool        pass_open = false;
-    FrameResult result    = FrameResult::Error; // default unless we succeed
+    FrameResult result    = FrameResult::Error;
 
-    rhi::ClearColor const clear{0.6f, 0.4f, 0.8f, 1.0f};
+    rhi::ClearColor const clear{0.08f, 0.08f, 0.10f, 1.0f};
 
     // --- Record -------------------------------------------------------------
     if (device_
@@ -373,7 +567,7 @@ FrameResult Render2D::draw_frame()
         goto cleanup;
     }
 
-    if (device_->cmd_bind_descriptor_set(cmd, pipeline_, 0, ubo_set_) != FrameResult::Ok)
+    if (device_->cmd_bind_descriptor_set(cmd, pipeline_, 0, ubo_set) != FrameResult::Ok)
     {
         goto cleanup;
     }
@@ -383,7 +577,8 @@ FrameResult Render2D::draw_frame()
         goto cleanup;
     }
 
-    if (device_->cmd_draw(cmd, 3, 1, 0, 0) != FrameResult::Ok)
+    // 36 vertices = 12 triangles = 1 cube
+    if (device_->cmd_draw(cmd, 36, 1, 0, 0) != FrameResult::Ok)
     {
         goto cleanup;
     }
@@ -397,7 +592,7 @@ FrameResult Render2D::draw_frame()
     if (device_->end_commands(cmd) != FrameResult::Ok)
     {
         result = FrameResult::Error;
-        goto cleanup_after_end; // don't call end_commands() again
+        goto cleanup_after_end;
     }
 
     // --- Submit -------------------------------------------------------------
@@ -412,7 +607,7 @@ FrameResult Render2D::draw_frame()
         if (sub != FrameResult::Ok)
         {
             result = sub;
-            goto cleanup_after_end; // command buffer already ended
+            goto cleanup_after_end;
         }
     }
 
@@ -421,7 +616,6 @@ FrameResult Render2D::draw_frame()
         FrameResult const pres = device_->present(swapchain_, img.image_index);
         if (pres == FrameResult::Ok)
         {
-            // If acquire was Suboptimal, bubble it up so caller can decide to resize.
             result = hint;
         }
         else
@@ -432,14 +626,12 @@ FrameResult Render2D::draw_frame()
     }
 
 cleanup:
-    // Best-effort: close rendering if we opened it.
     if (pass_open)
     {
         device_->cmd_end_swapchain_pass(cmd, swapchain_, img.image_index);
         pass_open = false;
     }
 
-    // Best-effort: end the command buffer so it can be reset next frame.
     device_->end_commands(cmd);
 
 cleanup_after_end:
@@ -459,10 +651,9 @@ FrameResult Render2D::recreate_pipeline()
     desc.fragment_shader_path = "shaders/flat_color.frag.spv";
     desc.alpha_blend          = false;
 
-    // Keep pipeline depth-compatible across resizes.
     desc.depth_format = depth_format_;
-    desc.depth_test   = false;
-    desc.depth_write  = false;
+    desc.depth_test   = true;
+    desc.depth_write  = true;
 
     DescriptorSetLayoutHandle const set_layouts[] = {ubo_layout_};
     desc.set_layouts                              = set_layouts;
@@ -481,7 +672,6 @@ FrameResult draw_frame_and_handle_resize(IGpuDevice&        device,
                                          Extent2D           framebuffer_size,
                                          base::Diagnostics& diagnostics)
 {
-
     // Minimized / zero-area window: skip rendering but don't treat as error.
     if (framebuffer_size.width == 0 || framebuffer_size.height == 0)
     {
@@ -492,7 +682,6 @@ FrameResult draw_frame_and_handle_resize(IGpuDevice&        device,
     if (result == FrameResult::Ok || result == FrameResult::Error)
         return result;
 
-    // Any non-Ok, non-Error result is treated as "swapchain needs resize".
     STRATA_LOG_INFO(diagnostics.logger(),
                     "renderer",
                     "Swapchain resize requested (result {})",
@@ -502,7 +691,7 @@ FrameResult draw_frame_and_handle_resize(IGpuDevice&        device,
 
     SwapchainDesc sc_desc{};
     sc_desc.size  = framebuffer_size;
-    sc_desc.vsync = true; // or expose as parameter later
+    sc_desc.vsync = true;
 
     // Resize existing swapchain in-place.
     FrameResult const resize_result = device.resize_swapchain(swapchain, sc_desc);
@@ -515,11 +704,8 @@ FrameResult draw_frame_and_handle_resize(IGpuDevice&        device,
         return FrameResult::Ok;
     }
 
-    // Swapchain-independent resources (UBO + descriptors) can persist.
-    // Only rebuild pipeline (swapchain format could change across resize).
     if (renderer.recreate_pipeline() != FrameResult::Ok)
     {
-        // Treat as non-fatal: no frame rendered, but app keeps running.
         STRATA_LOG_WARN(diagnostics.logger(),
                         "renderer",
                         "recreate_pipeline failed; skipping frame");

@@ -286,9 +286,11 @@ BasicPipeline create_basic_pipeline(VkDevice                               devic
     raster.rasterizerDiscardEnable = VK_FALSE;
     raster.polygonMode             = VK_POLYGON_MODE_FILL;
     raster.cullMode                = VK_CULL_MODE_BACK_BIT;
-    raster.frontFace               = VK_FRONT_FACE_CLOCKWISE; // depends on your VS winding
-    raster.depthBiasEnable         = VK_FALSE;
-    raster.lineWidth               = 1.0f;
+    // We flip Y in the projection for Vulkan (positive viewport height).
+    // With this convention, our geometry is authored with CCW front faces.
+    raster.frontFace       = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    raster.depthBiasEnable = VK_FALSE;
+    raster.lineWidth       = 1.0f;
 
     VkPipelineMultisampleStateCreateInfo msaa{};
     msaa.sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -296,8 +298,10 @@ BasicPipeline create_basic_pipeline(VkDevice                               devic
     msaa.sampleShadingEnable  = VK_FALSE;
 
     VkPipelineColorBlendAttachmentState blend_attach{};
-    blend_attach.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                  VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    blend_attach.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+        VK_COLOR_COMPONENT_G_BIT |
+        VK_COLOR_COMPONENT_B_BIT |
+        VK_COLOR_COMPONENT_A_BIT;
     blend_attach.blendEnable = VK_FALSE;
 
     VkPipelineColorBlendStateCreateInfo blend{};
