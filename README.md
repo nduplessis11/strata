@@ -53,7 +53,7 @@ If you’re looking for a “read the code top-to-bottom” entry point, follow 
 
 ```text
 engine/base          Diagnostics + assertions + other low-level utilities
-engine/platform      OS + windowing + event polling + WSI handle production
+engine/platform      OS + windowing + input + event polling + WSI handle production
 engine/core          Application wrapper, main loop, runtime helpers
 engine/gfx           RHI + renderer + backend/vk + shaders
 games/arcade_shooter  Example game / executable

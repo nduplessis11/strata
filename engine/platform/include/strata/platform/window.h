@@ -10,17 +10,24 @@
 // -----------------------------------------------------------------------------
 
 #pragma once
+
+#include "strata/platform/input.h"
 #include "strata/platform/wsi_handle.h"
+
+#include <cstdint>
 #include <memory>
 #include <string_view>
+#include <utility>
 
 namespace strata::base
 {
+
 class Diagnostics;
 }
 
 namespace strata::platform
 {
+
 struct Extent2d
 {
     std::int32_t width{};
@@ -47,21 +54,29 @@ class Window
     Window(Window const&)            = delete;
     Window& operator=(Window const&) = delete;
 
-    [[nodiscard]] bool should_close() const noexcept;
-    void               request_close() noexcept;
+    [[nodiscard]]
+    bool should_close() const noexcept;
+    void request_close() noexcept;
 
     void poll_events();
     void set_title(std::string_view title);
 
     // size queries
-    [[nodiscard]] auto window_size() const noexcept -> std::pair<std::int32_t, std::int32_t>;
-    [[nodiscard]] auto framebuffer_size() const noexcept -> std::pair<std::int32_t, std::int32_t>;
+    [[nodiscard]]
+    auto window_size() const noexcept -> std::pair<std::int32_t, std::int32_t>;
+    [[nodiscard]]
+    auto framebuffer_size() const noexcept -> std::pair<std::int32_t, std::int32_t>;
 
     bool is_minimized() const noexcept;
     bool is_visible() const noexcept;
 
+    // v1 raw input snapshot (owned by Window; no globals)
+    [[nodiscard]]
+    auto input() const noexcept -> InputState const&;
+
     // access to native handles in a strongly-typed variant
-    [[nodiscard]] auto native_wsi() const noexcept -> WsiHandle;
+    [[nodiscard]]
+    auto native_wsi() const noexcept -> WsiHandle;
 
   private:
     struct Impl;

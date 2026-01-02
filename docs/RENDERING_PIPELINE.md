@@ -27,6 +27,7 @@ The frame path looks like this:
 
 - **Vulkan is contained** in `engine/gfx/backend/vk/*` (`namespace strata::gfx::vk`).
 - The renderer (`Render2D`) depends only on the **RHI** (`IGpuDevice`), `base::Diagnostics`, and opaque handles.
+- Camera is external: game code owns camera control and feeds a `Camera3D` into the renderer via `Render2D::set_camera(...)`.
 - The backend uses a **frames-in-flight ring** (per-frame command buffers + fences + image-available semaphores).
 - Rendering uses **Vulkan 1.3 dynamic rendering** (`vkCmdBeginRendering`) and **dynamic viewport/scissor**.
 - Barriers use **Synchronization2** (`vkCmdPipelineBarrier2`).
@@ -66,6 +67,7 @@ Ownership is explicit (PImpl inside `Application`):
 Per iteration:
 
 1. `window.poll_events()`
+   - This refreshes the window-owned `platform::InputState` snapshot and resets per-frame deltas (mouse, wheel).
 2. Compute `FrameContext { frame_index, delta_seconds }`
 3. Optional user tick callback: `tick(*this, ctx)`
 4. Query framebuffer size and clamp:
@@ -82,6 +84,7 @@ On exit, `device->wait_idle()` is called once more.
 
 `Render2D` is the “frontend” renderer object. It owns:
 - `rhi::SwapchainHandle swapchain_` (opaque)
+- `Camera3D camera_` (value; the current camera state consumed for view/proj in the scene UBO)
 - `rhi::PipelineHandle pipeline_` (opaque; currently functions as a “valid/created” token)
 - `rhi::DescriptorSetLayoutHandle ubo_layout_` (opaque)
 - `std::vector<rhi::DescriptorSetHandle> ubo_sets_` (opaque; one per swapchain image)
@@ -89,6 +92,9 @@ On exit, `device->wait_idle()` is called once more.
 - `std::vector<rhi::TextureHandle> depth_textures_` (opaque; renderer-owned depth attachment, one per swapchain image)
 - a non-owning `base::Diagnostics* diagnostics_`
 - a non-owning `rhi::IGpuDevice* device_`
+
+V1 camera control:
+- The game can call `renderer.set_camera(camera)` before `draw_frame()` to control view/projection.
 
 ### Pipeline setup (`Render2D::Render2D`)
 Constructor (given a `base::Diagnostics&`, `IGpuDevice&`, and `SwapchainHandle`) creates a simple pipeline:
@@ -103,6 +109,8 @@ and calls:
 - `pipeline_ = device_->create_pipeline(desc);` (with `desc.set_layouts = { ubo_layout_ }`)
 
 UBO buffers + descriptor sets are created per swapchain image lazily in `draw_frame()` (after `acquire_next_image`) and updated per frame via `device_->write_buffer(...)`.
+
+The view/projection values come from the current `camera_` state (set via `set_camera(...)`).
 
 ### Frame rendering (`Render2D::draw_frame`)
 `draw_frame()` now drives the full frame:

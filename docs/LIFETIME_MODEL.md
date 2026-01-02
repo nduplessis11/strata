@@ -96,6 +96,7 @@ flowchart TD
 
 The application loop uses:
 - `window.poll_events()`
+- `window.input()` (raw input snapshot; `poll_events()` refreshes it and resets per-frame deltas)
 - `window.should_close()` / `window.request_close()`
 - `window.window_size()` / `window.framebuffer_size()`
 

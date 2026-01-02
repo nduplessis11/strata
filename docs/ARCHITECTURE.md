@@ -53,11 +53,14 @@ Key types:
 ### `engine/platform`
 Responsibilities:
 - Window creation & event polling (pImpl keeps OS headers out of public headers).
+- Raw input snapshot (`platform::InputState`) owned by `platform::Window` and refreshed by `poll_events()` (keys/buttons down + per-frame deltas).
 - WSI integration (Win32/X11/Wayland) via a **platform-neutral handle type**: `platform::WsiHandle`.
 - Platform-facing types like `WindowDesc`, `Extent2d`.
 
 Key types:
 - `strata::platform::Window` (PImpl; move-only; owns native window resources)
+- `strata::platform::InputState` (per-window raw input snapshot: key/button down state + mouse/wheel deltas)
+- `strata::platform::Key`, `strata::platform::MouseButton` (input enums)
 - `strata::platform::WsiHandle` (a `std::variant` of `platform::wsi::Win32 | X11 | Wayland`)
 - `strata::platform::wsi::*` (Win32/X11/Wayland “native handle bundles”, stored as integers/pointers)
 
@@ -68,12 +71,14 @@ Responsibilities:
 - The *application shell* that wires platform + graphics together.
 - Owns a `base::Diagnostics` instance and passes it down intentionally (no global state).
 - Runtime loop and per-frame context.
+- Minimal input action mapping helpers (`core::ActionMap`) for game/application actions.
 - High-level config and error propagation.
 
 Key types:
 - `strata::core::Application` (owning façade around an `Impl`)
 - `strata::core::ApplicationConfig` (window + device + swapchain config)
 - `strata::core::FrameContext` (frame index + delta time)
+- `strata::core::Action` / `strata::core::ActionMap` (input-driven action mapping; built on `platform::InputState`)
 - `strata::core::ApplicationError` (creation failure reasons)
 
 ### `engine/gfx`
@@ -152,6 +157,7 @@ At runtime, `strata::core::Application` owns the high-level system objects and c
 
 - `base::Diagnostics` (owns logging + assertions; passed explicitly)
 - `platform::Window` (owns native window)
+- `platform::InputState` (raw input snapshot owned by the `Window`; queried via `window.input()`)
 - `platform::WsiHandle` (non-owning descriptor derived from the native window)
 - `gfx::rhi::IGpuDevice` (backend-agnostic device interface; owned via `unique_ptr`)
 - `gfx::rhi::SwapchainHandle` (opaque handle managed by the GPU backend)

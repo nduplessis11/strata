@@ -112,6 +112,250 @@ class C_0005603721019384004173 {
 __
 +m : float[4][4]
 }
+enum "strata::platform::Key" as C_0003221439872259927514
+enum C_0003221439872259927514 {
+W
+A
+S
+D
+Space
+Ctrl
+Shift
+Escape
+Count
+}
+enum "strata::platform::MouseButton" as C_0011881472246153983510
+enum C_0011881472246153983510 {
+Left
+Right
+Middle
+Count
+}
+class "strata::platform::InputState" as C_0013081563177970586290
+class C_0013081563177970586290 {
++add_mouse_delta(float dx, float dy) noexcept : void
++add_wheel_delta(float delta) noexcept : void
++begin_frame() noexcept : void
++clear() noexcept : void
++focused() const noexcept : bool
++key_down(Key key) const noexcept : bool
++mouse_delta_x() const noexcept : float
++mouse_delta_y() const noexcept : float
++mouse_down(MouseButton b) const noexcept : bool
++set_focused(bool focused) noexcept : void
++set_key(Key key, bool down) noexcept : void
++set_mouse_button(MouseButton b, bool down) noexcept : void
+{static} -to_index(Key k) constexpr noexcept : std::size_t
+{static} -to_index(MouseButton b) constexpr noexcept : std::size_t
++wheel_delta() const noexcept : float
+__
+-focused_ : bool
+-keys_ : std::array<bool,static_cast<std::size_t>(Key::Count)>
+-mouse_buttons_ : std::array<bool,static_cast<std::size_t>(MouseButton::Count)>
+-mouse_dx_ : float
+-mouse_dy_ : float
+-wheel_delta_ : float
+}
+class "strata::platform::wsi::Win32Instance" as C_0009843677739255298692
+class C_0009843677739255298692 {
++operator bool() constexpr const noexcept : bool
+__
++value : std::uintptr_t
+}
+class "strata::platform::wsi::Win32Window" as C_0018290998811736525383
+class C_0018290998811736525383 {
++operator bool() constexpr const noexcept : bool
+__
++value : std::uintptr_t
+}
+class "strata::platform::wsi::Win32" as C_0015867045834686762295
+class C_0015867045834686762295 {
++operator bool() constexpr const noexcept : bool
+__
++instance : Win32Instance
++window : Win32Window
+}
+class "strata::platform::wsi::X11Display" as C_0004139216579141968676
+class C_0004139216579141968676 {
++operator bool() constexpr const noexcept : bool
+__
++value : std::uintptr_t
+}
+class "strata::platform::wsi::X11Window" as C_0000103132443571165194
+class C_0000103132443571165194 {
++operator bool() constexpr const noexcept : bool
+__
++value : std::uint64_t
+}
+class "strata::platform::wsi::X11" as C_0009424639203119917878
+class C_0009424639203119917878 {
++operator bool() constexpr const noexcept : bool
+__
++display : X11Display
++window : X11Window
+}
+class "strata::platform::wsi::WaylandDisplay" as C_0018051248413152380528
+class C_0018051248413152380528 {
++operator bool() constexpr const noexcept : bool
+__
++value : std::uintptr_t
+}
+class "strata::platform::wsi::WaylandSurface" as C_0006480956703282666377
+class C_0006480956703282666377 {
++operator bool() constexpr const noexcept : bool
+__
++value : std::uintptr_t
+}
+class "strata::platform::wsi::Wayland" as C_0016276992989547283338
+class C_0016276992989547283338 {
++operator bool() constexpr const noexcept : bool
+__
++display : WaylandDisplay
++surface : WaylandSurface
+}
+class "strata::platform::Extent2d" as C_0005777160501785278061
+class C_0005777160501785278061 {
+__
++height : std::int32_t
++width : std::int32_t
+}
+class "strata::platform::WindowDesc" as C_0016311843175510711894
+class C_0016311843175510711894 {
+__
++resizable : bool
++size : Extent2d
++title : std::string_view
++visible : bool
+}
+class "strata::platform::Window" as C_0005247819231906793915
+class C_0005247819231906793915 {
++Window(base::Diagnostics & diagnostics, const WindowDesc & desc) : void
++Window(Window &&) noexcept : void
++Window(const Window &) = deleted : void
++~Window() : void
+..
++operator=(Window &&) noexcept : Window &
++operator=(const Window &) = deleted : Window &
+..
++framebuffer_size() const noexcept : std::pair<std::int32_t,std::int32_t>
++input() const noexcept : const InputState &
++is_minimized() const noexcept : bool
++is_visible() const noexcept : bool
++native_wsi() const noexcept : WsiHandle
++poll_events() : void
++request_close() noexcept : void
++set_title(std::string_view title) : void
++should_close() const noexcept : bool
++window_size() const noexcept : std::pair<std::int32_t,std::int32_t>
+__
+-p_ : std::unique_ptr<Impl>
+}
+class "strata::platform::Window::Impl" as C_0013200129816682565187
+class C_0013200129816682565187 {
++make_wsi_handle() const : WsiHandle
++on_key(WPARAM vk, bool down) noexcept : void
++on_mouse_button(UINT msg, bool down) noexcept : void
++wnd_proc(HWND h, UINT msg, WPARAM w, LPARAM l) : LRESULT
+{static} +wndproc_static(HWND hwnd, UINT msg, WPARAM w, LPARAM l) : LRESULT
+__
++clear_brush : HBRUSH
++closing : bool
++diagnostics : base::Diagnostics *
++hinstance : HINSTANCE
++hwnd : HWND
++input : InputState
++last_mouse_x : int
++last_mouse_y : int
++minimized : bool
++mouse_pos_valid : bool
+}
+enum "strata::core::Action" as C_0018032594692547036397
+enum C_0018032594692547036397 {
+MoveForward
+MoveBack
+MoveLeft
+MoveRight
+MoveUp
+MoveDown
+Sprint
+Exit
+Count
+}
+class "strata::core::ActionMap" as C_0017461806447561434585
+class C_0017461806447561434585 {
++down(Action a) const noexcept : bool
++look_x() const noexcept : float
++look_y() const noexcept : float
+{static} -to_index(Action a) constexpr noexcept : std::size_t
++update(const platform::InputState & input) noexcept : void
+__
+-down_ : std::array<bool,static_cast<std::size_t>(Action::Count)>
+-look_x_ : float
+-look_y_ : float
+}
+class "strata::core::FrameContext" as C_0009952609517611504575
+class C_0009952609517611504575 {
+__
++delta_seconds : double
++frame_index : std::uint64_t
+}
+class "strata::core::ApplicationConfig" as C_0002056900511809122909
+class C_0002056900511809122909 {
+__
++device : strata::gfx::rhi::DeviceCreateInfo
++swapchain_desc : strata::gfx::rhi::SwapchainDesc
++throttle_cpu : bool
++throttle_sleep : std::chrono::milliseconds
++window_desc : strata::platform::WindowDesc
+}
+enum "strata::core::ApplicationError" as C_0009230160325266616415
+enum C_0009230160325266616415 {
+WindowCreateFailed
+DeviceCreateFailed
+SwapchainCreateFailed
+RendererCreateFailed
+}
+class "strata::core::Application" as C_0005212081933056084623
+class C_0005212081933056084623 {
+-Application(std::unique_ptr<Impl,ImplDeleter> impl) noexcept : void
+..
++config() const noexcept : const ApplicationConfig &
+{static} +create(ApplicationConfig config = {}) : std::expected<Application,ApplicationError>
++device() noexcept : strata::gfx::rhi::IGpuDevice &
++device() const noexcept : const strata::gfx::rhi::IGpuDevice &
++diagnostics() noexcept : strata::base::Diagnostics &
++diagnostics() const noexcept : const strata::base::Diagnostics &
++renderer() noexcept : strata::gfx::renderer::Render2D &
++renderer() const noexcept : const strata::gfx::renderer::Render2D &
++request_exit() noexcept : void
++run(TickFn tick = = {}) : std::int16_t
++swapchain() const noexcept : strata::gfx::rhi::SwapchainHandle
++window() noexcept : strata::platform::Window &
++window() const noexcept : const strata::platform::Window &
+__
+-impl_ : std::unique_ptr<Impl,ImplDeleter>
+}
+class "strata::core::Application::ImplDeleter" as C_0009403174502820656066
+class C_0009403174502820656066 {
++operator()(Impl *) const noexcept : void
+__
+}
+class "strata::core::Application::Impl" as C_0003684588886580275255
+class C_0003684588886580275255 {
++Impl(ApplicationConfig cfg, std::unique_ptr<base::Diagnostics> && diag, platform::Window && window, platform::WsiHandle surface, std::unique_ptr<gfx::rhi::IGpuDevice> && device, gfx::rhi::SwapchainHandle swapchain, gfx::renderer::Render2D && render) : void
++~Impl() noexcept : void
+__
++config : ApplicationConfig
++device : std::unique_ptr<gfx::rhi::IGpuDevice>
++diagnostics : std::unique_ptr<base::Diagnostics>
++exit_requested : bool
++frame_index : std::uint64_t
++last_frame : clock::time_point
++renderer : gfx::renderer::Render2D
++surface : platform::WsiHandle
++swapchain : gfx::rhi::SwapchainHandle
++window : platform::Window
+}
 class "strata::gfx::renderer::Camera3D" as C_0012459060599726822032
 class C_0012459060599726822032 {
 +add_yaw_pitch(float yaw_delta, float pitch_delta) noexcept : void
@@ -140,6 +384,7 @@ class C_0010824766815022468742 {
 ..
 +operator=(Render2D &&) noexcept : Render2D &
 ..
++camera() const noexcept : const Camera3D &
 -destroy_depth_textures() noexcept : void
 -destroy_ubo_resources() noexcept : void
 +draw_frame() : rhi::FrameResult
@@ -148,6 +393,7 @@ class C_0010824766815022468742 {
 +is_valid() const noexcept : bool
 +recreate_pipeline() : rhi::FrameResult
 -release() noexcept : void
++set_camera(const Camera3D & camera) noexcept : void
 __
 -camera_ : Camera3D
 -depth_extent_ : rhi::Extent2D
@@ -637,175 +883,6 @@ __
 +usage : rhi::TextureUsage
 +view : VkImageView
 }
-class "strata::platform::wsi::Win32Instance" as C_0009843677739255298692
-class C_0009843677739255298692 {
-+operator bool() constexpr const noexcept : bool
-__
-+value : std::uintptr_t
-}
-class "strata::platform::wsi::Win32Window" as C_0018290998811736525383
-class C_0018290998811736525383 {
-+operator bool() constexpr const noexcept : bool
-__
-+value : std::uintptr_t
-}
-class "strata::platform::wsi::Win32" as C_0015867045834686762295
-class C_0015867045834686762295 {
-+operator bool() constexpr const noexcept : bool
-__
-+instance : Win32Instance
-+window : Win32Window
-}
-class "strata::platform::wsi::X11Display" as C_0004139216579141968676
-class C_0004139216579141968676 {
-+operator bool() constexpr const noexcept : bool
-__
-+value : std::uintptr_t
-}
-class "strata::platform::wsi::X11Window" as C_0000103132443571165194
-class C_0000103132443571165194 {
-+operator bool() constexpr const noexcept : bool
-__
-+value : std::uint64_t
-}
-class "strata::platform::wsi::X11" as C_0009424639203119917878
-class C_0009424639203119917878 {
-+operator bool() constexpr const noexcept : bool
-__
-+display : X11Display
-+window : X11Window
-}
-class "strata::platform::wsi::WaylandDisplay" as C_0018051248413152380528
-class C_0018051248413152380528 {
-+operator bool() constexpr const noexcept : bool
-__
-+value : std::uintptr_t
-}
-class "strata::platform::wsi::WaylandSurface" as C_0006480956703282666377
-class C_0006480956703282666377 {
-+operator bool() constexpr const noexcept : bool
-__
-+value : std::uintptr_t
-}
-class "strata::platform::wsi::Wayland" as C_0016276992989547283338
-class C_0016276992989547283338 {
-+operator bool() constexpr const noexcept : bool
-__
-+display : WaylandDisplay
-+surface : WaylandSurface
-}
-class "strata::platform::Extent2d" as C_0005777160501785278061
-class C_0005777160501785278061 {
-__
-+height : std::int32_t
-+width : std::int32_t
-}
-class "strata::platform::WindowDesc" as C_0016311843175510711894
-class C_0016311843175510711894 {
-__
-+resizable : bool
-+size : Extent2d
-+title : std::string_view
-+visible : bool
-}
-class "strata::platform::Window" as C_0005247819231906793915
-class C_0005247819231906793915 {
-+Window(base::Diagnostics & diagnostics, const WindowDesc & desc) : void
-+Window(Window &&) noexcept : void
-+Window(const Window &) = deleted : void
-+~Window() : void
-..
-+operator=(Window &&) noexcept : Window &
-+operator=(const Window &) = deleted : Window &
-..
-+framebuffer_size() const noexcept : std::pair<std::int32_t,std::int32_t>
-+is_minimized() const noexcept : bool
-+is_visible() const noexcept : bool
-+native_wsi() const noexcept : WsiHandle
-+poll_events() : void
-+request_close() noexcept : void
-+set_title(std::string_view title) : void
-+should_close() const noexcept : bool
-+window_size() const noexcept : std::pair<std::int32_t,std::int32_t>
-__
--p_ : std::unique_ptr<Impl>
-}
-class "strata::platform::Window::Impl" as C_0013200129816682565187
-class C_0013200129816682565187 {
-+make_wsi_handle() const : WsiHandle
-+wnd_proc(HWND h, UINT msg, WPARAM w, LPARAM l) : LRESULT
-{static} +wndproc_static(HWND hwnd, UINT msg, WPARAM w, LPARAM l) : LRESULT
-__
-+clear_brush : HBRUSH
-+closing : bool
-+diagnostics : base::Diagnostics *
-+hinstance : HINSTANCE
-+hwnd : HWND
-+minimized : bool
-}
-class "strata::core::FrameContext" as C_0009952609517611504575
-class C_0009952609517611504575 {
-__
-+delta_seconds : double
-+frame_index : std::uint64_t
-}
-class "strata::core::ApplicationConfig" as C_0002056900511809122909
-class C_0002056900511809122909 {
-__
-+device : strata::gfx::rhi::DeviceCreateInfo
-+swapchain_desc : strata::gfx::rhi::SwapchainDesc
-+throttle_cpu : bool
-+throttle_sleep : std::chrono::milliseconds
-+window_desc : strata::platform::WindowDesc
-}
-enum "strata::core::ApplicationError" as C_0009230160325266616415
-enum C_0009230160325266616415 {
-WindowCreateFailed
-DeviceCreateFailed
-SwapchainCreateFailed
-RendererCreateFailed
-}
-class "strata::core::Application" as C_0005212081933056084623
-class C_0005212081933056084623 {
--Application(std::unique_ptr<Impl,ImplDeleter> impl) noexcept : void
-..
-+config() const noexcept : const ApplicationConfig &
-{static} +create(ApplicationConfig config = {}) : std::expected<Application,ApplicationError>
-+device() noexcept : strata::gfx::rhi::IGpuDevice &
-+device() const noexcept : const strata::gfx::rhi::IGpuDevice &
-+diagnostics() noexcept : strata::base::Diagnostics &
-+diagnostics() const noexcept : const strata::base::Diagnostics &
-+renderer() noexcept : strata::gfx::renderer::Render2D &
-+renderer() const noexcept : const strata::gfx::renderer::Render2D &
-+request_exit() noexcept : void
-+run(TickFn tick = = {}) : std::int16_t
-+swapchain() const noexcept : strata::gfx::rhi::SwapchainHandle
-+window() noexcept : strata::platform::Window &
-+window() const noexcept : const strata::platform::Window &
-__
--impl_ : std::unique_ptr<Impl,ImplDeleter>
-}
-class "strata::core::Application::ImplDeleter" as C_0009403174502820656066
-class C_0009403174502820656066 {
-+operator()(Impl *) const noexcept : void
-__
-}
-class "strata::core::Application::Impl" as C_0003684588886580275255
-class C_0003684588886580275255 {
-+Impl(ApplicationConfig cfg, std::unique_ptr<base::Diagnostics> && diag, platform::Window && window, platform::WsiHandle surface, std::unique_ptr<gfx::rhi::IGpuDevice> && device, gfx::rhi::SwapchainHandle swapchain, gfx::renderer::Render2D && render) : void
-+~Impl() noexcept : void
-__
-+config : ApplicationConfig
-+device : std::unique_ptr<gfx::rhi::IGpuDevice>
-+diagnostics : std::unique_ptr<base::Diagnostics>
-+exit_requested : bool
-+frame_index : std::uint64_t
-+last_frame : clock::time_point
-+renderer : gfx::renderer::Render2D
-+surface : platform::WsiHandle
-+swapchain : gfx::rhi::SwapchainHandle
-+window : platform::Window
-}
 C_0010592338517071783832 o-- C_0013027043135182793153 : +level
 C_0000212634736638790917 ..> C_0010592338517071783832
 C_0009626563013743656890 ..> C_0010592338517071783832
@@ -822,6 +899,54 @@ C_0015969163135226357711 o-- C_0014999958827645994269 : -logger_
 C_0001096765954109145703 --+ C_0015969163135226357711
 C_0001096765954109145703 o-- C_0013027043135182793153 : +min_level
 C_0013825142399234263653 ..> C_0013825134702652866176
+C_0013081563177970586290 ..> C_0003221439872259927514
+C_0013081563177970586290 ..> C_0011881472246153983510
+C_0015867045834686762295 o-- C_0009843677739255298692 : +instance
+C_0015867045834686762295 o-- C_0018290998811736525383 : +window
+C_0009424639203119917878 o-- C_0004139216579141968676 : +display
+C_0009424639203119917878 o-- C_0000103132443571165194 : +window
+C_0016276992989547283338 o-- C_0018051248413152380528 : +display
+C_0016276992989547283338 o-- C_0006480956703282666377 : +surface
+C_0016311843175510711894 o-- C_0005777160501785278061 : +size
+C_0005247819231906793915 ..> C_0015969163135226357711
+C_0005247819231906793915 ..> C_0016311843175510711894
+C_0005247819231906793915 ..> C_0013081563177970586290
+C_0005247819231906793915 ..> C_0015867045834686762295
+C_0005247819231906793915 ..> C_0009424639203119917878
+C_0005247819231906793915 ..> C_0016276992989547283338
+C_0013200129816682565187 --+ C_0005247819231906793915
+C_0013200129816682565187 ..> C_0015867045834686762295
+C_0013200129816682565187 ..> C_0009424639203119917878
+C_0013200129816682565187 ..> C_0016276992989547283338
+C_0013200129816682565187 --> C_0015969163135226357711 : +diagnostics
+C_0013200129816682565187 o-- C_0013081563177970586290 : +input
+C_0017461806447561434585 ..> C_0013081563177970586290
+C_0017461806447561434585 ..> C_0018032594692547036397
+C_0002056900511809122909 o-- C_0016311843175510711894 : +window_desc
+C_0002056900511809122909 o-- C_0007170430122059447642 : +device
+C_0002056900511809122909 o-- C_0008242555543376944237 : +swapchain_desc
+C_0005212081933056084623 ..> C_0002056900511809122909
+C_0005212081933056084623 ..> C_0009230160325266616415
+C_0005212081933056084623 ..> C_0009952609517611504575
+C_0005212081933056084623 ..> C_0005247819231906793915
+C_0005212081933056084623 ..> C_0017920997868415439149
+C_0005212081933056084623 ..> C_0010872083216687935010
+C_0005212081933056084623 ..> C_0010824766815022468742
+C_0005212081933056084623 ..> C_0015969163135226357711
+C_0005212081933056084623 ..> C_0003684588886580275255
+C_0005212081933056084623 ..> C_0009403174502820656066
+C_0009403174502820656066 --+ C_0005212081933056084623
+C_0009403174502820656066 ..> C_0003684588886580275255
+C_0003684588886580275255 --+ C_0005212081933056084623
+C_0003684588886580275255 o-- C_0002056900511809122909 : +config
+C_0003684588886580275255 o-- C_0015969163135226357711 : +diagnostics
+C_0003684588886580275255 o-- C_0005247819231906793915 : +window
+C_0003684588886580275255 o-- C_0015867045834686762295 : +surface
+C_0003684588886580275255 o-- C_0009424639203119917878 : +surface
+C_0003684588886580275255 o-- C_0016276992989547283338 : +surface
+C_0003684588886580275255 o-- C_0017920997868415439149 : +device
+C_0003684588886580275255 o-- C_0010872083216687935010 : +swapchain
+C_0003684588886580275255 o-- C_0010824766815022468742 : +renderer
 C_0012459060599726822032 ..> C_0005603721019384004173
 C_0012459060599726822032 o-- C_0013825134702652866176 : +position
 C_0012459060599726822032 o-- C_0013825134702652866176 : +world_up
@@ -924,48 +1049,6 @@ C_0018051402234945093614 --+ C_0002997308125348651313
 C_0001311421129333406444 --+ C_0002997308125348651313
 C_0015212676209426193147 --+ C_0002997308125348651313
 C_0015212676209426193147 o-- C_0002766783461747024134 : +usage
-C_0015867045834686762295 o-- C_0009843677739255298692 : +instance
-C_0015867045834686762295 o-- C_0018290998811736525383 : +window
-C_0009424639203119917878 o-- C_0004139216579141968676 : +display
-C_0009424639203119917878 o-- C_0000103132443571165194 : +window
-C_0016276992989547283338 o-- C_0018051248413152380528 : +display
-C_0016276992989547283338 o-- C_0006480956703282666377 : +surface
-C_0016311843175510711894 o-- C_0005777160501785278061 : +size
-C_0005247819231906793915 ..> C_0015969163135226357711
-C_0005247819231906793915 ..> C_0016311843175510711894
-C_0005247819231906793915 ..> C_0015867045834686762295
-C_0005247819231906793915 ..> C_0009424639203119917878
-C_0005247819231906793915 ..> C_0016276992989547283338
-C_0013200129816682565187 --+ C_0005247819231906793915
-C_0013200129816682565187 ..> C_0015867045834686762295
-C_0013200129816682565187 ..> C_0009424639203119917878
-C_0013200129816682565187 ..> C_0016276992989547283338
-C_0013200129816682565187 --> C_0015969163135226357711 : +diagnostics
-C_0002056900511809122909 o-- C_0016311843175510711894 : +window_desc
-C_0002056900511809122909 o-- C_0007170430122059447642 : +device
-C_0002056900511809122909 o-- C_0008242555543376944237 : +swapchain_desc
-C_0005212081933056084623 ..> C_0002056900511809122909
-C_0005212081933056084623 ..> C_0009230160325266616415
-C_0005212081933056084623 ..> C_0009952609517611504575
-C_0005212081933056084623 ..> C_0005247819231906793915
-C_0005212081933056084623 ..> C_0017920997868415439149
-C_0005212081933056084623 ..> C_0010872083216687935010
-C_0005212081933056084623 ..> C_0010824766815022468742
-C_0005212081933056084623 ..> C_0015969163135226357711
-C_0005212081933056084623 ..> C_0003684588886580275255
-C_0005212081933056084623 ..> C_0009403174502820656066
-C_0009403174502820656066 --+ C_0005212081933056084623
-C_0009403174502820656066 ..> C_0003684588886580275255
-C_0003684588886580275255 --+ C_0005212081933056084623
-C_0003684588886580275255 o-- C_0002056900511809122909 : +config
-C_0003684588886580275255 o-- C_0015969163135226357711 : +diagnostics
-C_0003684588886580275255 o-- C_0005247819231906793915 : +window
-C_0003684588886580275255 o-- C_0015867045834686762295 : +surface
-C_0003684588886580275255 o-- C_0009424639203119917878 : +surface
-C_0003684588886580275255 o-- C_0016276992989547283338 : +surface
-C_0003684588886580275255 o-- C_0017920997868415439149 : +device
-C_0003684588886580275255 o-- C_0010872083216687935010 : +swapchain
-C_0003684588886580275255 o-- C_0010824766815022468742 : +renderer
 
 'Generated with clang-uml, version 0.6.2
 'LLVM version clang version 20.1.7 (https://github.com/llvm/llvm-project.git 6146a88f60492b520a36f8f8f3231e15f3cc6082)
