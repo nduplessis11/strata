@@ -199,14 +199,29 @@ struct Window::Impl
             return 0;
 
         case WM_KEYDOWN:
-        case WM_SYSKEYDOWN:
             on_key(w, true);
             return 0;
 
         case WM_KEYUP:
-        case WM_SYSKEYUP:
             on_key(w, false);
             return 0;
+
+        case WM_SYSKEYDOWN:
+        case WM_SYSKEYUP:
+        {
+            // Always track it in input state (so Alt etc. is visible to the engine).
+            on_key(w, msg == WM_SYSKEYDOWN);
+
+            // IMPORTANT:
+            // Don't swallow system keys by default - let Windows generate SC_CLOSE for Alt+F4 etc.
+            //
+            // Exception: many engines suppress "press Alt" / F10 from activating the system menu
+            // focus.
+            if (w == VK_MENU || w == VK_F10)
+                return 0;
+
+            return ::DefWindowProcW(h, msg, w, l);
+        }
 
         case WM_LBUTTONDOWN:
         case WM_RBUTTONDOWN:
