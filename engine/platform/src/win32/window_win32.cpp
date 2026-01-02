@@ -459,12 +459,12 @@ void Window::poll_events()
 {
     // V1 Camera Input: reset per-frame deltas before pumping.
     if (p_)
-    {
         p_->input.begin_frame();
-    }
 
     MSG msg;
-    while (::PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
+    // Temp: per-window message pump.
+    // TODO: Move to Application or platform::EventLoop
+    while (::PeekMessageW(&msg, p_->hwnd, 0, 0, PM_REMOVE))
     {
         ::TranslateMessage(&msg);
         ::DispatchMessageW(&msg);
