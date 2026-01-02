@@ -34,6 +34,10 @@ class Render2D
 
     [[nodiscard]] bool is_valid() const noexcept;
 
+    // V1 Camera Input: external camera control (game owns camera logic; renderer consumes it)
+    void                          set_camera(Camera3D const& camera) noexcept;
+    [[nodiscard]] Camera3D const& camera() const noexcept;
+
     rhi::FrameResult draw_frame();
     rhi::FrameResult recreate_pipeline();
 

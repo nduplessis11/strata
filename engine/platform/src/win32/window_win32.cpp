@@ -5,20 +5,26 @@
 //   Win32 backend implementation for strata::platform::Window. Creates and
 //   manages native windows, message dispatch, and WSI handles for the graphics
 //   layer.
+//
+// V1 Camera Input:
+//   - Track raw input state (keys, mouse buttons, mouse delta) per Window.
+//   - Reset per-frame deltas in poll_events().
 // -----------------------------------------------------------------------------
 
 #include <string>
 #include <utility>
 #include <windows.h>
+#include <windowsx.h> // for GET_X_LPARAM, GET_Y_LPARAM
 
 #include "strata/base/diagnostics.h"
+#include "strata/platform/input.h"
 #include "strata/platform/window.h"
 #include "strata/platform/wsi_handle.h"
 
 namespace
 {
 
-// ────────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // A unique class name for this process.
 // Each "window class" in Win32 describes default behavior (cursor, icon, WndProc).
 // We register it once, then use it to create one or more windows of that class.
@@ -29,7 +35,7 @@ constexpr wchar_t const* strata_wnd_class = L"strata_window_class";
 //  - CS_OWNDC: give each window its own device context (useful for GDI, harmless otherwise).
 //  - CS_HREDRAW | CS_VREDRAW: request repaint on horizontal/vertical size changes.
 //  - lpfnWndProc: the function Windows calls for EVERY message (clicks, sizing, focus, etc.).
-//  - hbrBackground = nullptr: don't auto-erase background → reduces flicker in renderers.
+//  - hbrBackground = nullptr: don't auto-erase background -> reduces flicker in renderers.
 //  - If the class is already registered (typical in multi-window engines),
 //    treat that as success; registration is idempotent for our purposes.
 ATOM register_wnd_class(HINSTANCE hinst, WNDPROC proc)
@@ -51,13 +57,13 @@ ATOM register_wnd_class(HINSTANCE hinst, WNDPROC proc)
     ATOM atom = ::RegisterClassExW(&wc);
     if (!atom && ::GetLastError() == ERROR_CLASS_ALREADY_EXISTS)
     {
-        // Already registered by a previous window → fine; treat as success.
+        // Already registered by a previous window -> fine; treat as success.
         atom = static_cast<ATOM>(1);
     }
     return atom;
 }
 
-// UTF-8 → UTF-16 for window titles.
+// UTF-8 -> UTF-16 for window titles.
 // Public API uses UTF-8 (std::string_view); Win32 "W" APIs use UTF-16 (wchar_t*).
 std::wstring utf8_to_wide(std::string_view s)
 {
@@ -80,7 +86,7 @@ std::wstring utf8_to_wide(std::string_view s)
 namespace strata::platform
 {
 
-// ────────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Window::Impl — private Win32 state (pImpl)
 //
 // WHY pImpl?
@@ -104,11 +110,145 @@ struct Window::Impl
     bool      minimized{false};
     HBRUSH    clear_brush{}; // TEMP: dark-gray fill for smoke test (renderer-ready)
 
+    // V1 Camera Input: input state owned by this window.
+    InputState input{};
+
+    bool mouse_pos_valid{false};
+    int  last_mouse_x{0};
+    int  last_mouse_y{0};
+
+    void on_key(WPARAM vk, bool down) noexcept
+    {
+        switch (vk)
+        {
+        case 'W':
+            input.set_key(Key::W, down);
+            break;
+        case 'A':
+            input.set_key(Key::A, down);
+            break;
+        case 'S':
+            input.set_key(Key::S, down);
+            break;
+        case 'D':
+            input.set_key(Key::D, down);
+            break;
+
+        case VK_SPACE:
+            input.set_key(Key::Space, down);
+            break;
+
+        case VK_CONTROL:
+        case VK_LCONTROL:
+        case VK_RCONTROL:
+            input.set_key(Key::Ctrl, down);
+            break;
+
+        case VK_SHIFT:
+        case VK_LSHIFT:
+        case VK_RSHIFT:
+            input.set_key(Key::Shift, down);
+            break;
+
+        case VK_ESCAPE:
+            input.set_key(Key::Escape, down);
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    void on_mouse_button(UINT msg, bool down) noexcept
+    {
+        switch (msg)
+        {
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+            input.set_mouse_button(MouseButton::Left, down);
+            break;
+
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+            input.set_mouse_button(MouseButton::Right, down);
+            break;
+
+        case WM_MBUTTONDOWN:
+        case WM_MBUTTONUP:
+            input.set_mouse_button(MouseButton::Middle, down);
+            break;
+
+        default:
+            break;
+        }
+    }
+
     // Instance WndProc: receives messages after GWLP_USERDATA holds our Impl*.
     LRESULT wnd_proc(HWND h, UINT msg, WPARAM w, LPARAM l)
     {
         switch (msg)
         {
+        case WM_SETFOCUS:
+            input.set_focused(true);
+            mouse_pos_valid = false;
+            return 0;
+
+        case WM_KILLFOCUS:
+            input.set_focused(false);
+            mouse_pos_valid = false;
+            return 0;
+
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+            on_key(w, true);
+            return 0;
+
+        case WM_KEYUP:
+        case WM_SYSKEYUP:
+            on_key(w, false);
+            return 0;
+
+        case WM_LBUTTONDOWN:
+        case WM_RBUTTONDOWN:
+        case WM_MBUTTONDOWN:
+            on_mouse_button(msg, true);
+            break;
+
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP:
+        case WM_MBUTTONUP:
+            on_mouse_button(msg, false);
+            return 0;
+
+        case WM_MOUSEMOVE:
+        {
+            if (!input.focused())
+                return 0;
+
+            std::int32_t const x = GET_X_LPARAM(l);
+            std::int32_t const y = GET_Y_LPARAM(l);
+
+            if (mouse_pos_valid)
+            {
+                std::int32_t const dx = x - last_mouse_x;
+                std::int32_t const dy = y - last_mouse_y;
+                input.add_mouse_delta(static_cast<float>(dx), static_cast<float>(dy));
+            }
+
+            last_mouse_x    = x;
+            last_mouse_y    = y;
+            mouse_pos_valid = true;
+            return 0;
+        }
+
+        case WM_MOUSEHWHEEL:
+        {
+            // Positive is wheel away from user. Normalize to "notches".
+            std::int16_t const delta = GET_WHEEL_DELTA_WPARAM(w);
+            input.add_wheel_delta(static_cast<float>(delta) / static_cast<float>(WHEEL_DELTA));
+            return 0;
+        }
+
         case WM_CLOSE:
             // User requested close (e.g., Alt-F4 or clicking "X").
             // We don't destroy here; we mark and let Application drive teardown.
@@ -205,10 +345,12 @@ struct Window::Impl
     }
 };
 
-// ────────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Window API — construct, pump, query, teardown
+// -----------------------------------------------------------------------------
 
-Window::Window(base::Diagnostics& diagnostics, WindowDesc const& desc) : p_(std::make_unique<Impl>())
+Window::Window(base::Diagnostics& diagnostics, WindowDesc const& desc)
+      : p_(std::make_unique<Impl>())
 {
     p_->diagnostics = &diagnostics;
 
@@ -237,7 +379,7 @@ Window::Window(base::Diagnostics& diagnostics, WindowDesc const& desc) : p_(std:
     int const outer_w = rect.right - rect.left;
     int const outer_h = rect.bottom - rect.top;
 
-    // Title: UTF-8 → UTF-16.
+    // Title: UTF-8 -> UTF-16.
     std::wstring const wtitle = utf8_to_wide(desc.title);
 
     // Create the window. Pass Impl* via lpCreateParams so WM_NCCREATE can stash it.
@@ -300,6 +442,12 @@ void Window::request_close() noexcept
 // Processes ALL messages for this GUI thread (nullptr filter).
 void Window::poll_events()
 {
+    // V1 Camera Input: reset per-frame deltas before pumping.
+    if (p_)
+    {
+        p_->input.begin_frame();
+    }
+
     MSG msg;
     while (::PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
     {
@@ -326,8 +474,8 @@ auto Window::window_size() const noexcept -> std::pair<std::int32_t, std::int32_
         return {0, 0};
     RECT rc{};
     ::GetClientRect(p_->hwnd, &rc);
-    int const w = rc.right - rc.left;
-    int const h = rc.bottom - rc.top;
+    std::int32_t const w = rc.right - rc.left;
+    std::int32_t const h = rc.bottom - rc.top;
     return {w, h};
 }
 
@@ -336,6 +484,21 @@ auto Window::framebuffer_size() const noexcept -> std::pair<std::int32_t, std::i
     // FIRST BRING-UP: assume client == framebuffer.
     // LATER: if DPI-aware, multiply by DPI/96 or use GetDpiForWindow().
     return window_size();
+}
+
+bool Window::is_minimized() const noexcept
+{
+    return p_ ? p_->minimized : true;
+}
+
+bool Window::is_visible() const noexcept
+{
+    return (p_ && p_->hwnd) ? (::IsWindowVisible(p_->hwnd) != 0) : false;
+}
+
+auto Window::input() const noexcept -> InputState const&
+{
+    return p_->input;
 }
 
 // Return a typed WSI descriptor for gfx (used to create a VkSurfaceKHR).

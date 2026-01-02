@@ -4,16 +4,94 @@
 // Purpose:
 //   X11 backend implementation for strata::platform::Window. Creates a basic
 //   Xlib window, pumps events, and produces WSI handles for the graphics layer.
+//
+// V1 Camera Input:
+//   - Track raw input state (keys, mouse buttons, mouse delta) per Window.
+//   - Reset per-frame mouse delta in poll_events().
 // -----------------------------------------------------------------------------
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <X11/keysim.h>
+
 #include <string>
 #include <utility>
 
 #include "strata/base/diagnostics.h"
+#include "strata/platform/input.h"
 #include "strata/platform/window.h"
 #include "strata/platform/wsi_handle.h"
+
+namespace
+{
+
+bool translate_key(KeySym sym, strata::platform::Key& out) noexcept
+{
+    using strata::platform::Key;
+
+    switch (sym)
+    {
+    case XK_w:
+    case XK_W:
+        out = Key::W;
+        return true;
+    case XK_a:
+    case XK_A:
+        out = Key::A;
+        return true;
+    case XK_s:
+    case XK_S:
+        out = Key::S;
+        return true;
+    case XK_d:
+    case XK_D:
+        out = Key::D;
+        return true;
+
+    case XK_space:
+        out = Key::Space;
+        return true;
+
+    case XK_Control_L:
+    case XK_Control_R:
+        out = Key::Ctrl;
+        return true;
+
+    case XK_Shift_L:
+    case XK_Shift_R:
+        out = Key::Shift;
+        return true;
+
+    case XK_Escape:
+        out = Key::Escape;
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+bool translate_button(unsigned int button, strata::platform::MouseButton& out) noexcept
+{
+    using strata::platform::MouseButton;
+
+    switch (button)
+    {
+    case Button1:
+        out = MouseButton::Left;
+        return true;
+    case Button2:
+        out = MouseButton::Middle;
+        return true;
+    case Button3:
+        out = MouseButton::Right;
+        return true;
+    default:
+        return false;
+    }
+}
+
+} // namespace
 
 namespace strata::platform
 {
@@ -29,7 +107,15 @@ struct Window::Impl
     bool     visible{false};
     bool     minimized{false};
 
-    Impl(base::Diagnostics& diag, WindowDesc const& desc) : diagnostics(&diag)
+    // V1 Camera Input: input state owned by this Window.
+    InputState input{};
+
+    bool mouse_pos_valid{false};
+    int  last_mouse_x{0};
+    int  last_mouse_y{0};
+
+    Impl(base::Diagnostics& diag, WindowDesc const& desc)
+          : diagnostics(&diag)
     {
         display = ::XOpenDisplay(nullptr);
         if (!display)
@@ -43,8 +129,14 @@ struct Window::Impl
         ::Window const root   = RootWindow(display, screen);
 
         XSetWindowAttributes attrs{};
-        attrs.event_mask = ExposureMask | StructureNotifyMask | KeyPressMask | KeyReleaseMask |
-                           ButtonPressMask | ButtonReleaseMask | PointerMotionMask;
+        attrs.event_mask = ExposureMask |
+            StructureNotifyMask |
+            FocusChangeMask |
+            KeyPressMask |
+            KeyReleaseMask |
+            ButtonPressMask |
+            ButtonReleaseMask |
+            PointerMotionMask;
         attrs.background_pixel = BlackPixel(display, screen);
 
         int const          border = 0;
@@ -136,6 +228,9 @@ struct Window::Impl
         if (!display)
             return;
 
+        // V1 Camera Input: reset per-frame deltas before pumping.
+        input.begin_frame();
+
         while (::XPending(display) > 0)
         {
             XEvent evt{};
@@ -143,23 +238,112 @@ struct Window::Impl
 
             switch (evt.type)
             {
+            case FocusIn:
+                input.set_focused(true);
+                mouse_pos_valid = false;
+                break;
+
+            case FocusOut:
+                input.set_focused(false);
+                mouse_pos_valid = false;
+                break;
+
+            case KeyPress:
+            {
+                KeySym sym = ::XLookupKeysym(&evt.xkey, 0);
+                Key    k{};
+                if (translate_key(sym, k))
+                {
+                    input.set_key(k, true);
+                }
+                break;
+            }
+
+            case KeyRelease:
+            {
+                KeySym sym = ::XLookupKeysym(&evt.xkey, 0);
+                Key    k{};
+                if (translate_key(sym, k))
+                {
+                    input.set_key(k, false);
+                }
+                break;
+            }
+
+            case ButtonPress:
+            {
+                // Wheel buttons are typically 4/5; treat as wheel delta.
+                if (evt.xbutton.button == Button4)
+                {
+                    input.add_wheel_delta(+1.0f);
+                    break;
+                }
+                if (evt.xbutton.button == Button5)
+                {
+                    input.add_wheel_delta(-1.0f);
+                    break;
+                }
+
+                MouseButton b{};
+                if (translate_button(evt.xbutton.button, b))
+                {
+                    input.set_mouse_button(b, true);
+                }
+                break;
+            }
+
+            case ButtonRelease:
+            {
+                MouseButton b{};
+                if (translate_button(evt.xbutton.button, b))
+                {
+                    input.set_mouse_button(b, false);
+                }
+                break;
+            }
+
+            case MotionNotify:
+            {
+                if (!input.focused())
+                    break;
+
+                int const x = evt.xmotion.x;
+                int const y = evt.xmotion.y;
+
+                if (mouse_pos_valid)
+                {
+                    int const dx = x - last_mouse_x;
+                    int const dy = y - last_mouse_y;
+                    input.add_mouse_delta(static_cast<float>(dx), static_cast<float>(dy));
+                }
+
+                last_mouse_x    = x;
+                last_mouse_y    = y;
+                mouse_pos_valid = true;
+                break;
+            }
+
             case ClientMessage:
                 if (static_cast<Atom>(evt.xclient.data.l[0]) == wm_delete)
                 {
                     closing = true;
                 }
                 break;
+
             case DestroyNotify:
                 closing = true;
                 break;
+
             case UnmapNotify:
                 visible   = false;
                 minimized = true;
                 break;
+
             case MapNotify:
                 visible   = true;
                 minimized = false;
                 break;
+
             default:
                 break;
             }
@@ -190,7 +374,7 @@ struct Window::Impl
 };
 
 Window::Window(base::Diagnostics& diagnostics, WindowDesc const& desc)
-    : p_(std::make_unique<Impl>(diagnostics, desc))
+      : p_(std::make_unique<Impl>(diagnostics, desc))
 {
 }
 
@@ -247,6 +431,11 @@ bool Window::is_minimized() const noexcept
 bool Window::is_visible() const noexcept
 {
     return p_ ? p_->visible : false;
+}
+
+InputState const& Window::input() const noexcept
+{
+    return p_->input;
 }
 
 WsiHandle Window::native_wsi() const noexcept

@@ -157,6 +157,17 @@ bool Render2D::is_valid() const noexcept
     return diagnostics_ != nullptr && device_ != nullptr && swapchain_ && pipeline_ && ubo_layout_;
 }
 
+// V1 Camera Input: external camera control
+void Render2D::set_camera(Camera3D const& camera) noexcept
+{
+    camera_ = camera;
+}
+
+Camera3D const& Render2D::camera() const noexcept
+{
+    return camera_;
+}
+
 void Render2D::destroy_depth_textures() noexcept
 {
     if (!device_)
@@ -518,7 +529,7 @@ FrameResult Render2D::draw_frame()
     STRATA_ASSERT(*diagnostics_, ubo_set);
     STRATA_ASSERT(*diagnostics_, ubo_buffer);
 
-    // --- Update scene UBO (Camera 3D Cub) -----------------------------------
+    // --- Update scene UBO (Camera 3D Cube) -----------------------------------
     {
         float const aspect = (img.extent.height != 0)
             ? (static_cast<float>(img.extent.width) / static_cast<float>(img.extent.height))
