@@ -241,7 +241,7 @@ struct Window::Impl
             return 0;
         }
 
-        case WM_MOUSEHWHEEL:
+        case WM_MOUSEWHEEL:
         {
             // Positive is wheel away from user. Normalize to "notches".
             std::int16_t const delta = GET_WHEEL_DELTA_WPARAM(w);
