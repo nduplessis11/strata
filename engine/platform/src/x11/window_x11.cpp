@@ -10,6 +10,7 @@
 //   - Reset per-frame mouse delta in poll_events().
 // -----------------------------------------------------------------------------
 
+#include <X11/XKBlib.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/keysim.h>
@@ -124,6 +125,9 @@ struct Window::Impl
             closing = true;
             return;
         }
+
+        Bool supported = False;
+        XkbSetDetectableAutoRepeat(display, True, &supported);
 
         int const      screen = DefaultScreen(display);
         ::Window const root   = RootWindow(display, screen);
@@ -261,12 +265,27 @@ struct Window::Impl
 
             case KeyRelease:
             {
+                // Filter X11 key auto-repeat:
+                // Auto-repeat generates KeyRelease/KeyPress pairs with the same keycode+time.
+                if (XEventsQueued(display, QueuedAfterReading) > 0)
+                {
+                    XEvent next{};
+                    XPeekEvent(display, &next);
+
+                    if (next.type == KeyPress &&
+                        next.xkey.keycode == evt.xkey.keycode &&
+                        next.xkey.time == evt.xkey.time)
+                    {
+                        // This release is part of auto-repeat; ignore it.
+                        break;
+                    }
+                }
+
                 KeySym sym = ::XLookupKeysym(&evt.xkey, 0);
                 Key    k{};
                 if (translate_key(sym, k))
-                {
                     input.set_key(k, false);
-                }
+
                 break;
             }
 
