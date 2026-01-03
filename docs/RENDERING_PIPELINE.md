@@ -53,7 +53,9 @@ The frame path looks like this:
 6. Create swapchain:
    - `swapchain = device->create_swapchain(sc_desc, wsi_handle)`
 7. Create renderer:
-   - `gfx::renderer::Render2D renderer{ *diagnostics, *device, swapchain }`
+   - `auto renderer_exp = gfx::renderer::Render2D::create(*diagnostics, *device, swapchain);`
+   - `if (!renderer_exp) return std::unexpected(ApplicationError::RendererCreateFailed);`
+   - `gfx::renderer::Render2D renderer = std::move(*renderer_exp);`
 
 
 Ownership is explicit (PImpl inside `Application`):
@@ -96,8 +98,8 @@ On exit, `device->wait_idle()` is called once more.
 V1 camera control:
 - The game can call `renderer.set_camera(camera)` before `draw_frame()` to control view/projection.
 
-### Pipeline setup (`Render2D::Render2D`)
-Constructor (given a `base::Diagnostics&`, `IGpuDevice&`, and `SwapchainHandle`) creates a simple pipeline:
+### Pipeline setup (`Render2D::create`)
+`Render2D::create(...)` (given a `base::Diagnostics&`, `IGpuDevice&`, and `SwapchainHandle`) creates a simple pipeline:
 - vertex shader: `shaders/fullscreen_triangle.vert.spv`
 - fragment shader: `shaders/flat_color.frag.spv`
 - no blending
@@ -267,7 +269,7 @@ Resize mirrors creation:
 `Render2D::draw_frame()` drives the frame while `VkGpuDevice` supplies the Vulkan-backed primitives.
 
 ### 0) Ensure pipeline exists
-When `Render2D` is constructed (or rebuilt after resize), it calls:
+When `Render2D` is created (or rebuilt after resize), it calls:
 - `device_->create_pipeline(desc)`
 
 The Vulkan backend rebuilds its `basic_pipeline_` when this is called, and also invalidates it on resize.
