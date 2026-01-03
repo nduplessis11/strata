@@ -94,19 +94,28 @@ inline strata::base::math::Mat4 rotation_y(float radians) noexcept
 // Render2D
 // -------------------------------------------------------------------------
 
-Render2D::Render2D(base::Diagnostics& diagnostics, IGpuDevice& device, SwapchainHandle swapchain)
-      : diagnostics_(&diagnostics)
-      , device_(&device)
-      , swapchain_(swapchain)
-      , pipeline_{}
+std::expected<Render2D, Render2DError> Render2D::create(base::Diagnostics& diagnostics,
+                                                        IGpuDevice&        device,
+                                                        SwapchainHandle    swapchain)
 {
-    STRATA_ASSERT(diagnostics, swapchain_);
+    using namespace strata::gfx::rhi;
 
-    // Camera defaults, but push it back a bit so the cube is clearly visible.
-    camera_.position = base::math::Vec3(0.0f, 0.0f, 3.0f);
-    camera_.set_yaw_pitch(0.0f, 0.0f);
+    if (!swapchain)
+    {
+        STRATA_LOG_ERROR(diagnostics.logger(), "renderer", "Render2D::create: invalid swapchain");
+        return std::unexpected(Render2DError::InvalidSwapchain);
+    }
 
-    // 1) Descriptor set layout: set 0, binding 0 = uniform buffer visible to vertex+fragment.
+    Render2D out{};
+    out.diagnostics_ = &diagnostics;
+    out.device_      = &device;
+    out.swapchain_   = swapchain;
+
+    // Camera defaults (same as your current ctor)
+    out.camera_.position = base::math::Vec3(0.0f, 0.0f, 3.0f);
+    out.camera_.set_yaw_pitch(0.0f, 0.0f);
+
+    // 1) Descriptor set layout
     DescriptorBinding binding{};
     binding.binding = 0;
     binding.type    = DescriptorType::UniformBuffer;
@@ -116,40 +125,43 @@ Render2D::Render2D(base::Diagnostics& diagnostics, IGpuDevice& device, Swapchain
     DescriptorSetLayoutDesc layout_desc{};
     layout_desc.bindings = std::span{&binding, 1};
 
-    ubo_layout_ = device_->create_descriptor_set_layout(layout_desc);
-    if (!ubo_layout_)
+    out.ubo_layout_ = device.create_descriptor_set_layout(layout_desc);
+    if (!out.ubo_layout_)
     {
-        STRATA_LOG_ERROR(diagnostics_->logger(),
+        STRATA_LOG_ERROR(diagnostics.logger(),
                          "renderer",
-                         "Render2D: create_descriptor_set_layout failed");
-        return;
+                         "Render2D::create: create_descriptor_set_layout failed");
+        return std::unexpected(Render2DError::CreateDescriptorSetLayoutFailed);
+        // NOTE: out will be destroyed here; ~Render2D() will call release() (safe).
     }
 
-    // NOTE (Camera3D Cube):
-    // We create UBO buffers + descriptor sets per swapchain image index lazily in draw_frame().
-    // This avoids overwritting a single UBO while another frame is still in flight.
-
-    // 2) Create pipeline (depth-compatible. depth test/write enabled for 3D demo)
+    // 2) Pipeline
     PipelineDesc desc{};
     desc.vertex_shader_path   = "shaders/fullscreen_triangle.vert.spv";
     desc.fragment_shader_path = "shaders/flat_color.frag.spv";
     desc.alpha_blend          = false;
 
-    desc.depth_format = depth_format_;
+    desc.depth_format = out.depth_format_;
     desc.depth_test   = true;
     desc.depth_write  = true;
 
-    DescriptorSetLayoutHandle const set_layouts[] = {ubo_layout_};
+    DescriptorSetLayoutHandle const set_layouts[] = {out.ubo_layout_};
     desc.set_layouts                              = set_layouts;
 
-    pipeline_ = device_->create_pipeline(desc);
-    if (!pipeline_)
+    out.pipeline_ = device.create_pipeline(desc);
+    if (!out.pipeline_)
     {
-        STRATA_LOG_ERROR(diagnostics_->logger(), "renderer", "Render2D: create_pipeline failed");
-        return;
+        STRATA_LOG_ERROR(diagnostics.logger(),
+                         "renderer",
+                         "Render2D::create: create_pipeline failed");
+        return std::unexpected(Render2DError::CreatePipelineFailed);
     }
 
-    STRATA_LOG_INFO(diagnostics_->logger(), "renderer", "Render2D initialized: 3D cube demo");
+    STRATA_ASSERT(diagnostics, out.is_valid());
+    STRATA_LOG_INFO(diagnostics.logger(), "renderer", "Render2D initialized: 3D cube demo");
+
+    // IMPORTANT: Render2D is move-only, so force move into expected.
+    return std::move(out);
 }
 
 bool Render2D::is_valid() const noexcept

@@ -121,7 +121,17 @@ std::expected<Application, ApplicationError> Application::create(ApplicationConf
         return std::unexpected(ApplicationError::SwapchainCreateFailed);
     }
 
-    gfx::renderer::Render2D renderer{*diagnostics, *device, swapchain};
+    auto renderer_exp = gfx::renderer::Render2D::create(*diagnostics, *device, swapchain);
+    if (!renderer_exp)
+    {
+        STRATA_LOG_ERROR(diagnostics->logger(),
+                         "core",
+                         "Renderer creation failed ({})",
+                         gfx::renderer::to_string(renderer_exp.error()));
+        return std::unexpected(ApplicationError::RendererCreateFailed);
+    }
+
+    gfx::renderer::Render2D renderer = std::move(*renderer_exp);
 
     std::unique_ptr<Impl, ImplDeleter> impl{new Impl{std::move(config),
                                                      std::move(diagnostics),

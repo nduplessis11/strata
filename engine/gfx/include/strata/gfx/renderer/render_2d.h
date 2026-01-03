@@ -8,12 +8,14 @@
 #pragma once
 
 #include <cstdint>
+#include <expected>
+#include <string_view>
 #include <vector>
 
 #include "strata/gfx/renderer/camera_3d.h"
 #include "strata/gfx/rhi/gpu_device.h"
 
-namespace
+namespace strata::base
 {
 class Diagnostics;
 }
@@ -21,12 +23,36 @@ class Diagnostics;
 namespace strata::gfx::renderer
 {
 
+enum class Render2DError : std::uint8_t
+{
+    InvalidSwapchain,
+    CreateDescriptorSetLayoutFailed,
+    CreatePipelineFailed,
+};
+
+[[nodiscard]]
+constexpr std::string_view to_string(Render2DError e) noexcept
+{
+    switch (e)
+    {
+    case Render2DError::InvalidSwapchain:
+        return "InvalidSwapchain";
+    case Render2DError::CreateDescriptorSetLayoutFailed:
+        return "CreateDescriptorSetLayoutFailed";
+    case Render2DError::CreatePipelineFailed:
+        return "CreatePipelineFailed";
+    }
+    return "Unknown";
+}
+
 class Render2D
 {
   public:
-    Render2D(base::Diagnostics&   diagnostics,
-             rhi::IGpuDevice&     device,
-             rhi::SwapchainHandle swapchain);
+    [[nodiscard]]
+    static std::expected<Render2D, Render2DError> create(base::Diagnostics&   diagnostics,
+                                                         rhi::IGpuDevice&     device,
+                                                         rhi::SwapchainHandle swapchain);
+
     ~Render2D();
 
     Render2D(Render2D&&) noexcept;
@@ -42,6 +68,8 @@ class Render2D
     rhi::FrameResult recreate_pipeline();
 
   private:
+    Render2D() = default; // only create() can build a valid instance
+
     void release() noexcept;
 
     void             destroy_depth_textures() noexcept;

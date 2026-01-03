@@ -376,15 +376,22 @@ __
 +world_up : base::math::Vec3
 +yaw_radians : float
 }
+enum "strata::gfx::renderer::Render2DError" as C_0001528822942849330672
+enum C_0001528822942849330672 {
+InvalidSwapchain
+CreateDescriptorSetLayoutFailed
+CreatePipelineFailed
+}
 class "strata::gfx::renderer::Render2D" as C_0010824766815022468742
 class C_0010824766815022468742 {
-+Render2D(base::Diagnostics & diagnostics, rhi::IGpuDevice & device, rhi::SwapchainHandle swapchain) : void
 +Render2D(Render2D &&) noexcept : void
+-Render2D() = default : void
 +~Render2D() : void
 ..
 +operator=(Render2D &&) noexcept : Render2D &
 ..
 +camera() const noexcept : const Camera3D &
+{static} +create(base::Diagnostics & diagnostics, rhi::IGpuDevice & device, rhi::SwapchainHandle swapchain) : std::expected<Render2D,Render2DError>
 -destroy_depth_textures() noexcept : void
 -destroy_ubo_resources() noexcept : void
 +draw_frame() : rhi::FrameResult
@@ -950,6 +957,7 @@ C_0003684588886580275255 o-- C_0010824766815022468742 : +renderer
 C_0012459060599726822032 ..> C_0005603721019384004173
 C_0012459060599726822032 o-- C_0013825134702652866176 : +position
 C_0012459060599726822032 o-- C_0013825134702652866176 : +world_up
+C_0010824766815022468742 ..> C_0001528822942849330672
 C_0010824766815022468742 ..> C_0007898125113726414504
 C_0010824766815022468742 --> C_0015969163135226357711 : -diagnostics_
 C_0010824766815022468742 --> C_0017920997868415439149 : -device_

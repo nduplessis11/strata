@@ -174,8 +174,10 @@ Creation happens in a strict “bring-up” sequence:
    - Determine framebuffer size
    - `swapchain = device->create_swapchain(sc_desc, surface)`
 6. **Renderer**
-   - `Render2D renderer{ *diagnostics, *device, swapchain }`
-   - This calls `device.create_pipeline(...)` inside the constructor
+   - `auto renderer_exp = Render2D::create(*diagnostics, *device, swapchain);`
+   - `if (!renderer_exp) return std::unexpected(ApplicationError::RendererCreateFailed);`
+   - `Render2D renderer = std::move(*renderer_exp);`
+   - This calls `device.create_pipeline(...)` inside `Render2D::create(...)`
 
 
 Only after all of the above succeed is `Application` returned as a valid value.
