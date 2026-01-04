@@ -665,8 +665,12 @@ cleanup:
         sd.image_index    = img.image_index;
         sd.frame_index    = img.frame_index;
 
-        (void)device_->submit(sd);
-        (void)device_->present(swapchain_, img.image_index);
+        FrameResult const sub = device_->submit(sd);
+        if (sub == FrameResult::Ok)
+        {
+            (void)device_->present(swapchain_, img.image_index);
+        }
+        // else: do NOT present — render_finished is not guaranteed signaled.
     }
 
 cleanup_after_end:
