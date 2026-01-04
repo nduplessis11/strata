@@ -167,6 +167,8 @@ class VkGpuDevice final : public rhi::IGpuDevice
     bool init_frames();
     void destroy_frames();
 
+    bool drain_image_available(std::uint32_t slot) noexcept;
+
     bool init_render_finished_per_image(std::size_t image_count);
     void destroy_render_finished_per_image();
 
@@ -182,7 +184,6 @@ class VkGpuDevice final : public rhi::IGpuDevice
     rhi::BufferHandle        allocate_buffer_handle();
     rhi::TextureHandle       allocate_texture_handle();
     rhi::PipelineHandle      allocate_pipeline_handle();
-    rhi::CommandBufferHandle allocate_command_handle();
 
     // --- Descriptor internals ------------------------------------------------
     bool ensure_descriptor_pool();

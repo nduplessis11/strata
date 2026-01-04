@@ -670,7 +670,7 @@ cleanup:
         {
             (void)device_->present(swapchain_, img.image_index);
         }
-        // else: do NOT present — render_finished is not guaranteed signaled.
+        // else: do NOT present - render_finished is not guaranteed signaled.
     }
 
 cleanup_after_end:

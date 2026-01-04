@@ -146,21 +146,6 @@ rhi::FrameResult VkGpuDevice::submit(rhi::IGpuDevice::SubmitDesc const& sd)
 
     auto& diag = *diagnostics_;
 
-    if (!device_.device() || !swapchain_.valid())
-        return FrameResult::Error;
-
-    if (pending_submit_frame_index_ == invalid_index)
-    {
-        STRATA_LOG_ERROR(diag.logger(), "vk.submit", "submit: no pending command buffer");
-        return FrameResult::Error;
-    }
-
-    if (!sd.command_buffer)
-    {
-        STRATA_LOG_ERROR(diag.logger(), "vk.submit", "submit: sd.command_buffer is invalid");
-        return FrameResult::Error;
-    }
-
     std::uint32_t slot = invalid_index;
     if (!decode_cmd_handle(sd.command_buffer, slot) || slot != pending_submit_frame_index_)
     {
@@ -171,6 +156,31 @@ rhi::FrameResult VkGpuDevice::submit(rhi::IGpuDevice::SubmitDesc const& sd)
                          pending_submit_frame_index_);
         diag.debug_break_on_error();
         pending_submit_frame_index_ = invalid_index;
+        return FrameResult::Error;
+    }
+
+    if (!device_.device() || !swapchain_.valid())
+    {
+        // We cannot safely submit the recorded work, but we MUST consume image_available
+        // or the next acquire will reuse a still-signaled semaphore.
+        (void)drain_image_available(slot);
+
+        pending_submit_frame_index_ = invalid_index;
+        recording_frame_index_      = invalid_index;
+        recording_active_           = false;
+
+        return FrameResult::Error;
+    }
+
+    if (pending_submit_frame_index_ == invalid_index)
+    {
+        STRATA_LOG_ERROR(diag.logger(), "vk.submit", "submit: no pending command buffer");
+        return FrameResult::Error;
+    }
+
+    if (!sd.command_buffer)
+    {
+        STRATA_LOG_ERROR(diag.logger(), "vk.submit", "submit: sd.command_buffer is invalid");
         return FrameResult::Error;
     }
 
@@ -324,6 +334,39 @@ void VkGpuDevice::destroy_frames()
         f = {};
     }
     frames_.clear();
+}
+
+bool VkGpuDevice::drain_image_available(std::uint32_t slot) noexcept
+{
+    if (!device_.device() || slot >= frames_.size())
+        return false;
+
+    VkSemaphore const sem   = frames_[slot].image_available;
+    VkFence const     fence = frames_[slot].in_flight;
+
+    if (sem == VK_NULL_HANDLE || fence == VK_NULL_HANDLE)
+        return false;
+
+    VkPipelineStageFlags const wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+    VkSubmitInfo si{};
+    si.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    si.waitSemaphoreCount = 1;
+    si.pWaitSemaphores    = &sem;
+    si.pWaitDstStageMask  = &wait_stage;
+    si.commandBufferCount = 0;
+
+    VkDevice vk_device = device_.device();
+    (void)vkResetFences(vk_device, 1, &fence);
+
+    VkResult const r = vkQueueSubmit(device_.graphics_queue(), 1, &si, fence);
+    if (r != VK_SUCCESS)
+        return false;
+
+    // Be extra safe
+    (void)vkWaitForFences(vk_device, 1, &fence, VK_TRUE, UINT64_MAX);
+
+    return true;
 }
 
 } // namespace strata::gfx::vk
