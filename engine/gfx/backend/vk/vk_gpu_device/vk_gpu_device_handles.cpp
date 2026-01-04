@@ -39,11 +39,6 @@ rhi::PipelineHandle VkGpuDevice::allocate_pipeline_handle()
     return rhi::PipelineHandle{next_pipeline_++};
 }
 
-rhi::CommandBufferHandle VkGpuDevice::allocate_command_handle()
-{
-    return rhi::CommandBufferHandle{next_command_++};
-}
-
 rhi::DescriptorSetLayoutHandle VkGpuDevice::allocate_descriptor_set_layout_handle()
 {
     rhi::DescriptorSetLayoutHandle h{next_descriptor_set_layout_++};
@@ -55,4 +50,25 @@ rhi::DescriptorSetHandle VkGpuDevice::allocate_descriptor_set_handle()
     rhi::DescriptorSetHandle h{next_descriptor_set_++};
     return h;
 }
+
+rhi::CommandBufferHandle VkGpuDevice::encode_cmd_handle(std::uint32_t slot) const noexcept
+{
+    // Slot is 0..frames_.size()-1. CommandBufferHandle uses 0 as invalid, so store slot+1.
+    return rhi::CommandBufferHandle{slot + 1};
+}
+
+bool VkGpuDevice::decode_cmd_handle(rhi::CommandBufferHandle cmd,
+                                    std::uint32_t&           out_slot) const noexcept
+{
+    if (!cmd)
+        return false;
+
+    std::uint32_t const slot = cmd.value - 1;
+    if (slot >= frames_.size())
+        return false;
+
+    out_slot = slot;
+    return true;
+}
+
 } // namespace strata::gfx::vk

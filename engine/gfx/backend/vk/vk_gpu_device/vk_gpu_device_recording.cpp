@@ -28,7 +28,7 @@ inline bool aspect_has_stencil(VkImageAspectFlags aspect) noexcept
 
 } // namespace
 
-rhi::FrameResult VkGpuDevice::cmd_bind_descriptor_set(rhi::CommandBufferHandle /*cmd*/,
+rhi::FrameResult VkGpuDevice::cmd_bind_descriptor_set(rhi::CommandBufferHandle cmd,
                                                       rhi::PipelineHandle      pipeline,
                                                       std::uint32_t            set_index,
                                                       rhi::DescriptorSetHandle set)
@@ -41,6 +41,10 @@ rhi::FrameResult VkGpuDevice::cmd_bind_descriptor_set(rhi::CommandBufferHandle /
     auto& diag = *diagnostics_;
 
     if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
+        return FrameResult::Error;
+
+    std::uint32_t slot = invalid_index;
+    if (!decode_cmd_handle(cmd, slot))
         return FrameResult::Error;
 
     VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
@@ -94,14 +98,13 @@ rhi::FrameResult VkGpuDevice::cmd_bind_descriptor_set(rhi::CommandBufferHandle /
     return FrameResult::Ok;
 }
 
-rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
-    [[maybe_unused]] rhi::CommandBufferHandle cmd,
-    [[maybe_unused]] rhi::SwapchainHandle     swapchain,
-    std::uint32_t                             image_index,
-    rhi::ClearColor const&                    clear,
-    [[maybe_unused]] rhi::TextureHandle       depth_texture,
-    [[maybe_unused]] float                    clear_depth,
-    [[maybe_unused]] std::uint32_t            clear_stencil)
+rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(rhi::CommandBufferHandle cmd,
+                                                       rhi::SwapchainHandle /*swapchain*/,
+                                                       std::uint32_t          image_index,
+                                                       rhi::ClearColor const& clear,
+                                                       rhi::TextureHandle     depth_texture,
+                                                       float                  clear_depth,
+                                                       std::uint32_t          clear_stencil)
 {
     using namespace strata::base;
     using rhi::FrameResult;
@@ -112,6 +115,10 @@ rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
     auto& diag = *diagnostics_;
 
     if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
+        return FrameResult::Error;
+
+    std::uint32_t slot = invalid_index;
+    if (!decode_cmd_handle(cmd, slot))
         return FrameResult::Error;
 
     VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
@@ -280,9 +287,9 @@ rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
         else if (depth_old_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
         {
             depth_src_stage = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
-                              VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+                VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
             depth_src_access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-                               VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
         }
         else
         {
@@ -302,9 +309,9 @@ rhi::FrameResult VkGpuDevice::cmd_begin_swapchain_pass(
         barriers[1].srcStageMask  = depth_src_stage;
         barriers[1].srcAccessMask = depth_src_access;
         barriers[1].dstStageMask  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
-                                   VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+            VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
         barriers[1].dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-                                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
         barriers[1].oldLayout           = depth_old_layout;
         barriers[1].newLayout           = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         barriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -452,8 +459,8 @@ rhi::FrameResult VkGpuDevice::cmd_end_swapchain_pass(
     return rhi::FrameResult::Ok;
 }
 
-rhi::FrameResult VkGpuDevice::cmd_bind_pipeline([[maybe_unused]] rhi::CommandBufferHandle cmd,
-                                                rhi::PipelineHandle                       pipeline)
+rhi::FrameResult VkGpuDevice::cmd_bind_pipeline(rhi::CommandBufferHandle cmd,
+                                                rhi::PipelineHandle      pipeline)
 {
     using namespace strata::base;
     using rhi::FrameResult;
@@ -463,6 +470,10 @@ rhi::FrameResult VkGpuDevice::cmd_bind_pipeline([[maybe_unused]] rhi::CommandBuf
     auto& diag = *diagnostics_;
 
     if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
+        return FrameResult::Error;
+
+    std::uint32_t slot = invalid_index;
+    if (!decode_cmd_handle(cmd, slot))
         return FrameResult::Error;
 
     VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
@@ -517,9 +528,8 @@ rhi::FrameResult VkGpuDevice::cmd_bind_pipeline([[maybe_unused]] rhi::CommandBuf
     return FrameResult::Ok;
 }
 
-rhi::FrameResult VkGpuDevice::cmd_set_viewport_scissor(
-    [[maybe_unused]] rhi::CommandBufferHandle cmd,
-    rhi::Extent2D                             extent)
+rhi::FrameResult VkGpuDevice::cmd_set_viewport_scissor(rhi::CommandBufferHandle cmd,
+                                                       rhi::Extent2D            extent)
 {
     using namespace strata::base;
     using rhi::FrameResult;
@@ -528,6 +538,10 @@ rhi::FrameResult VkGpuDevice::cmd_set_viewport_scissor(
         return FrameResult::Error;
 
     if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
+        return FrameResult::Error;
+
+    std::uint32_t slot = invalid_index;
+    if (!decode_cmd_handle(cmd, slot))
         return FrameResult::Error;
 
     VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
@@ -552,15 +566,19 @@ rhi::FrameResult VkGpuDevice::cmd_set_viewport_scissor(
     return FrameResult::Ok;
 }
 
-rhi::FrameResult VkGpuDevice::cmd_draw([[maybe_unused]] rhi::CommandBufferHandle cmd,
-                                       std::uint32_t                             vertex_count,
-                                       std::uint32_t                             instance_count,
-                                       std::uint32_t                             first_vertex,
-                                       std::uint32_t                             first_instance)
+rhi::FrameResult VkGpuDevice::cmd_draw(rhi::CommandBufferHandle cmd,
+                                       std::uint32_t            vertex_count,
+                                       std::uint32_t            instance_count,
+                                       std::uint32_t            first_vertex,
+                                       std::uint32_t            first_instance)
 {
     using rhi::FrameResult;
 
     if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
+        return FrameResult::Error;
+
+    std::uint32_t slot = invalid_index;
+    if (!decode_cmd_handle(cmd, slot))
         return FrameResult::Error;
 
     VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;

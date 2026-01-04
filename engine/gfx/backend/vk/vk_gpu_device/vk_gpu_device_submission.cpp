@@ -33,6 +33,19 @@ rhi::CommandBufferHandle VkGpuDevice::begin_commands()
                       !recording_active_,
                       "begin_commands called while recording_active_ = true");
 
+    STRATA_ASSERT_MSG(diag,
+                      pending_submit_frame_index_ == invalid_index,
+                      "begin_commands called while previous commands are ended but not submitted");
+    if (pending_submit_frame_index_ != invalid_index)
+    {
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.submit",
+                         "begin_commands: pending submit exists (slot={})",
+                         pending_submit_frame_index_);
+        diag.debug_break_on_error();
+        return {};
+    }
+
     // Lock the frame slot used for this recording.
     recording_frame_index_ = frame_index_;
     recording_active_      = true;
@@ -58,15 +71,15 @@ rhi::CommandBufferHandle VkGpuDevice::begin_commands()
                          "vkBeginCommandBuffer failed: {}",
                          ::strata::gfx::vk::to_string(br));
         diag.debug_break_on_error();
-        recording_active_ = false;
+        recording_active_      = false;
+        recording_frame_index_ = invalid_index;
         return {};
     }
 
-    // Still "opaque" for now; later encode recording_frame_index_ here.
-    return rhi::CommandBufferHandle{1};
+    return encode_cmd_handle(recording_frame_index_);
 }
 
-rhi::FrameResult VkGpuDevice::end_commands(rhi::CommandBufferHandle)
+rhi::FrameResult VkGpuDevice::end_commands(rhi::CommandBufferHandle cmd)
 {
     using namespace strata::base;
     using rhi::FrameResult;
@@ -79,6 +92,20 @@ rhi::FrameResult VkGpuDevice::end_commands(rhi::CommandBufferHandle)
     if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
     {
         STRATA_LOG_ERROR(diag.logger(), "vk.submit", "end_commands: invalid recording state");
+        return FrameResult::Error;
+    }
+
+    std::uint32_t slot = invalid_index;
+    if (!decode_cmd_handle(cmd, slot) || slot != recording_frame_index_)
+    {
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.submit",
+                         "end_commands: cmd handle mismatch (cmd={}, recording_slot={})",
+                         cmd.value,
+                         recording_frame_index_);
+        diag.debug_break_on_error();
+        recording_active_      = false;
+        recording_frame_index_ = invalid_index;
         return FrameResult::Error;
     }
 
@@ -98,10 +125,14 @@ rhi::FrameResult VkGpuDevice::end_commands(rhi::CommandBufferHandle)
                          "vkEndCommandBuffer failed: {}",
                          ::strata::gfx::vk::to_string(er));
         diag.debug_break_on_error();
-        recording_active_ = false;
+        recording_active_      = false;
+        recording_frame_index_ = invalid_index;
         return FrameResult::Error;
     }
 
+    // Recording session is finished; next step must be submit().
+    recording_active_           = false;
+    pending_submit_frame_index_ = slot;
     return FrameResult::Ok;
 }
 
@@ -118,26 +149,43 @@ rhi::FrameResult VkGpuDevice::submit(rhi::IGpuDevice::SubmitDesc const& sd)
     if (!device_.device() || !swapchain_.valid())
         return FrameResult::Error;
 
-    if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
+    if (pending_submit_frame_index_ == invalid_index)
     {
-        STRATA_LOG_ERROR(diag.logger(), "vk.submit", "submit: invalid recording state");
+        STRATA_LOG_ERROR(diag.logger(), "vk.submit", "submit: no pending command buffer");
         return FrameResult::Error;
     }
 
     if (!sd.command_buffer)
     {
         STRATA_LOG_ERROR(diag.logger(), "vk.submit", "submit: sd.command_buffer is invalid");
-        recording_active_ = false;
         return FrameResult::Error;
     }
 
-    FrameSlot const& frame = frames_[recording_frame_index_];
+    std::uint32_t slot = invalid_index;
+    if (!decode_cmd_handle(sd.command_buffer, slot) || slot != pending_submit_frame_index_)
+    {
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.submit",
+                         "submit: cmd handle mismatch (cmd={}, pending_slot={})",
+                         sd.command_buffer.value,
+                         pending_submit_frame_index_);
+        diag.debug_break_on_error();
+        pending_submit_frame_index_ = invalid_index;
+        return FrameResult::Error;
+    }
+
+    STRATA_ASSERT_MSG(diag,
+                      sd.frame_index == slot,
+                      "submit: sd.frame_index must match command slot");
+
+    FrameSlot const& frame = frames_[slot];
 
     std::uint32_t const image_index = sd.image_index;
     if (image_index >= swapchain_sync_.render_finished_per_image.size())
     {
         STRATA_LOG_ERROR(diag.logger(), "vk.submit", "submit: image_index out of range");
-        recording_active_ = false;
+        recording_active_           = false;
+        pending_submit_frame_index_ = invalid_index;
         return FrameResult::Error;
     }
 
@@ -168,7 +216,7 @@ rhi::FrameResult VkGpuDevice::submit(rhi::IGpuDevice::SubmitDesc const& sd)
                          "vkQueueSubmit failed: {}",
                          ::strata::gfx::vk::to_string(qsr));
         diag.debug_break_on_error();
-        recording_active_ = false;
+        pending_submit_frame_index_ = invalid_index;
         return FrameResult::Error;
     }
 
@@ -177,7 +225,8 @@ rhi::FrameResult VkGpuDevice::submit(rhi::IGpuDevice::SubmitDesc const& sd)
         swapchain_image_layouts_[image_index] = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     }
 
-    recording_active_ = false;
+    pending_submit_frame_index_ = invalid_index;
+    recording_frame_index_      = invalid_index;
 
     // Advance frame slot for the NEXT frame
     frame_index_ = (frame_index_ + 1) % frames_in_flight_;
