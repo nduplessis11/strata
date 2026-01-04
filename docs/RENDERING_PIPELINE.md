@@ -129,7 +129,7 @@ The view/projection values come from the current `camera_` state (set via `set_c
   - `cmd_draw(...)`
   - `cmd_end_swapchain_pass(...)`
 - `device_->end_commands(cmd)`
-- `device_->submit({ cmd, swapchain, image_index, frame_index })`
+- `device_->submit({ cmd, swapchain, image_index, frame_index })` (where `frame_index` is `rhi::AcquiredImage::frame_index`)
 - `device_->present(swapchain, image_index)`
 
 In other words: **the renderer owns command recording**, and the backend owns the Vulkan plumbing.
@@ -182,8 +182,8 @@ Descriptor sets:
 
 Commands/submission:
 - `begin_commands() -> CommandBufferHandle`
-- `end_commands(cmd)`
-- `submit(SubmitDesc{ command_buffer, swapchain, image_index, frame_index })`
+- `end_commands(cmd) -> FrameResult`
+- `submit(SubmitDesc{ command_buffer, swapchain, image_index, frame_index }) -> FrameResult`
 - `cmd_begin_swapchain_pass(...)`, `cmd_bind_pipeline(...)`, `cmd_bind_descriptor_set(...)`, `cmd_draw(...)`, ...
 
 ---
@@ -279,6 +279,7 @@ The Vulkan backend rebuilds its `basic_pipeline_` when this is called, and also 
 `VkGpuDevice::acquire_next_image(...)`:
 - waits for the **current frame slot** `in_flight` fence
 - calls `vkAcquireNextImageKHR(..., frame.image_available, ..., &image_index)`
+- writes `rhi::AcquiredImage { extent, image_index, frame_index }` (where `frame_index` is the frames-in-flight slot index; distinct from `core::FrameContext::frame_index`)
 - waits on `images_in_flight_[image_index]` if that swapchain image is still in flight
 - maps `VK_ERROR_OUT_OF_DATE_KHR` → `ResizeNeeded`
 - returns `Suboptimal` but allows rendering
@@ -299,7 +300,7 @@ The Vulkan backend rebuilds its `basic_pipeline_` when this is called, and also 
 - `end_commands(cmd)` ends the command buffer
 
 ### 3) Submit
-`submit({ cmd, swapchain, image_index, frame_index })`:
+`submit({ cmd, swapchain, image_index, frame_index })` (where `frame_index` is `rhi::AcquiredImage::frame_index`):
 - waits on the frame slot `image_available`
 - signals `render_finished_per_image[image_index]`
 - uses the frame slot `in_flight` fence

@@ -777,7 +777,6 @@ class C_0002997308125348651313 {
 ..
 +acquire_next_image(rhi::SwapchainHandle swapchain, rhi::AcquiredImage & out) : rhi::FrameResult
 -allocate_buffer_handle() : rhi::BufferHandle
--allocate_command_handle() : rhi::CommandBufferHandle
 +allocate_descriptor_set(rhi::DescriptorSetLayoutHandle layout) : rhi::DescriptorSetHandle
 -allocate_descriptor_set_handle() : rhi::DescriptorSetHandle
 -allocate_descriptor_set_layout_handle() : rhi::DescriptorSetLayoutHandle
@@ -799,12 +798,15 @@ class C_0002997308125348651313 {
 +create_pipeline(const rhi::PipelineDesc & desc) : rhi::PipelineHandle
 +create_swapchain(const rhi::SwapchainDesc & desc, const platform::WsiHandle & surface) : rhi::SwapchainHandle
 +create_texture(const rhi::TextureDesc & desc) : rhi::TextureHandle
+-decode_cmd_handle(rhi::CommandBufferHandle cmd, std::uint32_t & out_slot) const noexcept : bool
 +destroy_buffer(rhi::BufferHandle handle) : void
 +destroy_descriptor_set_layout(rhi::DescriptorSetLayoutHandle handle) : void
 -destroy_frames() : void
 +destroy_pipeline(rhi::PipelineHandle handle) : void
 -destroy_render_finished_per_image() : void
 +destroy_texture(rhi::TextureHandle handle) : void
+-drain_image_available(std::uint32_t slot) noexcept : bool
+-encode_cmd_handle(std::uint32_t slot) const noexcept : rhi::CommandBufferHandle
 +end_commands(rhi::CommandBufferHandle cmd) : rhi::FrameResult
 -ensure_descriptor_pool() : bool
 +free_descriptor_set(rhi::DescriptorSetHandle set) : void
@@ -842,12 +844,13 @@ __
 -frames_in_flight_ : std::uint32_t
 -images_in_flight_ : std::vector<VkFence>
 -instance_ : VkInstanceWrapper
+{static} -invalid_index : const std::uint32_t
 -next_buffer_ : std::uint32_t
--next_command_ : std::uint32_t
 -next_descriptor_set_ : std::uint32_t
 -next_descriptor_set_layout_ : std::uint32_t
 -next_pipeline_ : std::uint32_t
 -next_texture_ : std::uint32_t
+-pending_submit_frame_index_ : std::uint32_t
 -pipeline_set_layout_handles_ : std::vector<rhi::DescriptorSetLayoutHandle>
 -recording_active_ : bool
 -recording_frame_index_ : std::uint32_t

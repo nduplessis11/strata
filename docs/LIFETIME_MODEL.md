@@ -362,10 +362,12 @@ These are **not owning objects**. They are IDs/tokens.
 The Vulkan backend effectively implements:
 - one swapchain (`SwapchainHandle{1}` always means “the one swapchain”)
 - one pipeline stored as `BasicPipeline basic_pipeline_`
+- command buffers are a per-frame ring; `CommandBufferHandle` is a per-frame token (`slot + 1`), not a persistent registry ID
 
 Implications (worth recording):
 - Destroying “any pipeline handle” destroys the single backend pipeline.
 - Multiple pipeline handles are not tracked as distinct pipelines yet.
+- `CommandBufferHandle` values are only meaningful for the frame slot they were produced from; don’t store them beyond a frame.
 
 This is fine for early development, but future refactors should turn handles into real registry entries.
 
