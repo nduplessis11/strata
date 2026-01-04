@@ -171,8 +171,8 @@ Creation happens in a strict “bring-up” sequence:
 4. **Device**
    - `auto device = gfx::rhi::create_device(*diagnostics, config.device, surface)`
 5. **Swapchain**
-   - Determine framebuffer size
-   - `swapchain = device->create_swapchain(sc_desc, surface)`
+   - Determine framebuffer size and write it into `config.swapchain_desc.size`
+   - `swapchain = device->create_swapchain(config.swapchain_desc, surface)`
 6. **Renderer**
    - `auto renderer_exp = Render2D::create(*diagnostics, *device, swapchain);`
    - `if (!renderer_exp) return std::unexpected(ApplicationError::RendererCreateFailed);`
@@ -334,7 +334,9 @@ In `draw_frame_and_handle_resize()`:
 On resize request:
 
 1. `device.wait_idle()`
-2. `device.resize_swapchain(swapchain, sc_desc)`
+2. `device.resize_swapchain(swapchain, wanted)`
+   - `wanted` is derived from the existing `swapchain_desc` with only `size` overridden from the current framebuffer (preserving vsync/format)
+   - On `Ok`, `swapchain_desc` is updated in place (`swapchain_desc = wanted`)
    - backend destroys/recreates swapchain + image views
    - backend resets `basic_pipeline_ = {}` (invalidates pipeline)
 3. `renderer.recreate_pipeline()`

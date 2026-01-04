@@ -11,7 +11,7 @@ It is intentionally scoped to the **current** implementation (single pass, spinn
 The frame path looks like this:
 
 1. `core::Application::run()` drives the loop and calls a helper:
-   - `gfx::renderer::draw_frame_and_handle_resize(device, swapchain, renderer, framebuffer_size, diagnostics)`
+   - `gfx::renderer::draw_frame_and_handle_resize(device, swapchain, swapchain_desc, renderer, framebuffer_size, diagnostics)`
 2. `Render2D::draw_frame()` now owns the frame:
    - **acquire → begin cmd → record pass → end cmd → submit → present**
 3. The Vulkan backend (`vk::VkGpuDevice`) provides the building blocks:
@@ -49,9 +49,9 @@ The frame path looks like this:
 3. Create a `platform::WsiHandle` from the window: `window.native_wsi()`
 4. Create device via RHI factory:
    - `gfx::rhi::create_device(*diagnostics, config.device, wsi_handle)`
-5. Choose initial framebuffer size and build a `SwapchainDesc`
+5. Choose initial framebuffer size and write it into `config.swapchain_desc.size`
 6. Create swapchain:
-   - `swapchain = device->create_swapchain(sc_desc, wsi_handle)`
+   - `swapchain = device->create_swapchain(config.swapchain_desc, wsi_handle)`
 7. Create renderer:
    - `auto renderer_exp = gfx::renderer::Render2D::create(*diagnostics, *device, swapchain);`
    - `if (!renderer_exp) return std::unexpected(ApplicationError::RendererCreateFailed);`
@@ -75,7 +75,7 @@ Per iteration:
 4. Query framebuffer size and clamp:
    - `auto framebuffer = clamp_framebuffer(fbw, fbh)`
 5. Render + resize handling:
-   - `draw_frame_and_handle_resize(*device, swapchain, renderer, framebuffer, *diagnostics)`
+   - `draw_frame_and_handle_resize(*device, swapchain, swapchain_desc, renderer, framebuffer, *diagnostics)`
 6. Optional CPU throttle sleep
 
 On exit, `device->wait_idle()` is called once more.
@@ -144,8 +144,9 @@ This helper implements the current resize policy:
 
 Resize path:
 1. `device.wait_idle()` (simple + safe, but stalls)
-2. Build `SwapchainDesc` from the framebuffer (**vsync hard-coded true**)
-3. `device.resize_swapchain(swapchain, sc_desc)`
+2. Build a desired `SwapchainDesc` by taking the existing `swapchain_desc` and overriding `size` from the framebuffer
+3. `device.resize_swapchain(swapchain, wanted)`
+   - On `Ok`, store `swapchain_desc = wanted` so the current swapchain settings stay in sync with the resized swapchain
 4. Ask the existing renderer to recreate its pipeline (swapchain-independent resources persist):
    - `renderer.recreate_pipeline()` rebuilds the pipeline for the new swapchain format while keeping UBO + descriptor resources.
    - If `recreate_pipeline()` fails (non-`Ok`), it is treated as non-fatal: the frame is skipped, but the application keeps running.
@@ -246,7 +247,7 @@ Those requirements match the frame code:
 1. `wait_idle()`
 2. destroy existing swapchain + views
 3. `swapchain_.init(...)`
-   - chooses surface format (prefers `VK_FORMAT_B8G8R8A8_UNORM` + `VK_COLOR_SPACE_SRGB_NONLINEAR_KHR`)
+   - chooses surface format (tries to honor `desc.format` if specified; otherwise prefers `VK_FORMAT_B8G8R8A8_UNORM` + `VK_COLOR_SPACE_SRGB_NONLINEAR_KHR`)
    - chooses present mode:
      - FIFO (vsync on)
      - mailbox if vsync off and supported (future use)

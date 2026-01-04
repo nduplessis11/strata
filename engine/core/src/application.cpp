@@ -110,11 +110,10 @@ std::expected<Application, ApplicationError> Application::create(ApplicationConf
         fbh           = (wh > 0) ? wh : config.window_desc.size.height;
     }
 
-    SwapchainDesc sc_desc = config.swapchain_desc;
-    sc_desc.size          = gfx::rhi::Extent2D{static_cast<std::uint32_t>(std::max(1, fbw)),
-                                      static_cast<std::uint32_t>(std::max(1, fbh))};
+    config.swapchain_desc.size = gfx::rhi::Extent2D{static_cast<std::uint32_t>(std::max(1, fbw)),
+                                                    static_cast<std::uint32_t>(std::max(1, fbh))};
 
-    auto swapchain = device->create_swapchain(sc_desc, surface);
+    auto swapchain = device->create_swapchain(config.swapchain_desc, surface);
     if (!swapchain)
     {
         STRATA_LOG_ERROR(diagnostics->logger(), "core", "Swapchain creation failed");
@@ -175,9 +174,10 @@ std::int16_t Application::run(TickFn tick)
         auto [w, h]            = impl_->window.framebuffer_size();
         auto const framebuffer = clamp_framebuffer(w, h);
 
-        // TODO: Why is 'draw_frame_and_handle_resize' not part of Render2D?
+        // TODO: Move the resize policy to core::Application.
         auto result = gfx::renderer::draw_frame_and_handle_resize(*impl_->device,
                                                                   impl_->swapchain,
+                                                                  impl_->config.swapchain_desc,
                                                                   impl_->renderer,
                                                                   framebuffer,
                                                                   *impl_->diagnostics);
