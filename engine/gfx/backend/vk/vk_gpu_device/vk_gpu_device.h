@@ -9,6 +9,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -166,14 +167,23 @@ class VkGpuDevice final : public rhi::IGpuDevice
     bool init_frames();
     void destroy_frames();
 
+    bool drain_image_available(std::uint32_t slot) noexcept;
+
     bool init_render_finished_per_image(std::size_t image_count);
     void destroy_render_finished_per_image();
+
+    // --- Handle policy (v1) --------------------------------------------------
+    // CommandBufferHandle is a per-frame token (slot+1), not a persistent registry ID.
+    static constexpr std::uint32_t invalid_index = std::numeric_limits<std::uint32_t>::max();
+
+    [[nodiscard]] rhi::CommandBufferHandle encode_cmd_handle(std::uint32_t slot) const noexcept;
+    [[nodiscard]] bool                     decode_cmd_handle(rhi::CommandBufferHandle cmd,
+                                                             std::uint32_t&           out_slot) const noexcept;
 
     // --- Handle allocation (simple monotonic IDs) ----------------------------
     rhi::BufferHandle        allocate_buffer_handle();
     rhi::TextureHandle       allocate_texture_handle();
     rhi::PipelineHandle      allocate_pipeline_handle();
-    rhi::CommandBufferHandle allocate_command_handle();
 
     // --- Descriptor internals ------------------------------------------------
     bool ensure_descriptor_pool();
@@ -231,13 +241,13 @@ class VkGpuDevice final : public rhi::IGpuDevice
 
     // Recording state (simple invariant checks)
     bool          recording_active_{false};
-    std::uint32_t recording_frame_index_{0};
+    std::uint32_t recording_frame_index_{invalid_index};
+    std::uint32_t pending_submit_frame_index_{invalid_index};
 
     // Resource handle counters
     std::uint32_t next_buffer_{1};
     std::uint32_t next_texture_{1};
     std::uint32_t next_pipeline_{1};
-    std::uint32_t next_command_{1};
 
     // Descriptor handle counters + registries
     std::uint32_t                      next_descriptor_set_layout_{1};

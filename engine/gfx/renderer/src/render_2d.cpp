@@ -655,7 +655,23 @@ cleanup:
         pass_open = false;
     }
 
-    device_->end_commands(cmd);
+    // End command buffer.
+    if (device_->end_commands(cmd) == FrameResult::Ok)
+    {
+        // Best-effort: drain the acquire semaphore and release the image.
+        rhi::IGpuDevice::SubmitDesc sd{};
+        sd.command_buffer = cmd;
+        sd.swapchain      = swapchain_;
+        sd.image_index    = img.image_index;
+        sd.frame_index    = img.frame_index;
+
+        FrameResult const sub = device_->submit(sd);
+        if (sub == FrameResult::Ok)
+        {
+            (void)device_->present(swapchain_, img.image_index);
+        }
+        // else: do NOT present - render_finished is not guaranteed signaled.
+    }
 
 cleanup_after_end:
     return result;
