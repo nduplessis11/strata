@@ -249,12 +249,13 @@ void VkSwapchainWrapper::cleanup()
                 vkDestroyImageView(device_, view, nullptr);
             }
         }
-        image_views_.clear();
-        images_.clear();
-
         vkDestroySwapchainKHR(device_, swapchain_, nullptr);
         swapchain_ = VK_NULL_HANDLE;
     }
+
+    // Prevent CPI-side retention if teardown order is ever violated.
+    image_views_.clear();
+    images_.clear();
 
     device_       = VK_NULL_HANDLE;
     image_format_ = VK_FORMAT_UNDEFINED;
@@ -266,7 +267,8 @@ bool VkSwapchainWrapper::init(VkPhysicalDevice          physical,
                               VkSurfaceKHR              surface,
                               std::uint32_t             graphics_family,
                               std::uint32_t             present_family,
-                              rhi::SwapchainDesc const& desc)
+                              rhi::SwapchainDesc const& desc,
+                              VkSwapchainKHR            old_swapchain)
 {
     cleanup();
 
@@ -352,7 +354,7 @@ bool VkSwapchainWrapper::init(VkPhysicalDevice          physical,
     ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     ci.presentMode    = present_mode;
     ci.clipped        = VK_TRUE;
-    ci.oldSwapchain   = VK_NULL_HANDLE; // for simplicity; we recreate from scratch
+    ci.oldSwapchain   = old_swapchain;
 
     // 4) Create the swapchain
     VkResult const sr = vkCreateSwapchainKHR(device, &ci, nullptr, &swapchain_);

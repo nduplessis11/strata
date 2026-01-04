@@ -67,6 +67,11 @@ class Render2D
     rhi::FrameResult draw_frame();
     rhi::FrameResult recreate_pipeline();
 
+    // Called once the device is idle and we are about to recreate the swapchain.
+    // Release resources that are sized or counted by the swapchain (depth images, per-image UBOs).
+    // This keeps memory stable during resize storms and avoids retaining stale per-image resources.
+    void on_before_swapchain_resize() noexcept;
+
   private:
     Render2D() = default; // only create() can build a valid instance
 

@@ -701,6 +701,16 @@ FrameResult Render2D::recreate_pipeline()
     return pipeline_ ? FrameResult::Ok : FrameResult::Error;
 }
 
+void Render2D::on_before_swapchain_resize() noexcept
+{
+    // Depth images are swapchain-extent dependent.
+    destroy_depth_textures();
+
+    // Per-image UBO sets/buffers are swapchain-image-count dependent.
+    // Keeping them is *allowed*, but destroying here prevents "max-ever image_count" growth.
+    destroy_ubo_resources();
+}
+
 // -------------------------------------------------------------------------
 // Helper: draw_frame_and_handle_resize
 // -------------------------------------------------------------------------
@@ -722,12 +732,26 @@ FrameResult draw_frame_and_handle_resize(IGpuDevice&        device,
     if (result == FrameResult::Ok || result == FrameResult::Error)
         return result;
 
+    // Avoid resize-thrashing on SUBOPTIMAL when the framebuffer size hasn't changed.
+    // Many drivers can return SUBOPTIMAL without requiring immediate swapchain recreation.
+    if (result == FrameResult::Suboptimal)
+    {
+        if (framebuffer_size.width == swapchain_desc.size.width &&
+            framebuffer_size.height == swapchain_desc.size.height)
+        {
+            return FrameResult::Ok;
+        }
+    }
+
     STRATA_LOG_INFO(diagnostics.logger(),
                     "renderer",
                     "Swapchain resize requested (result {})",
                     static_cast<std::int32_t>(result));
 
     device.wait_idle();
+
+    // Proactively release swapchain-sized resources while we are guaranteed idle.
+    renderer.on_before_swapchain_resize();
 
     SwapchainDesc wanted = swapchain_desc;
     wanted.size          = framebuffer_size;
