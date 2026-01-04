@@ -40,11 +40,26 @@ bool vk_ok(base::Diagnostics* diag, VkResult r, char const* what)
     return false;
 }
 
+[[nodiscard]]
+VkFormat to_vk_format(rhi::Format fmt) noexcept
+{
+    switch (fmt)
+    {
+    case rhi::Format::B8G8R8A8_UNorm:
+        return VK_FORMAT_B8G8R8A8_UNORM;
+    case rhi::Format::R8G8B8A8_UNorm:
+        return VK_FORMAT_R8G8B8A8_UNORM;
+    default:
+        return VK_FORMAT_UNDEFINED;
+    }
+}
+
 // Choose a surface format (we prefer SRGB BGRA if available)
 [[nodiscard]]
 bool choose_surface_format(base::Diagnostics*  diag,
                            VkPhysicalDevice    physical,
                            VkSurfaceKHR        surface,
+                           VkFormat            requested_format,
                            VkSurfaceFormatKHR& out)
 {
     u32      count = 0;
@@ -63,14 +78,41 @@ bool choose_surface_format(base::Diagnostics*  diag,
     if (!vk_ok(diag, r, "vkGetPhysicalDeviceSurfaceFormatsKHR(list)"))
         return false;
 
-    // If the surface has no preferred format, pick something sensible.
+    // Special case: "no preferred format".
     if (formats.size() == 1 && formats[0].format == VK_FORMAT_UNDEFINED)
     {
-        out = VkSurfaceFormatKHR{VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
+        VkFormat const requested_or_fallback =
+            (requested_format != VK_FORMAT_UNDEFINED) ? requested_format : VK_FORMAT_B8G8R8A8_UNORM;
+
+        out = VkSurfaceFormatKHR{requested_or_fallback, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
         return true;
     }
 
-    // Prefer SRGB-like output path (UNORM + SRGB colorspace is common).
+    // 1) If caller requested a format, try to honor it.
+    if (requested_format != VK_FORMAT_UNDEFINED)
+    {
+        // Prefer SRGB nonlinear color space (common for SDR).
+        for (auto const& f : formats)
+        {
+            if (f.format == requested_format && f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            {
+                out = f;
+                return true;
+            }
+        }
+
+        // Otherwise accept any colorspace with the requested format.
+        for (auto const& f : formats)
+        {
+            if (f.format == requested_format)
+            {
+                out = f;
+                return true;
+            }
+        }
+    }
+
+    // 2) Existing preferred default (BGRA UNORM + SRGB nonlinear).
     for (auto const& f : formats)
     {
         if (f.format == VK_FORMAT_B8G8R8A8_UNORM &&
@@ -81,6 +123,7 @@ bool choose_surface_format(base::Diagnostics*  diag,
         }
     }
 
+    // 3) Fallback: first supported.
     out = formats[0];
     return true;
 }
@@ -238,11 +281,23 @@ bool VkSwapchainWrapper::init(VkPhysicalDevice          physical,
         return false;
     }
 
+    VkFormat const     requested_format = to_vk_format(desc.format);
     VkSurfaceFormatKHR surface_format{};
-    if (!choose_surface_format(diagnostics_, physical, surface, surface_format))
+    if (!choose_surface_format(diagnostics_, physical, surface, requested_format, surface_format))
     {
         cleanup();
         return false;
+    }
+
+    if (diagnostics_ &&
+        requested_format != VK_FORMAT_UNDEFINED &&
+        surface_format.format != requested_format)
+    {
+        STRATA_LOG_WARN(diagnostics_->logger(),
+                        "vk.swapchain",
+                        "Requested swapchain format {} not supported; using {} instead",
+                        static_cast<std::int32_t>(requested_format),
+                        static_cast<std::int32_t>(surface_format.format));
     }
 
     VkPresentModeKHR present_mode{};

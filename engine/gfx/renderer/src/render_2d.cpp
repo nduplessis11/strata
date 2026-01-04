@@ -691,6 +691,7 @@ FrameResult Render2D::recreate_pipeline()
 
 FrameResult draw_frame_and_handle_resize(IGpuDevice&        device,
                                          SwapchainHandle&   swapchain,
+                                         SwapchainDesc&     swapchain_desc,
                                          Render2D&          renderer,
                                          Extent2D           framebuffer_size,
                                          base::Diagnostics& diagnostics)
@@ -712,13 +713,16 @@ FrameResult draw_frame_and_handle_resize(IGpuDevice&        device,
 
     device.wait_idle();
 
-    SwapchainDesc sc_desc{};
-    sc_desc.size  = framebuffer_size;
-    sc_desc.vsync = true;
+    SwapchainDesc wanted = swapchain_desc;
+    wanted.size          = framebuffer_size;
 
     // Resize existing swapchain in-place.
-    FrameResult const resize_result = device.resize_swapchain(swapchain, sc_desc);
-    if (resize_result == FrameResult::Error)
+    FrameResult const resize_result = device.resize_swapchain(swapchain, wanted);
+    if (resize_result == FrameResult::Ok)
+    {
+        swapchain_desc = wanted;
+    }
+    else if (resize_result == FrameResult::Error)
     {
         // Failed to resize; treat as non-fatal (no frame rendered).
         STRATA_LOG_WARN(diagnostics.logger(),

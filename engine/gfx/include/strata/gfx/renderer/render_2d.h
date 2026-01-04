@@ -104,6 +104,7 @@ class Render2D
 
 rhi::FrameResult draw_frame_and_handle_resize(rhi::IGpuDevice&      device,
                                               rhi::SwapchainHandle& swapchain,
+                                              rhi::SwapchainDesc&   swapchain_desc,
                                               Render2D&             renderer,
                                               rhi::Extent2D         framebuffer_size,
                                               base::Diagnostics&    diagnostics);
