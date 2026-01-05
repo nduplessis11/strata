@@ -38,15 +38,16 @@ rhi::SwapchainHandle VkGpuDevice::create_swapchain(rhi::SwapchainDesc const& des
 
     wait_idle();
 
-    swapchain_.cleanup();
-    swapchain_image_layouts_.clear();
+    VkSwapchainWrapper new_swapchain{};
+    new_swapchain.set_diagnostics(diagnostics_);
 
-    if (!swapchain_.init(device_.physical(),
-                         device_.device(),
-                         instance_.surface(),
-                         device_.graphics_family(),
-                         device_.present_family(),
-                         desc))
+    if (!new_swapchain.init(device_.physical(),
+                            device_.device(),
+                            instance_.surface(),
+                            device_.graphics_family(),
+                            device_.present_family(),
+                            desc,
+                            swapchain_.swapchain()))
     {
         STRATA_LOG_ERROR(diag.logger(),
                          "vk.swapchain",
@@ -54,22 +55,24 @@ rhi::SwapchainHandle VkGpuDevice::create_swapchain(rhi::SwapchainDesc const& des
         return {};
     }
 
-    std::size_t const image_count = swapchain_.images().size();
-
-    swapchain_image_layouts_.assign(image_count, VK_IMAGE_LAYOUT_UNDEFINED);
-    images_in_flight_.assign(image_count, VK_NULL_HANDLE);
-
+    std::size_t const image_count = new_swapchain.images().size();
     if (!init_render_finished_per_image(image_count))
     {
         STRATA_LOG_ERROR(diag.logger(),
                          "vk.swapchain",
                          "create_swapchain: init_render_finished_per_image failed");
-        swapchain_.cleanup();
-        swapchain_image_layouts_.clear();
-        images_in_flight_.clear();
-        destroy_render_finished_per_image();
         return {};
     }
+
+    // Commit only after everything succeeds (swapchain + per-image sync).
+    swapchain_ = std::move(new_swapchain);
+    swapchain_image_layouts_.assign(image_count, VK_IMAGE_LAYOUT_UNDEFINED);
+    images_in_flight_.assign(image_count, VK_NULL_HANDLE);
+
+    STRATA_ASSERT_MSG(
+        diag,
+        swapchain_sync_.render_finished_per_image.size() == image_count,
+        "create_swapchain: render_finished_per_image count must match swapchain images");
 
     return rhi::SwapchainHandle{1};
 }
@@ -89,17 +92,38 @@ rhi::FrameResult VkGpuDevice::resize_swapchain(rhi::SwapchainHandle, rhi::Swapch
 
     wait_idle();
 
-    swapchain_.cleanup();
-    swapchain_image_layouts_.clear();
-    images_in_flight_.clear();
-    destroy_render_finished_per_image();
+    // swapchain_.cleanup();
+    // swapchain_image_layouts_.clear();
+    // images_in_flight_.clear();
+    // destroy_render_finished_per_image();
 
-    if (!swapchain_.init(device_.physical(),
-                         device_.device(),
-                         instance_.surface(),
-                         device_.graphics_family(),
-                         device_.present_family(),
-                         desc))
+    // Best-effort recovery: if someone ended commands but never submitted, do not wedge.
+    if (pending_submit_frame_index_ != invalid_index)
+    {
+        STRATA_LOG_WARN(
+            diag.logger(),
+            "vk.swapchain",
+            "resize_swapchain: pending submit existed (slot={}); draining and discarding",
+            pending_submit_frame_index_);
+
+        (void)drain_image_available(pending_submit_frame_index_);
+        pending_submit_frame_index_ = invalid_index;
+        recording_active_           = false;
+        recording_frame_index_      = invalid_index;
+
+        // continue with resize
+    }
+
+    VkSwapchainWrapper new_swapchain{};
+    new_swapchain.set_diagnostics(diagnostics_);
+
+    if (!new_swapchain.init(device_.physical(),
+                            device_.device(),
+                            instance_.surface(),
+                            device_.graphics_family(),
+                            device_.present_family(),
+                            desc,
+                            swapchain_.swapchain()))
     {
         STRATA_LOG_ERROR(diag.logger(),
                          "vk.swapchain",
@@ -107,22 +131,24 @@ rhi::FrameResult VkGpuDevice::resize_swapchain(rhi::SwapchainHandle, rhi::Swapch
         return FrameResult::Error;
     }
 
-    std::size_t const image_count = swapchain_.images().size();
-
-    swapchain_image_layouts_.assign(image_count, VK_IMAGE_LAYOUT_UNDEFINED);
-    images_in_flight_.assign(image_count, VK_NULL_HANDLE);
-
+    std::size_t const image_count = new_swapchain.images().size();
     if (!init_render_finished_per_image(image_count))
     {
         STRATA_LOG_ERROR(diag.logger(),
                          "vk.swapchain",
                          "resize_swapchain: init_render_finished_per_image failed");
-        swapchain_.cleanup();
-        swapchain_image_layouts_.clear();
-        images_in_flight_.clear();
-        destroy_render_finished_per_image();
         return FrameResult::Error;
     }
+
+    // Commit only after everything succeeds.
+    swapchain_ = std::move(new_swapchain);
+    swapchain_image_layouts_.assign(image_count, VK_IMAGE_LAYOUT_UNDEFINED);
+    images_in_flight_.assign(image_count, VK_NULL_HANDLE);
+
+    STRATA_ASSERT_MSG(
+        diag,
+        swapchain_sync_.render_finished_per_image.size() == image_count,
+        "resize_swapchain: render_finished_per_image count must match swapchain images");
 
     // Invalidate pipeline; renderer will recreate.
     basic_pipeline_ = BasicPipeline{};

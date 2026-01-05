@@ -183,7 +183,7 @@ Rationale:
 Examples:
 - `create_device`
 - `request_exit`
-- `draw_frame_and_handle_resize`
+- `on_before_swapchain_resize`
 
 ### Guidance
 - **Factories**: `create_*`

@@ -146,30 +146,45 @@ rhi::FrameResult VkGpuDevice::submit(rhi::IGpuDevice::SubmitDesc const& sd)
 
     auto& diag = *diagnostics_;
 
+    auto abort_submit = [&](std::uint32_t drain_slot) -> FrameResult
+    {
+        if (drain_slot != invalid_index)
+        {
+            (void)drain_image_available(drain_slot);
+        }
+        pending_submit_frame_index_ = invalid_index;
+        recording_frame_index_      = invalid_index;
+        recording_active_           = false;
+        return FrameResult::Error;
+    };
+
     std::uint32_t slot = invalid_index;
-    if (!decode_cmd_handle(sd.command_buffer, slot) || slot != pending_submit_frame_index_)
+    if (!decode_cmd_handle(sd.command_buffer, slot))
     {
         STRATA_LOG_ERROR(diag.logger(),
                          "vk.submit",
-                         "submit: cmd handle mismatch (cmd={}, pending_slot={})",
+                         "submit: cannot decode cmd handle (cmd={}, pending_slot={})",
                          sd.command_buffer.value,
                          pending_submit_frame_index_);
         diag.debug_break_on_error();
-        pending_submit_frame_index_ = invalid_index;
-        return FrameResult::Error;
+        return abort_submit(pending_submit_frame_index_);
+    }
+
+    if (pending_submit_frame_index_ == invalid_index || slot != pending_submit_frame_index_)
+    {
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.submit",
+                         "submit: cmd handle mismatch (cmd={}, slot={}, pending_slot={})",
+                         sd.command_buffer.value,
+                         slot,
+                         pending_submit_frame_index_);
+        diag.debug_break_on_error();
+        return abort_submit(pending_submit_frame_index_);
     }
 
     if (!device_.device() || !swapchain_.valid())
     {
-        // We cannot safely submit the recorded work, but we MUST consume image_available
-        // or the next acquire will reuse a still-signaled semaphore.
-        (void)drain_image_available(slot);
-
-        pending_submit_frame_index_ = invalid_index;
-        recording_frame_index_      = invalid_index;
-        recording_active_           = false;
-
-        return FrameResult::Error;
+        return abort_submit(slot);
     }
 
     if (pending_submit_frame_index_ == invalid_index)
@@ -194,9 +209,7 @@ rhi::FrameResult VkGpuDevice::submit(rhi::IGpuDevice::SubmitDesc const& sd)
     if (image_index >= swapchain_sync_.render_finished_per_image.size())
     {
         STRATA_LOG_ERROR(diag.logger(), "vk.submit", "submit: image_index out of range");
-        recording_active_           = false;
-        pending_submit_frame_index_ = invalid_index;
-        return FrameResult::Error;
+        return abort_submit(slot);
     }
 
     VkSemaphore render_finished           = swapchain_sync_.render_finished_per_image[image_index];
@@ -214,9 +227,16 @@ rhi::FrameResult VkGpuDevice::submit(rhi::IGpuDevice::SubmitDesc const& sd)
 
     VkDevice vk_device = device_.device();
 
-    STRATA_VK_ASSERT_RETURN(diag,
-                            vkResetFences(vk_device, 1, &frame.in_flight),
-                            FrameResult::Error);
+    VkResult const rf = vkResetFences(vk_device, 1, &frame.in_flight);
+    if (rf != VK_SUCCESS)
+    {
+        STRATA_LOG_ERROR(diag.logger(),
+                         "vk.submit",
+                         "vkResetFences failed: {}",
+                         ::strata::gfx::vk::to_string(rf));
+        diag.debug_break_on_error();
+        return abort_submit(slot);
+    }
 
     VkResult const qsr = vkQueueSubmit(device_.graphics_queue(), 1, &submit, frame.in_flight);
     if (qsr != VK_SUCCESS)
@@ -226,8 +246,9 @@ rhi::FrameResult VkGpuDevice::submit(rhi::IGpuDevice::SubmitDesc const& sd)
                          "vkQueueSubmit failed: {}",
                          ::strata::gfx::vk::to_string(qsr));
         diag.debug_break_on_error();
-        pending_submit_frame_index_ = invalid_index;
-        return FrameResult::Error;
+        // IMPORTANT: queue submit failed after we reset the fence; without draining,
+        // acquire_next_image() will wait forever on an unsignaled fence.
+        return abort_submit(slot);
     }
 
     if (image_index < swapchain_image_layouts_.size())

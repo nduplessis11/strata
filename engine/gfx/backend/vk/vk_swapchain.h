@@ -51,7 +51,8 @@ class VkSwapchainWrapper
               VkSurfaceKHR              surface,
               std::uint32_t             graphics_family,
               std::uint32_t             present_family,
-              rhi::SwapchainDesc const& desc);
+              rhi::SwapchainDesc const& desc,
+              VkSwapchainKHR            old_swapchain = VK_NULL_HANDLE);
 
     void cleanup();
 

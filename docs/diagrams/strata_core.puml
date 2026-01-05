@@ -352,6 +352,7 @@ __
 +frame_index : std::uint64_t
 +last_frame : clock::time_point
 +renderer : gfx::renderer::Render2D
++suboptimal_pending_recreate_ : bool
 +surface : platform::WsiHandle
 +swapchain : gfx::rhi::SwapchainHandle
 +window : platform::Window
@@ -398,6 +399,7 @@ class C_0010824766815022468742 {
 -ensure_depth_texture(std::uint32_t image_index, rhi::Extent2D extent) : rhi::FrameResult
 -ensure_ubo_resources(std::uint32_t image_index) : rhi::FrameResult
 +is_valid() const noexcept : bool
++on_before_swapchain_resize() noexcept : void
 +recreate_pipeline() : rhi::FrameResult
 -release() noexcept : void
 +set_camera(const Camera3D & camera) noexcept : void
@@ -757,7 +759,7 @@ class C_0005469923327072863924 {
 +image_format() const noexcept : VkFormat
 +image_views() const noexcept : const std::vector<VkImageView> &
 +images() const noexcept : const std::vector<VkImage> &
-+init(VkPhysicalDevice physical, VkDevice device, VkSurfaceKHR surface, std::uint32_t graphics_family, std::uint32_t present_family, const rhi::SwapchainDesc & desc) : bool
++init(VkPhysicalDevice physical, VkDevice device, VkSurfaceKHR surface, std::uint32_t graphics_family, std::uint32_t present_family, const rhi::SwapchainDesc & desc, VkSwapchainKHR old_swapchain = nullptr) : bool
 +set_diagnostics(base::Diagnostics * diagnostics) noexcept : void
 +swapchain() const noexcept : VkSwapchainKHR
 +valid() const noexcept : bool

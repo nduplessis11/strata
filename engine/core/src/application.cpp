@@ -45,6 +45,8 @@ struct Application::Impl
     std::uint64_t     frame_index{0};
     clock::time_point last_frame{};
 
+    bool suboptimal_pending_recreate_{false};
+
     Impl(ApplicationConfig                       cfg,
          std::unique_ptr<base::Diagnostics>&&    diag,
          platform::Window&&                      window,
@@ -174,18 +176,113 @@ std::int16_t Application::run(TickFn tick)
         auto [w, h]            = impl_->window.framebuffer_size();
         auto const framebuffer = clamp_framebuffer(w, h);
 
-        // TODO: Move the resize policy to core::Application.
-        auto result = gfx::renderer::draw_frame_and_handle_resize(*impl_->device,
-                                                                  impl_->swapchain,
-                                                                  impl_->config.swapchain_desc,
-                                                                  impl_->renderer,
-                                                                  framebuffer,
-                                                                  *impl_->diagnostics);
+        using gfx::rhi::FrameResult;
 
-        if (result == gfx::rhi::FrameResult::Error)
+        // Minimized / zero-area width: skip rendering but don't treat as error.
+        if (framebuffer.width == 0 || framebuffer.height == 0)
         {
-            STRATA_LOG_ERROR(impl_->diagnostics->logger(), "core", "Render error; exiting.");
-            return 2;
+            impl_->suboptimal_pending_recreate_ = false;
+        }
+        else
+        {
+            FrameResult const result = impl_->renderer.draw_frame();
+
+            if (result == FrameResult::Ok)
+            {
+                impl_->suboptimal_pending_recreate_ = false;
+            }
+            else if (result == FrameResult::Error)
+            {
+                STRATA_LOG_ERROR(impl_->diagnostics->logger(), "core", "Render error; exiting.");
+                return 2;
+            }
+            else
+            {
+                // Resize policy is owned by core::Application:
+                // - ResizeNeeded: recreate immediately
+                // - Suboptimal:
+                //    * if size changed: recreate immediately
+                //    * else: recreate once per "suboptimal streak" (debounce)
+
+                bool const size_changed =
+                    framebuffer.width != impl_->config.swapchain_desc.size.width ||
+                    framebuffer.height != impl_->config.swapchain_desc.size.height;
+
+                bool should_recreate = false;
+
+                if (result == FrameResult::ResizeNeeded)
+                {
+                    should_recreate = true;
+                }
+                else // Suboptimal
+                {
+                    if (size_changed)
+                    {
+                        should_recreate = true;
+                    }
+                    else if (!impl_->suboptimal_pending_recreate_)
+                    {
+                        // First suboptimal frame (size unchanged): allow one frame to present,
+                        // but remember to recreate if it persists.
+                        impl_->suboptimal_pending_recreate_ = true;
+                        should_recreate                     = false;
+                    }
+                    else
+                    {
+                        // Suboptimal persisted with same size: recreate now.
+                        should_recreate = true;
+                    }
+                }
+
+                if (should_recreate)
+                {
+                    impl_->suboptimal_pending_recreate_ = false;
+
+                    STRATA_LOG_INFO(
+                        impl_->diagnostics->logger(),
+                        "core",
+                        "Swapchain recreate requested (result {}, fb {}x{}, current {}x{})",
+                        static_cast<std::int32_t>(result),
+                        framebuffer.width,
+                        framebuffer.height,
+                        impl_->config.swapchain_desc.size.width,
+                        impl_->config.swapchain_desc.size.height);
+
+                    impl_->device->wait_idle();
+
+                    // Release swapchain-sized resourced while we are guaranteed idle.
+                    impl_->renderer.on_before_swapchain_resize();
+
+                    gfx::rhi::SwapchainDesc wanted = impl_->config.swapchain_desc;
+                    wanted.size                    = framebuffer;
+
+                    FrameResult const resize_result =
+                        impl_->device->resize_swapchain(impl_->swapchain, wanted);
+
+                    if (resize_result == FrameResult::Ok)
+                    {
+                        impl_->config.swapchain_desc = wanted;
+                    }
+                    else
+                    {
+                        STRATA_LOG_WARN(impl_->diagnostics->logger(),
+                                        "core",
+                                        "resize_swapchain failed; skipping frame");
+                        // Non-fatal just skip this frame.
+                        // (Also: do NOT attempt recreate_pipeline on failure.)
+                    }
+
+                    if (resize_result == FrameResult::Ok)
+                    {
+                        if (impl_->renderer.recreate_pipeline() != FrameResult::Ok)
+                        {
+                            STRATA_LOG_WARN(impl_->diagnostics->logger(),
+                                            "core",
+                                            "recreate_pipeline failed; skipping frame");
+                        }
+                    }
+                }
+            }
         }
 
         if (impl_->config.throttle_cpu)

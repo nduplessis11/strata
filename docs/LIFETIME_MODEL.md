@@ -325,23 +325,26 @@ Required invariants:
 ## Swapchain resize lifetime and safety
 
 ### Resize trigger and policy
-In `draw_frame_and_handle_resize()`:
+In `core::Application::run()` (around `renderer.draw_frame()`):
 - `FrameResult::Ok` → done
 - `FrameResult::Error` → treat as fatal
-- Any other result (`Suboptimal`, `ResizeNeeded`) → treat as resize request
+- `FrameResult::ResizeNeeded` → treat as resize request
+- `FrameResult::Suboptimal` → treat as resize request if it persists (or immediately if the framebuffer size changed)
 
 ### Resize sequence
 On resize request:
 
 1. `device.wait_idle()`
-2. `device.resize_swapchain(swapchain, wanted)`
+2. `renderer.on_before_swapchain_resize()`
+   - releases swapchain-sized resources (depth textures + per-image UBO buffers/descriptor sets)
+3. `device.resize_swapchain(swapchain, wanted)`
    - `wanted` is derived from the existing `swapchain_desc` with only `size` overridden from the current framebuffer (preserving vsync/format)
    - On `Ok`, `swapchain_desc` is updated in place (`swapchain_desc = wanted`)
-   - backend destroys/recreates swapchain + image views
+   - backend recreates swapchain + image views (using `oldSwapchain` when replacing)
    - backend resets `basic_pipeline_ = {}` (invalidates pipeline)
-3. `renderer.recreate_pipeline()`
-   - swapchain-independent renderer-owned RHI resources (UBO layout and any existing per-swapchain-image UBO buffers/descriptor sets) persist across the resize
-   - only the pipeline is rebuilt for the new swapchain format; if recreation fails, the frame is skipped but the application keeps running
+4. `renderer.recreate_pipeline()`
+   - rebuilds the pipeline for the new swapchain format
+   - per-image resources are recreated lazily; if recreation fails, the frame is skipped but the application keeps running
 
 This is safe because `wait_idle()` ensures:
 - No in-flight command buffer references old swapchain images/views

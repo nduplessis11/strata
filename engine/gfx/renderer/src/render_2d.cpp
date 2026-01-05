@@ -701,61 +701,14 @@ FrameResult Render2D::recreate_pipeline()
     return pipeline_ ? FrameResult::Ok : FrameResult::Error;
 }
 
-// -------------------------------------------------------------------------
-// Helper: draw_frame_and_handle_resize
-// -------------------------------------------------------------------------
-
-FrameResult draw_frame_and_handle_resize(IGpuDevice&        device,
-                                         SwapchainHandle&   swapchain,
-                                         SwapchainDesc&     swapchain_desc,
-                                         Render2D&          renderer,
-                                         Extent2D           framebuffer_size,
-                                         base::Diagnostics& diagnostics)
+void Render2D::on_before_swapchain_resize() noexcept
 {
-    // Minimized / zero-area window: skip rendering but don't treat as error.
-    if (framebuffer_size.width == 0 || framebuffer_size.height == 0)
-    {
-        return FrameResult::Ok;
-    }
+    // Depth images are swapchain-extent dependent.
+    destroy_depth_textures();
 
-    FrameResult const result = renderer.draw_frame();
-    if (result == FrameResult::Ok || result == FrameResult::Error)
-        return result;
-
-    STRATA_LOG_INFO(diagnostics.logger(),
-                    "renderer",
-                    "Swapchain resize requested (result {})",
-                    static_cast<std::int32_t>(result));
-
-    device.wait_idle();
-
-    SwapchainDesc wanted = swapchain_desc;
-    wanted.size          = framebuffer_size;
-
-    // Resize existing swapchain in-place.
-    FrameResult const resize_result = device.resize_swapchain(swapchain, wanted);
-    if (resize_result == FrameResult::Ok)
-    {
-        swapchain_desc = wanted;
-    }
-    else if (resize_result == FrameResult::Error)
-    {
-        // Failed to resize; treat as non-fatal (no frame rendered).
-        STRATA_LOG_WARN(diagnostics.logger(),
-                        "renderer",
-                        "resize_swapchain failed; skipping frame");
-        return FrameResult::Ok;
-    }
-
-    if (renderer.recreate_pipeline() != FrameResult::Ok)
-    {
-        STRATA_LOG_WARN(diagnostics.logger(),
-                        "renderer",
-                        "recreate_pipeline failed; skipping frame");
-        return FrameResult::Ok;
-    }
-
-    return FrameResult::Ok;
+    // Per-image UBO sets/buffers are swapchain-image-count dependent.
+    // Keeping them is *allowed*, but destroying here prevents "max-ever image_count" growth.
+    destroy_ubo_resources();
 }
 
 } // namespace strata::gfx::renderer
