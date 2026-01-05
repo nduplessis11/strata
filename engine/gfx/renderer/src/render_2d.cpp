@@ -160,8 +160,8 @@ std::expected<Render2D, Render2DError> Render2D::create(base::Diagnostics& diagn
     STRATA_ASSERT(diagnostics, out.is_valid());
     STRATA_LOG_INFO(diagnostics.logger(), "renderer", "Render2D initialized: 3D cube demo");
 
-    // IMPORTANT: Render2D is move-only, so force move into expected.
-    return std::move(out);
+    // IMPORTANT: Render2D is move-only, so no need to force it.
+    return out;
 }
 
 bool Render2D::is_valid() const noexcept
