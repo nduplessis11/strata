@@ -42,6 +42,14 @@ struct WindowDesc
     bool             visible{true};
 };
 
+enum class CursorMode : std::uint8_t
+{
+    Normal,   // visible, not confined
+    Hidden,   // hidden, not confined
+    Confined, // visible, confined to client rect while focused
+    Locked,   // hidden + confined (FPS-style)
+};
+
 class Window
 {
   public:
@@ -60,6 +68,13 @@ class Window
 
     void poll_events();
     void set_title(std::string_view title);
+
+    void set_cursor_mode(CursorMode mode) noexcept;
+    [[nodiscard]]
+    CursorMode cursor_mode() const noexcept;
+
+    [[nodiscard]]
+    bool has_focus() const noexcept;
 
     // size queries
     [[nodiscard]]

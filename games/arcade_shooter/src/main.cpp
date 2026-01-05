@@ -64,6 +64,8 @@ int main()
             using strata::base::math::length;
             using strata::base::math::normalize;
 
+            auto& win = app.window();
+
             // One-time camera init (game-owned).
             if (!state.initialized)
             {
@@ -73,14 +75,24 @@ int main()
             }
 
             // Update actions from raw input.
-            state.actions.update(app.window().input());
+            state.actions.update(win.input());
 
             // Exit on ESC.
             if (state.actions.down(strata::core::Action::Exit))
             {
+                // Ensure we release cursor confinement/hide before shutdown.
+                win.set_cursor_mode(strata::platform::CursorMode::Normal);
                 app.request_exit();
                 return;
             }
+
+            // Cursor policy for this sample:
+            // - When focused: lock (hidden + confined) for FPS-style mouse look
+            // - When unfocused: release
+            //
+            // This can be expanded later to: "if menu open => Normal".
+            win.set_cursor_mode(win.has_focus() ? strata::platform::CursorMode::Locked
+                                                : strata::platform::CursorMode::Normal);
 
             float const dt = static_cast<float>(ctx.delta_seconds);
             // First frames may have zero dt.
