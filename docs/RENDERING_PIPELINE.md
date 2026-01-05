@@ -10,16 +10,17 @@ It is intentionally scoped to the **current** implementation (single pass, spinn
 
 The frame path looks like this:
 
-1. `core::Application::run()` drives the loop and calls a helper:
-   - `gfx::renderer::draw_frame_and_handle_resize(device, swapchain, swapchain_desc, renderer, framebuffer_size, diagnostics)`
+1. `core::Application::run()` drives the loop and owns the resize policy:
+   - it calls `renderer.draw_frame()` and reacts to the returned `FrameResult` (see below)
 2. `Render2D::draw_frame()` now owns the frame:
    - **acquire → begin cmd → record pass → end cmd → submit → present**
 3. The Vulkan backend (`vk::VkGpuDevice`) provides the building blocks:
    - `acquire_next_image`, `begin_commands`, `cmd_*`, `end_commands`, `submit`, `present`
 4. If the swapchain is suboptimal/out-of-date:
    - the engine calls `device.wait_idle()`,
+   - asks the existing renderer to release swapchain-sized resources (via `renderer.on_before_swapchain_resize()`),
    - recreates the swapchain,
-   - asks the existing renderer to recreate its pipeline (via `renderer.recreate_pipeline()`, keeping UBO + descriptor resources).
+   - asks the existing renderer to recreate its pipeline (via `renderer.recreate_pipeline()`; per-image resources are recreated lazily).
 
 ---
 
@@ -75,7 +76,7 @@ Per iteration:
 4. Query framebuffer size and clamp:
    - `auto framebuffer = clamp_framebuffer(fbw, fbh)`
 5. Render + resize handling:
-   - `draw_frame_and_handle_resize(*device, swapchain, swapchain_desc, renderer, framebuffer, *diagnostics)`
+   - `result = renderer.draw_frame()` + core-owned resize policy (see “Resize policy” below)
 6. Optional CPU throttle sleep
 
 On exit, `device->wait_idle()` is called once more.
@@ -134,21 +135,24 @@ The view/projection values come from the current `camera_` state (set via `set_c
 
 In other words: **the renderer owns command recording**, and the backend owns the Vulkan plumbing.
 
-### Resize helper: `draw_frame_and_handle_resize`
-This helper implements the current resize policy:
+### Resize policy: `core::Application::run`
+This implements the current resize policy:
 - If framebuffer is zero-area: return `Ok` (minimized window)
 - `result = renderer.draw_frame()`
   - `Ok` → done
   - `Error` → fatal render error
-  - anything else (`Suboptimal` / `ResizeNeeded`) → resize path
+  - `ResizeNeeded` → resize path
+  - `Suboptimal` → resize path (immediately if size changed; otherwise allow one suboptimal present and recreate if it persists)
 
 Resize path:
 1. `device.wait_idle()` (simple + safe, but stalls)
-2. Build a desired `SwapchainDesc` by taking the existing `swapchain_desc` and overriding `size` from the framebuffer
-3. `device.resize_swapchain(swapchain, wanted)`
+2. Release swapchain-sized renderer resources while we are guaranteed idle:
+   - `renderer.on_before_swapchain_resize()`
+3. Build a desired `SwapchainDesc` by taking the existing `swapchain_desc` and overriding `size` from the framebuffer
+4. `device.resize_swapchain(swapchain, wanted)`
    - On `Ok`, store `swapchain_desc = wanted` so the current swapchain settings stay in sync with the resized swapchain
-4. Ask the existing renderer to recreate its pipeline (swapchain-independent resources persist):
-   - `renderer.recreate_pipeline()` rebuilds the pipeline for the new swapchain format while keeping UBO + descriptor resources.
+5. Ask the existing renderer to recreate its pipeline:
+   - `renderer.recreate_pipeline()` rebuilds the pipeline for the new swapchain format; per-image resources (depth textures + UBO buffers/sets) are recreated lazily.
    - If `recreate_pipeline()` fails (non-`Ok`), it is treated as non-fatal: the frame is skipped, but the application keeps running.
 
 ---
@@ -245,7 +249,7 @@ Those requirements match the frame code:
 ### Swapchain creation (`create_swapchain`)
 `VkGpuDevice::create_swapchain(desc, ...)`:
 1. `wait_idle()`
-2. destroy existing swapchain + views
+2. create a new swapchain (passing the current swapchain as `oldSwapchain` when replacing)
 3. `swapchain_.init(...)`
    - chooses surface format (tries to honor `desc.format` if specified; otherwise prefers `VK_FORMAT_B8G8R8A8_UNORM` + `VK_COLOR_SPACE_SRGB_NONLINEAR_KHR`)
    - chooses present mode:
@@ -259,7 +263,7 @@ Those requirements match the frame code:
 ### Swapchain resize (`resize_swapchain`)
 Resize mirrors creation:
 - `wait_idle()`
-- cleanup + recreate swapchain wrapper + views
+- recreate swapchain wrapper + views (passing the previous swapchain via `oldSwapchain`)
 - recreate per-image render-finished semaphores
 - invalidate `basic_pipeline_` so it will be rebuilt for the new swapchain format
 
@@ -376,7 +380,7 @@ Because the pipeline depends on swapchain format (and optional depth format/stat
    - Support secondary command buffers or parallel recording.
 
 3. **Pipeline lifetime rules**
-   - Now: pipeline is recreated on resize via `renderer.recreate_pipeline()` (swapchain-independent UBO + descriptor resources persist), and the backend can lazily rebuild.
+   - Now: pipeline is recreated on resize via `renderer.recreate_pipeline()` (after `renderer.on_before_swapchain_resize()` releases swapchain-sized per-image resources), and the backend can lazily rebuild.
    - Later: pipeline cache, expanded descriptor sets, shader hot-reload, etc.
 
 4. **Swapchain recreation policy**
