@@ -43,7 +43,10 @@ jobs:
       - name: Configure CMake
         shell: pwsh
         run: |
-          cmake -S "$env:GITHUB_WORKSPACE" -B "$env:GITHUB_WORKSPACE\build"
+          cmake -S "$env:GITHUB_WORKSPACE" -B "$env:GITHUB_WORKSPACE\build" `
+            -DCMAKE_CXX_STANDARD=23 `
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON `
+            -DCMAKE_CXX_EXTENSIONS=OFF
 
       - name: Build (Release)
         shell: pwsh
@@ -119,14 +122,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install system deps (X11 + build tooling)
+      - name: Install system deps (X11 + build tooling + GCC 14 for C++23 <print>)
         shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build pkg-config \
             xorg-dev libgl1-mesa-dev \
-            xvfb zip
+            xvfb zip \
+            gcc-14 g++-14
+
+          echo "gcc-14: $(gcc-14 --version | head -n 1)"
+          echo "g++-14: $(g++-14 --version | head -n 1)"
 
       # ---- Vulkan SDK (PINNED; same as Windows) ----
       - name: Install Vulkan SDK
@@ -144,10 +151,19 @@ jobs:
           test -f "$VULKAN_SDK/include/vulkan/vulkan.h" || test -f "$VULKAN_SDK/Include/vulkan/vulkan.h"
 
       # ---- Configure / Build / Test ----
-      - name: Configure CMake (Release)
+      - name: Configure CMake (Release, C++23)
         shell: bash
         run: |
-          cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" -DCMAKE_BUILD_TYPE=Release
+          cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_CXX_STANDARD=23 \
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+            -DCMAKE_CXX_EXTENSIONS=OFF
+
+          echo "---- CMake toolchain summary ----"
+          grep -E "CMAKE_(C|CXX)_COMPILER:FILEPATH=|CMAKE_CXX_STANDARD:STRING=" "$GITHUB_WORKSPACE/build/CMakeCache.txt" || true
 
       - name: Build (Release)
         shell: bash
