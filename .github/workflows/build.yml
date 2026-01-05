@@ -43,7 +43,10 @@ jobs:
       - name: Configure CMake
         shell: pwsh
         run: |
-          cmake -S "$env:GITHUB_WORKSPACE" -B "$env:GITHUB_WORKSPACE\build"
+          cmake -S "$env:GITHUB_WORKSPACE" -B "$env:GITHUB_WORKSPACE\build" `
+            -DCMAKE_CXX_STANDARD=23 `
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON `
+            -DCMAKE_CXX_EXTENSIONS=OFF
 
       - name: Build (Release)
         shell: pwsh
@@ -110,3 +113,140 @@ jobs:
         with:
           files: ${{ github.workspace }}/arcade_shooter-${{ github.ref_name }}-windows.zip
           generate_release_notes: true
+
+  build-linux-x11:
+    name: linux (X11, Release)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system deps (X11 + build tooling + GCC 14 for C++23 <print>)
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config \
+            xorg-dev libgl1-mesa-dev \
+            xvfb zip \
+            gcc-14 g++-14
+
+          echo "gcc-14: $(gcc-14 --version | head -n 1)"
+          echo "g++-14: $(g++-14 --version | head -n 1)"
+
+      # ---- Vulkan SDK (PINNED; same as Windows) ----
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@v1.2
+        with:
+          version: 1.4.309.0
+          cache: true
+
+      - name: Sanity check Vulkan SDK layout (Linux)
+        shell: bash
+        run: |
+          echo "VULKAN_SDK=$VULKAN_SDK"
+          ls -la "$VULKAN_SDK" || true
+          # SDK layout differs a bit by platform; accept either casing.
+          test -f "$VULKAN_SDK/include/vulkan/vulkan.h" || test -f "$VULKAN_SDK/Include/vulkan/vulkan.h"
+
+      # ---- Configure / Build / Test ----
+      - name: Configure CMake (Release, C++23)
+        shell: bash
+        run: |
+          cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_CXX_STANDARD=23 \
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+            -DCMAKE_CXX_EXTENSIONS=OFF
+
+          echo "---- CMake toolchain summary ----"
+          grep -E "CMAKE_(C|CXX)_COMPILER:FILEPATH=|CMAKE_CXX_STANDARD:STRING=" "$GITHUB_WORKSPACE/build/CMakeCache.txt" || true
+
+      - name: Build (Release)
+        shell: bash
+        run: |
+          cmake --build "$GITHUB_WORKSPACE/build" --parallel
+
+      - name: Test (Release, Xvfb)
+        shell: bash
+        run: |
+          xvfb-run -a ctest --test-dir "$GITHUB_WORKSPACE/build" -C Release --output-on-failure
+
+      # ---- Stage files to publish ----
+      - name: Stage arcade shooter dist
+        id: stage
+        shell: bash
+        run: |
+          buildDir="$GITHUB_WORKSPACE/build"
+          distDir="$GITHUB_WORKSPACE/dist"
+          mkdir -p "$distDir"
+
+          # Find Linux executable (expected output name)
+          exe="$(find "$buildDir" -type f -name "strata_shooter" -perm -111 | head -n 1 || true)"
+          if [ -z "$exe" ]; then
+            exe="$(find "$buildDir" -type f -name "strata_shooter" | head -n 1 || true)"
+          fi
+          if [ -z "$exe" ]; then
+            echo "Could not find strata_shooter under $buildDir"
+            echo "Here are some files near the build root to help debug:"
+            find "$buildDir" -maxdepth 4 -type f | head -n 200
+            exit 1
+          fi
+
+          cp -f "$exe" "$distDir/arcade_shooter"
+          chmod +x "$distDir/arcade_shooter"
+
+          # Shaders: prefer folder next to the executable; fall back to repo root /shaders if present
+          shaderDir="$(dirname "$exe")/shaders"
+          if [ -d "$shaderDir" ]; then
+            cp -R "$shaderDir" "$distDir/shaders"
+          elif [ -d "$GITHUB_WORKSPACE/shaders" ]; then
+            cp -R "$GITHUB_WORKSPACE/shaders" "$distDir/shaders"
+          else
+            echo "::warning::No shaders folder found. If runtime needs shaders, ensure your post-build copy step runs in CI."
+          fi
+
+          echo "distDir=$distDir" >> "$GITHUB_OUTPUT"
+
+      # ---- 1) Upload as Actions artifact (always) ----
+      - name: Upload artifact (Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: arcade_shooter-linux-x11-Release
+          path: ${{ steps.stage.outputs.distDir }}
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-linux-x11:
+    name: linux (X11) publish to GitHub Release
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    needs: [build-windows, build-linux-x11]
+
+    steps:
+      - name: Install zip
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends zip
+
+      - name: Download linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: arcade_shooter-linux-x11-Release
+          path: dist
+
+      - name: Zip release payload (Linux X11)
+        shell: bash
+        run: |
+          zipPath="$GITHUB_WORKSPACE/arcade_shooter-${{ github.ref_name }}-linux-x11.zip"
+          rm -f "$zipPath"
+          (cd "$GITHUB_WORKSPACE/dist" && zip -r "$zipPath" .)
+
+      - name: Upload asset to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ github.workspace }}/arcade_shooter-${{ github.ref_name }}-linux-x11.zip
