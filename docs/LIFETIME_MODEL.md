@@ -96,9 +96,13 @@ flowchart TD
 
 The application loop uses:
 - `window.poll_events()`
-- `window.input()` (raw input snapshot; `poll_events()` refreshes it and resets per-frame deltas)
+- `window.input()` (raw input snapshot (includes focus state); `poll_events()` refreshes it and resets per-frame deltas)
 - `window.should_close()` / `window.request_close()`
 - `window.window_size()` / `window.framebuffer_size()`
+
+Sample/game code may also use:
+- `window.set_cursor_mode(...)` / `window.cursor_mode()` (cursor visibility / confinement / lock)
+- `window.has_focus()` (query focus state)
 
 ### `platform::WsiHandle` (non-owning description)
 `platform::WsiHandle` is a `std::variant` of platform-specific structs:
