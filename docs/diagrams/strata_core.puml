@@ -227,6 +227,13 @@ __
 +title : std::string_view
 +visible : bool
 }
+enum "strata::platform::CursorMode" as C_0012072349216706500702
+enum C_0012072349216706500702 {
+Normal
+Hidden
+Confined
+Locked
+}
 class "strata::platform::Window" as C_0005247819231906793915
 class C_0005247819231906793915 {
 +Window(base::Diagnostics & diagnostics, const WindowDesc & desc) : void
@@ -237,13 +244,16 @@ class C_0005247819231906793915 {
 +operator=(Window &&) noexcept : Window &
 +operator=(const Window &) = deleted : Window &
 ..
++cursor_mode() const noexcept : CursorMode
 +framebuffer_size() const noexcept : std::pair<std::int32_t,std::int32_t>
++has_focus() const noexcept : bool
 +input() const noexcept : const InputState &
 +is_minimized() const noexcept : bool
 +is_visible() const noexcept : bool
 +native_wsi() const noexcept : WsiHandle
 +poll_events() : void
 +request_close() noexcept : void
++set_cursor_mode(CursorMode mode) noexcept : void
 +set_title(std::string_view title) : void
 +should_close() const noexcept : bool
 +window_size() const noexcept : std::pair<std::int32_t,std::int32_t>
@@ -252,22 +262,34 @@ __
 }
 class "strata::platform::Window::Impl" as C_0013200129816682565187
 class C_0013200129816682565187 {
++apply_clip(bool enable) const noexcept : void
++apply_cursor_mode() noexcept : void
++center_cursor_screen() noexcept : void
++client_center() const noexcept : std::pair<std::int32_t,std::int32_t>
++client_rect_screen() const noexcept : RECT
 +make_wsi_handle() const : WsiHandle
 +on_key(WPARAM vk, bool down) noexcept : void
 +on_mouse_button(UINT msg, bool down) noexcept : void
++on_raw_input(LPARAM lparam) noexcept : void
++set_cursor_visible(bool visible) noexcept : void
++try_enable_raw_mouse() noexcept : void
 +wnd_proc(HWND h, UINT msg, WPARAM w, LPARAM l) : LRESULT
 {static} +wndproc_static(HWND hwnd, UINT msg, WPARAM w, LPARAM l) : LRESULT
 __
 +clear_brush : HBRUSH
 +closing : bool
++cursor_mode : CursorMode
 +diagnostics : base::Diagnostics *
 +hinstance : HINSTANCE
 +hwnd : HWND
++ignore_next_mouse_move : bool
 +input : InputState
 +last_mouse_x : int
 +last_mouse_y : int
 +minimized : bool
 +mouse_pos_valid : bool
++raw_input_buffer : std::vector<std::byte>
++raw_mouse_enabled : bool
 }
 enum "strata::core::Action" as C_0018032594692547036397
 enum C_0018032594692547036397 {
@@ -922,6 +944,7 @@ C_0016276992989547283338 o-- C_0006480956703282666377 : +surface
 C_0016311843175510711894 o-- C_0005777160501785278061 : +size
 C_0005247819231906793915 ..> C_0015969163135226357711
 C_0005247819231906793915 ..> C_0016311843175510711894
+C_0005247819231906793915 ..> C_0012072349216706500702
 C_0005247819231906793915 ..> C_0013081563177970586290
 C_0005247819231906793915 ..> C_0015867045834686762295
 C_0005247819231906793915 ..> C_0009424639203119917878
@@ -932,6 +955,7 @@ C_0013200129816682565187 ..> C_0009424639203119917878
 C_0013200129816682565187 ..> C_0016276992989547283338
 C_0013200129816682565187 --> C_0015969163135226357711 : +diagnostics
 C_0013200129816682565187 o-- C_0013081563177970586290 : +input
+C_0013200129816682565187 o-- C_0012072349216706500702 : +cursor_mode
 C_0017461806447561434585 ..> C_0013081563177970586290
 C_0017461806447561434585 ..> C_0018032594692547036397
 C_0002056900511809122909 o-- C_0016311843175510711894 : +window_desc
