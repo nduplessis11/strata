@@ -8,6 +8,12 @@
 // V1 Camera Input:
 //   - Track raw input state (keys, mouse buttons, mouse delta) per Window.
 //   - Reset per-frame mouse delta in poll_events().
+//
+// Cursor control (CursorMode):
+//   - Normal:   visible, not confined
+//   - Hidden:   hidden, not confined
+//   - Confined: visible, confined while focused (XGrabPointer with confine_to=window)
+//   - Locked:   hidden + confined; additionally warp-to-center for endless deltas
 // -----------------------------------------------------------------------------
 
 #include <X11/XKBlib.h>
@@ -108,12 +114,156 @@ struct Window::Impl
     bool     visible{false};
     bool     minimized{false};
 
-    // V1 Camera Input: input state owned by this Window.
+    // V1 Camera Input
     InputState input{};
 
     bool mouse_pos_valid{false};
     int  last_mouse_x{0};
     int  last_mouse_y{0};
+
+    // Cursor control
+    CursorMode cursor_mode{CursorMode::Normal};
+    Cursor     invisible_cursor{};
+    bool       invisible_cursor_ready{false};
+    bool       pointer_grabbed{false};
+    bool       ignore_next_motion{false};
+
+    int cached_w{0};
+    int cached_h{0};
+
+    void ensure_invisible_cursor() noexcept
+    {
+        if (!display || !window || invisible_cursor_ready)
+            return;
+
+        // 8x8 empty bitmap cursor
+        static char const no_data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+
+        Pixmap bm = ::XCreateBitmapFromData(display, window, no_data, 8, 8);
+        if (!bm)
+            return;
+
+        XColor black{};
+        black.red = black.green = black.blue = 0;
+
+        invisible_cursor = ::XCreatePixmapCursor(display, bm, bm, &black, &black, 0, 0);
+        ::XFreePixmap(display, bm);
+
+        invisible_cursor_ready = (invisible_cursor != 0);
+    }
+
+    void ungrab_pointer() noexcept
+    {
+        if (display && pointer_grabbed)
+        {
+            ::XUngrabPointer(display, CurrentTime);
+            pointer_grabbed = false;
+        }
+    }
+
+    bool grab_pointer(bool confine, Cursor cursor_shape) noexcept
+    {
+        if (!display || !window)
+            return false;
+
+        int const r = ::XGrabPointer(display,
+                                     window,
+                                     True,
+                                     ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
+                                     GrabModeAsync,
+                                     GrabModeAsync,
+                                     confine ? window : None,
+                                     cursor_shape,
+                                     CurrentTime);
+
+        if (r == GrabSuccess)
+        {
+            pointer_grabbed = true;
+            return true;
+        }
+
+        // Not fatal: just don’t confine.
+        if (diagnostics)
+        {
+            STRATA_LOG_WARN(diagnostics->logger(),
+                            "platform",
+                            "X11: XGrabPointer failed (code={})",
+                            r);
+        }
+        pointer_grabbed = false;
+        return false;
+    }
+
+    void warp_pointer_to_center() noexcept
+    {
+        if (!display || !window)
+            return;
+
+        if (cached_w <= 0 || cached_h <= 0)
+            return;
+
+        int const cx = cached_w / 2;
+        int const cy = cached_h / 2;
+
+        ::XWarpPointer(display, None, window, 0, 0, 0, 0, cx, cy);
+        ::XFlush(display);
+
+        last_mouse_x       = cx;
+        last_mouse_y       = cy;
+        mouse_pos_valid    = true;
+        ignore_next_motion = true;
+    }
+
+    void apply_cursor_mode() noexcept
+    {
+        if (!display || !window)
+            return;
+
+        // Never keep pointer grabbed when unfocused or minimized.
+        if (!input.focused() || minimized)
+        {
+            ungrab_pointer();
+            ::XUndefineCursor(display, window);
+            ::XFlush(display);
+            mouse_pos_valid    = false;
+            ignore_next_motion = false;
+            return;
+        }
+
+        switch (cursor_mode)
+        {
+        case CursorMode::Normal:
+            ungrab_pointer();
+            ::XUndefineCursor(display, window);
+            break;
+
+        case CursorMode::Hidden:
+            ungrab_pointer();
+            ensure_invisible_cursor();
+            if (invisible_cursor_ready)
+            {
+                ::XDefineCursor(display, window, invisible_cursor);
+            }
+            break;
+
+        case CursorMode::Confined:
+            // visible cursor + grab pointer confined to window
+            ensure_invisible_cursor(); // (not required, but cheap)
+            ::XUndefineCursor(display, window);
+            (void)grab_pointer(true, None);
+            break;
+
+        case CursorMode::Locked:
+            ensure_invisible_cursor();
+            // hidden cursor + grab pointer confined to window
+            (void)grab_pointer(true, invisible_cursor_ready ? invisible_cursor : None);
+            // FPS-style endless deltas: warp to center
+            warp_pointer_to_center();
+            break;
+        }
+
+        ::XFlush(display);
+    }
 
     Impl(base::Diagnostics& diag, WindowDesc const& desc)
           : diagnostics(&diag)
@@ -165,14 +315,15 @@ struct Window::Impl
             return;
         }
 
-        // Handle window close requests from the window manager (WM_DELETE_WINDOW)
+        cached_w = desc.size.width;
+        cached_h = desc.size.height;
+
         wm_delete = ::XInternAtom(display, "WM_DELETE_WINDOW", False);
         if (wm_delete)
         {
             ::XSetWMProtocols(display, window, &wm_delete, 1);
         }
 
-        // Apply window hints (title, resizable flag via min/max size)
         std::string title{desc.title};
         ::XStoreName(display, window, title.c_str());
 
@@ -199,6 +350,21 @@ struct Window::Impl
 
     ~Impl()
     {
+        if (display)
+        {
+            ungrab_pointer();
+            if (window)
+            {
+                ::XUndefineCursor(display, window);
+            }
+            if (invisible_cursor_ready)
+            {
+                ::XFreeCursor(display, invisible_cursor);
+                invisible_cursor       = 0;
+                invisible_cursor_ready = false;
+            }
+        }
+
         if (display && window)
         {
             ::XDestroyWindow(display, window);
@@ -232,7 +398,6 @@ struct Window::Impl
         if (!display)
             return;
 
-        // V1 Camera Input: reset per-frame deltas before pumping.
         input.begin_frame();
 
         while (::XPending(display) > 0)
@@ -244,12 +409,26 @@ struct Window::Impl
             {
             case FocusIn:
                 input.set_focused(true);
-                mouse_pos_valid = false;
+                mouse_pos_valid    = false;
+                ignore_next_motion = false;
+                apply_cursor_mode();
                 break;
 
             case FocusOut:
                 input.set_focused(false);
-                mouse_pos_valid = false;
+                mouse_pos_valid    = false;
+                ignore_next_motion = false;
+                apply_cursor_mode();
+                break;
+
+            case ConfigureNotify:
+                cached_w = evt.xconfigure.width;
+                cached_h = evt.xconfigure.height;
+                // If locked, keep center-warp stable after size change.
+                if (cursor_mode == CursorMode::Locked && input.focused())
+                {
+                    warp_pointer_to_center();
+                }
                 break;
 
             case KeyPress:
@@ -265,8 +444,6 @@ struct Window::Impl
 
             case KeyRelease:
             {
-                // Filter X11 key auto-repeat:
-                // Auto-repeat generates KeyRelease/KeyPress pairs with the same keycode+time.
                 if (XEventsQueued(display, QueuedAfterReading) > 0)
                 {
                     XEvent next{};
@@ -276,7 +453,6 @@ struct Window::Impl
                         next.xkey.keycode == evt.xkey.keycode &&
                         next.xkey.time == evt.xkey.time)
                     {
-                        // This release is part of auto-repeat; ignore it.
                         break;
                     }
                 }
@@ -291,7 +467,6 @@ struct Window::Impl
 
             case ButtonPress:
             {
-                // Wheel buttons are typically 4/5; treat as wheel delta.
                 if (evt.xbutton.button == Button4)
                 {
                     input.add_wheel_delta(+1.0f);
@@ -329,6 +504,15 @@ struct Window::Impl
                 int const x = evt.xmotion.x;
                 int const y = evt.xmotion.y;
 
+                if (ignore_next_motion)
+                {
+                    ignore_next_motion = false;
+                    last_mouse_x       = x;
+                    last_mouse_y       = y;
+                    mouse_pos_valid    = true;
+                    break;
+                }
+
                 if (mouse_pos_valid)
                 {
                     int const dx = x - last_mouse_x;
@@ -339,6 +523,12 @@ struct Window::Impl
                 last_mouse_x    = x;
                 last_mouse_y    = y;
                 mouse_pos_valid = true;
+
+                if (cursor_mode == CursorMode::Locked)
+                {
+                    warp_pointer_to_center();
+                }
+
                 break;
             }
 
@@ -356,11 +546,13 @@ struct Window::Impl
             case UnmapNotify:
                 visible   = false;
                 minimized = true;
+                apply_cursor_mode();
                 break;
 
             case MapNotify:
                 visible   = true;
                 minimized = false;
+                apply_cursor_mode();
                 break;
 
             default:
@@ -391,6 +583,10 @@ struct Window::Impl
         return WsiHandle{std::in_place_type<X11>, h};
     }
 };
+
+// -----------------------------------------------------------------------------
+// Window API
+// -----------------------------------------------------------------------------
 
 Window::Window(base::Diagnostics& diagnostics, WindowDesc const& desc)
       : p_(std::make_unique<Impl>(diagnostics, desc))
@@ -427,9 +623,35 @@ void Window::set_title(std::string_view title)
 {
     if (!p_ || !p_->display || !p_->window)
         return;
+
     std::string t{title};
     ::XStoreName(p_->display, p_->window, t.c_str());
     ::XFlush(p_->display);
+}
+
+void Window::set_cursor_mode(CursorMode mode) noexcept
+{
+    if (!p_ || !p_->display || !p_->window)
+        return;
+
+    if (p_->cursor_mode == mode)
+        return;
+
+    p_->cursor_mode        = mode;
+    p_->mouse_pos_valid    = false;
+    p_->ignore_next_motion = false;
+
+    p_->apply_cursor_mode();
+}
+
+CursorMode Window::cursor_mode() const noexcept
+{
+    return p_ ? p_->cursor_mode : CursorMode::Normal;
+}
+
+bool Window::has_focus() const noexcept
+{
+    return p_ ? p_->input.focused() : false;
 }
 
 auto Window::window_size() const noexcept -> std::pair<int, int>

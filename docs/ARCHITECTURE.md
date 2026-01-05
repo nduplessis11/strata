@@ -36,7 +36,7 @@ It favors pragmatism over consistency, and consistency over cleverness, and shou
 ```
 engine/base         → dependency-free utilities (diagnostics, assertions, helpers)
 engine/platform     → OS + windowing + input + WSI handle production
-engine/core         → application wrapper, (future) ECS, action map + runtime helpers
+engine/core         → application wrapper, ecs_min (minimal ECS prototype), action map + runtime helpers
 engine/gfx          → graphics abstractions, rhi/*, renderer/*, backend/vk/*, shaders/*
 ```
 
