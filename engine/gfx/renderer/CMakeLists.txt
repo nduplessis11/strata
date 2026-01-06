@@ -4,6 +4,7 @@ add_library(strata_gfx_renderer STATIC
     src/render_2d.cpp
     src/render_scene.cpp
     src/render_graph.cpp
+    src/renderer.cpp
 )
 
 # Public engine headers live under engine/, e.g. "gfx/renderer/render_2d.h".

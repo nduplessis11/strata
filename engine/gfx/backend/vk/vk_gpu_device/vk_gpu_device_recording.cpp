@@ -26,6 +26,42 @@ inline bool aspect_has_stencil(VkImageAspectFlags aspect) noexcept
     return (aspect & VK_IMAGE_ASPECT_STENCIL_BIT) != 0;
 }
 
+VkVertexInputRate to_vk_input_rate(rhi::VertexInputRate r) noexcept
+{
+    switch (r)
+    {
+    case rhi::VertexInputRate::Vertex:
+        return VK_VERTEX_INPUT_RATE_VERTEX;
+    case rhi::VertexInputRate::Instance:
+        return VK_VERTEX_INPUT_RATE_INSTANCE;
+    }
+    return VK_VERTEX_INPUT_RATE_VERTEX;
+}
+
+VkFormat to_vk_vertex_format(rhi::VertexFormat f) noexcept
+{
+    switch (f)
+    {
+    case rhi::VertexFormat::Float3:
+        return VK_FORMAT_R32G32B32_SFLOAT;
+    case rhi::VertexFormat::Float4:
+        return VK_FORMAT_R32G32B32A32_SFLOAT;
+    }
+    return VK_FORMAT_UNDEFINED;
+}
+
+VkIndexType to_vk_index_type(rhi::IndexType t) noexcept
+{
+    switch (t)
+    {
+    case rhi::IndexType::UInt16:
+        return VK_INDEX_TYPE_UINT16;
+    case rhi::IndexType::UInt32:
+        return VK_INDEX_TYPE_UINT32;
+    }
+    return VK_INDEX_TYPE_UINT32;
+}
+
 } // namespace
 
 rhi::FrameResult VkGpuDevice::cmd_bind_descriptor_set(rhi::CommandBufferHandle cmd,
@@ -505,6 +541,41 @@ rhi::FrameResult VkGpuDevice::cmd_bind_pipeline(rhi::CommandBufferHandle cmd,
             vk_layouts.push_back(vk_layout);
         }
 
+        // Rebuild using vertex input recipe too.
+        std::vector<VkVertexInputBindingDescription> vk_bindings;
+        vk_bindings.reserve(pipeline_vertex_bindings_.size());
+        for (auto const& b : pipeline_vertex_bindings_)
+        {
+            VkVertexInputBindingDescription vb{};
+            vb.binding   = b.binding;
+            vb.stride    = b.stride;
+            vb.inputRate = to_vk_input_rate(b.rate);
+            vk_bindings.push_back(vb);
+        }
+
+        std::vector<VkVertexInputAttributeDescription> vk_attrs;
+        vk_attrs.reserve(pipeline_vertex_attributes_.size());
+        for (auto const& a : pipeline_vertex_attributes_)
+        {
+            VkFormat const vkf = to_vk_vertex_format(a.format);
+            if (vkf == VK_FORMAT_UNDEFINED)
+            {
+                STRATA_LOG_ERROR(
+                    diag.logger(),
+                    "vk.record",
+                    "cmd_bind_pipeline: cannot rebuild pipeline (vertex format unsupported)");
+                diag.debug_break_on_error();
+                return FrameResult::Error;
+            }
+
+            VkVertexInputAttributeDescription va{};
+            va.location = a.location;
+            va.binding  = a.binding;
+            va.format   = vkf;
+            va.offset   = a.offset;
+            vk_attrs.push_back(va);
+        }
+
         basic_pipeline_ = create_basic_pipeline(device_.device(),
                                                 swapchain_.image_format(),
                                                 &diag,
@@ -513,7 +584,9 @@ rhi::FrameResult VkGpuDevice::cmd_bind_pipeline(rhi::CommandBufferHandle cmd,
                                                 basic_pipeline_depth_test_,
                                                 basic_pipeline_depth_write_,
                                                 basic_pipeline_vertex_shader_path_.c_str(),
-                                                basic_pipeline_fragment_shader_path_.c_str());
+                                                basic_pipeline_fragment_shader_path_.c_str(),
+                                                std::span{vk_bindings},
+                                                std::span{vk_attrs});
         if (!basic_pipeline_.valid())
         {
             STRATA_LOG_ERROR(diag.logger(),
@@ -586,6 +659,119 @@ rhi::FrameResult VkGpuDevice::cmd_draw(rhi::CommandBufferHandle cmd,
         return FrameResult::Error;
 
     vkCmdDraw(vk_cmd, vertex_count, instance_count, first_vertex, first_instance);
+    return FrameResult::Ok;
+}
+
+rhi::FrameResult VkGpuDevice::cmd_bind_vertex_buffer(rhi::CommandBufferHandle cmd,
+                                                     std::uint32_t            binding,
+                                                     rhi::BufferHandle        buffer,
+                                                     std::uint64_t            offset_bytes)
+{
+    using namespace strata::base;
+    using rhi::FrameResult;
+
+    if (!diagnostics_)
+        return FrameResult::Error;
+    auto& diag = *diagnostics_;
+
+    if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
+        return FrameResult::Error;
+
+    std::uint32_t slot = invalid_index;
+    if (!decode_cmd_handle(cmd, slot))
+        return FrameResult::Error;
+
+    VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
+    if (vk_cmd == VK_NULL_HANDLE)
+        return FrameResult::Error;
+
+    STRATA_ASSERT_MSG(diag, buffer, "cmd_bind_vertex_buffer: invalid BufferHandle");
+    if (!buffer)
+        return FrameResult::Error;
+
+    VkBuffer const vk_buf = get_vk_buffer(buffer);
+    if (vk_buf == VK_NULL_HANDLE)
+    {
+        STRATA_LOG_ERROR(diag.logger(), "vk.record", "cmd_bind_vertex_buffer: buffer not found");
+        diag.debug_break_on_error();
+        return FrameResult::Error;
+    }
+
+    VkDeviceSize const offsets[] = {static_cast<VkDeviceSize>(offset_bytes)};
+    VkBuffer const     bufs[]    = {vk_buf};
+
+    vkCmdBindVertexBuffers(vk_cmd, binding, 1, bufs, offsets);
+    return FrameResult::Ok;
+}
+
+rhi::FrameResult VkGpuDevice::cmd_bind_index_buffer(rhi::CommandBufferHandle cmd,
+                                                    rhi::BufferHandle        buffer,
+                                                    rhi::IndexType           type,
+                                                    std::uint64_t            offset_bytes)
+{
+    using namespace strata::base;
+    using rhi::FrameResult;
+
+    if (!diagnostics_)
+        return FrameResult::Error;
+    auto& diag = *diagnostics_;
+
+    if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
+        return FrameResult::Error;
+
+    std::uint32_t slot = invalid_index;
+    if (!decode_cmd_handle(cmd, slot))
+        return FrameResult::Error;
+
+    VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
+    if (vk_cmd == VK_NULL_HANDLE)
+        return FrameResult::Error;
+
+    STRATA_ASSERT_MSG(diag, buffer, "cmd_bind_index_buffer: invalid BufferHandle");
+    if (!buffer)
+        return FrameResult::Error;
+
+    VkBuffer const vk_buf = get_vk_buffer(buffer);
+    if (vk_buf == VK_NULL_HANDLE)
+    {
+        STRATA_LOG_ERROR(diag.logger(), "vk.record", "cmd_bind_index_buffer: buffer not found");
+        diag.debug_break_on_error();
+        return FrameResult::Error;
+    }
+
+    vkCmdBindIndexBuffer(vk_cmd,
+                         vk_buf,
+                         static_cast<VkDeviceSize>(offset_bytes),
+                         to_vk_index_type(type));
+    return FrameResult::Ok;
+}
+
+rhi::FrameResult VkGpuDevice::cmd_draw_indexed(rhi::CommandBufferHandle cmd,
+                                               std::uint32_t            index_count,
+                                               std::uint32_t            instance_count,
+                                               std::uint32_t            first_index,
+                                               std::int32_t             vertex_offset,
+                                               std::uint32_t            first_instance)
+{
+    using rhi::FrameResult;
+
+    if (!recording_active_ || frames_.empty() || recording_frame_index_ >= frames_.size())
+        return FrameResult::Error;
+
+    std::uint32_t slot = invalid_index;
+    if (!decode_cmd_handle(cmd, slot))
+        return FrameResult::Error;
+
+    VkCommandBuffer vk_cmd = frames_[recording_frame_index_].cmd;
+    if (vk_cmd == VK_NULL_HANDLE)
+        return FrameResult::Error;
+
+    vkCmdDrawIndexed(vk_cmd,
+                     index_count,
+                     instance_count,
+                     first_index,
+                     vertex_offset,
+                     first_instance);
     return FrameResult::Ok;
 }
 

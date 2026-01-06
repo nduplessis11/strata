@@ -104,11 +104,31 @@ class IGpuDevice
 
     virtual FrameResult cmd_bind_pipeline(CommandBufferHandle cmd, PipelineHandle pipeline) = 0;
     virtual FrameResult cmd_set_viewport_scissor(CommandBufferHandle cmd, Extent2D extent)  = 0;
+
+    // Geometry (non-indexed)
     virtual FrameResult cmd_draw(CommandBufferHandle cmd,
                                  std::uint32_t       vertex_count,
                                  std::uint32_t       instance_count,
                                  std::uint32_t       first_vertex,
-                                 std::uint32_t       first_instance)                              = 0;
+                                 std::uint32_t       first_instance) = 0;
+
+    // Geometry (indexed)
+    virtual FrameResult cmd_bind_vertex_buffer(CommandBufferHandle cmd,
+                                               std::uint32_t       binding,
+                                               BufferHandle        buffer,
+                                               std::uint64_t       offset_bytes = 0) = 0;
+
+    virtual FrameResult cmd_bind_index_buffer(CommandBufferHandle cmd,
+                                              BufferHandle        buffer,
+                                              IndexType           type,
+                                              std::uint64_t       offset_bytes = 0) = 0;
+
+    virtual FrameResult cmd_draw_indexed(CommandBufferHandle cmd,
+                                         std::uint32_t       index_count,
+                                         std::uint32_t       instance_count,
+                                         std::uint32_t       first_index,
+                                         std::int32_t        vertex_offset,
+                                         std::uint32_t       first_instance) = 0;
 
     virtual void wait_idle() = 0;
 };

@@ -32,6 +32,30 @@ VkFormat to_vk_format(rhi::Format fmt) noexcept
     }
 }
 
+VkVertexInputRate to_vk_input_rate(rhi::VertexInputRate r) noexcept
+{
+    switch (r)
+    {
+    case rhi::VertexInputRate::Vertex:
+        return VK_VERTEX_INPUT_RATE_VERTEX;
+    case rhi::VertexInputRate::Instance:
+        return VK_VERTEX_INPUT_RATE_INSTANCE;
+    }
+    return VK_VERTEX_INPUT_RATE_VERTEX;
+}
+
+VkFormat to_vk_vertex_format(rhi::VertexFormat f) noexcept
+{
+    switch (f)
+    {
+    case rhi::VertexFormat::Float3:
+        return VK_FORMAT_R32G32B32_SFLOAT;
+    case rhi::VertexFormat::Float4:
+        return VK_FORMAT_R32G32B32A32_SFLOAT;
+    }
+    return VK_FORMAT_UNDEFINED;
+}
+
 bool is_non_empty(char const* s) noexcept
 {
     return (s != nullptr) && (s[0] != '\0');
@@ -72,6 +96,48 @@ rhi::PipelineHandle VkGpuDevice::create_pipeline(rhi::PipelineDesc const& desc)
         vk_layouts.push_back(vk_layout);
     }
 
+    // Store vertex input recipe for rebuild.
+    pipeline_vertex_bindings_.assign(desc.vertex_bindings.begin(), desc.vertex_bindings.end());
+    pipeline_vertex_attributes_.assign(desc.vertex_attributes.begin(),
+                                       desc.vertex_attributes.end());
+
+    // Convert vertex input recipe to Vk arrays for pipeline creation.
+    std::vector<VkVertexInputBindingDescription> vk_bindings;
+    vk_bindings.reserve(pipeline_vertex_bindings_.size());
+    for (auto const& b : pipeline_vertex_bindings_)
+    {
+        VkVertexInputBindingDescription vb{};
+        vb.binding   = b.binding;
+        vb.stride    = b.stride;
+        vb.inputRate = to_vk_input_rate(b.rate);
+        vk_bindings.push_back(vb);
+    }
+
+    std::vector<VkVertexInputAttributeDescription> vk_attrs;
+    vk_attrs.reserve(pipeline_vertex_attributes_.size());
+    for (auto const& a : pipeline_vertex_attributes_)
+    {
+        VkFormat const vkf = to_vk_vertex_format(a.format);
+        if (vkf == VK_FORMAT_UNDEFINED)
+        {
+            STRATA_LOG_ERROR(diag.logger(),
+                             "vk.pipeline",
+                             "create_pipeline: unsupported vertex attribute format");
+            diag.debug_break_on_error();
+            pipeline_set_layout_handles_.clear();
+            pipeline_vertex_bindings_.clear();
+            pipeline_vertex_attributes_.clear();
+            return {};
+        }
+
+        VkVertexInputAttributeDescription va{};
+        va.location = a.location;
+        va.binding  = a.binding;
+        va.format   = vkf;
+        va.offset   = a.offset;
+        vk_attrs.push_back(va);
+    }
+
     // Store the pipeline recipe bits needed for swapchain-resize rebuild.
     if (desc.depth_format == rhi::Format::Unknown)
     {
@@ -108,12 +174,12 @@ rhi::PipelineHandle VkGpuDevice::create_pipeline(rhi::PipelineDesc const& desc)
     // If the caller doesn't provide them, we fall back to the historical defaults
     // used by vk_pipeline_basic
     basic_pipeline_vertex_shader_path_ = is_non_empty(desc.vertex_shader_path)
-                                             ? desc.vertex_shader_path
-                                             : basic_pipeline_default_vertex_shader_path;
+        ? desc.vertex_shader_path
+        : basic_pipeline_default_vertex_shader_path;
 
     basic_pipeline_fragment_shader_path_ = is_non_empty(desc.fragment_shader_path)
-                                               ? desc.fragment_shader_path
-                                               : basic_pipeline_default_fragment_shader_path;
+        ? desc.fragment_shader_path
+        : basic_pipeline_default_fragment_shader_path;
 
     basic_pipeline_ = create_basic_pipeline(device_.device(),
                                             swapchain_.image_format(),
@@ -123,7 +189,9 @@ rhi::PipelineHandle VkGpuDevice::create_pipeline(rhi::PipelineDesc const& desc)
                                             basic_pipeline_depth_test_,
                                             basic_pipeline_depth_write_,
                                             basic_pipeline_vertex_shader_path_.c_str(),
-                                            basic_pipeline_fragment_shader_path_.c_str());
+                                            basic_pipeline_fragment_shader_path_.c_str(),
+                                            std::span{vk_bindings},
+                                            std::span{vk_attrs});
 
     if (!basic_pipeline_.valid())
     {
@@ -147,6 +215,7 @@ void VkGpuDevice::destroy_pipeline(rhi::PipelineHandle)
     // Do NOT clear pipeline_set_layout_handles_ (it is the rebuild recipe).
     // Do NOT clear basic_pipeline_depth_* (it is also part of the rebuild recipe).
     // Do NOT clear basic_pipeline_*_shader_path (it is also part of the rebuild recipe).
+    // Do NOT clear vertex input recipe (it is also part of the rebuild recipe).
 }
 
 } // namespace strata::gfx::vk

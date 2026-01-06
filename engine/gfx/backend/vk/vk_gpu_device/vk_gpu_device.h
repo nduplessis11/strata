@@ -119,6 +119,23 @@ class VkGpuDevice final : public rhi::IGpuDevice
                               std::uint32_t            first_vertex,
                               std::uint32_t            first_instance) override;
 
+    rhi::FrameResult cmd_bind_vertex_buffer(rhi::CommandBufferHandle cmd,
+                                            std::uint32_t            binding,
+                                            rhi::BufferHandle        buffer,
+                                            std::uint64_t            offset_bytes) override;
+
+    rhi::FrameResult cmd_bind_index_buffer(rhi::CommandBufferHandle cmd,
+                                           rhi::BufferHandle        buffer,
+                                           rhi::IndexType           type,
+                                           std::uint64_t            offset_bytes) override;
+
+    rhi::FrameResult cmd_draw_indexed(rhi::CommandBufferHandle cmd,
+                                      std::uint32_t            index_count,
+                                      std::uint32_t            instance_count,
+                                      std::uint32_t            first_index,
+                                      std::int32_t             vertex_offset,
+                                      std::uint32_t            first_instance) override;
+
     void wait_idle() override;
 
   private:
@@ -181,9 +198,9 @@ class VkGpuDevice final : public rhi::IGpuDevice
                                                              std::uint32_t&           out_slot) const noexcept;
 
     // --- Handle allocation (simple monotonic IDs) ----------------------------
-    rhi::BufferHandle        allocate_buffer_handle();
-    rhi::TextureHandle       allocate_texture_handle();
-    rhi::PipelineHandle      allocate_pipeline_handle();
+    rhi::BufferHandle   allocate_buffer_handle();
+    rhi::TextureHandle  allocate_texture_handle();
+    rhi::PipelineHandle allocate_pipeline_handle();
 
     // --- Descriptor internals ------------------------------------------------
     bool ensure_descriptor_pool();
@@ -228,6 +245,10 @@ class VkGpuDevice final : public rhi::IGpuDevice
     // Shader paths are part of the rebuild recipe.
     std::string basic_pipeline_vertex_shader_path_{};
     std::string basic_pipeline_fragment_shader_path_{};
+
+    // Vertex input is also part of the rebuild recipe.
+    std::vector<rhi::VertexBindingDesc>   pipeline_vertex_bindings_{};
+    std::vector<rhi::VertexAttributeDesc> pipeline_vertex_attributes_{};
 
     // Frames in flight (ring)
     std::uint32_t          frames_in_flight_{2};

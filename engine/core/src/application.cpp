@@ -40,7 +40,7 @@ struct Application::Impl
     std::unique_ptr<gfx::rhi::IGpuDevice> device{};
     gfx::rhi::SwapchainHandle             swapchain{};
 
-    gfx::renderer::Render2D renderer;
+    gfx::renderer::Renderer renderer;
 
     std::uint64_t     frame_index{0};
     clock::time_point last_frame{};
@@ -53,7 +53,7 @@ struct Application::Impl
          platform::WsiHandle                     surface,
          std::unique_ptr<gfx::rhi::IGpuDevice>&& device,
          gfx::rhi::SwapchainHandle               swapchain,
-         gfx::renderer::Render2D&&               render)
+         gfx::renderer::Renderer&&               render)
           : config(std::move(cfg))
           , diagnostics(std::move(diag))
           , window(std::move(window))
@@ -68,7 +68,7 @@ struct Application::Impl
     ~Impl() noexcept
     {
         // Critical: wait_idle runs BEFORE members are destroyed,
-        // so Render2D::~Render2D can safely destroy pipelines.
+        // so renderer teardown can safely destroy pipelines.
         if (device)
         {
             device->wait_idle();
@@ -122,7 +122,7 @@ std::expected<Application, ApplicationError> Application::create(ApplicationConf
         return std::unexpected(ApplicationError::SwapchainCreateFailed);
     }
 
-    auto renderer_exp = gfx::renderer::Render2D::create(*diagnostics, *device, swapchain);
+    auto renderer_exp = gfx::renderer::Renderer::create(*diagnostics, *device, swapchain);
     if (!renderer_exp)
     {
         STRATA_LOG_ERROR(diagnostics->logger(),
@@ -132,7 +132,7 @@ std::expected<Application, ApplicationError> Application::create(ApplicationConf
         return std::unexpected(ApplicationError::RendererCreateFailed);
     }
 
-    gfx::renderer::Render2D renderer = std::move(*renderer_exp);
+    gfx::renderer::Renderer renderer = std::move(*renderer_exp);
 
     std::unique_ptr<Impl, ImplDeleter> impl{new Impl{std::move(config),
                                                      std::move(diagnostics),
@@ -319,11 +319,11 @@ gfx::rhi::SwapchainHandle Application::swapchain() const noexcept
     return impl_->swapchain;
 }
 
-gfx::renderer::Render2D& Application::renderer() noexcept
+gfx::renderer::Renderer& Application::renderer() noexcept
 {
     return impl_->renderer;
 }
-gfx::renderer::Render2D const& Application::renderer() const noexcept
+gfx::renderer::Renderer const& Application::renderer() const noexcept
 {
     return impl_->renderer;
 }

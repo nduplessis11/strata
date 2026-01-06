@@ -52,7 +52,7 @@ inline constexpr char const* basic_pipeline_default_vertex_shader_path =
 inline constexpr char const* basic_pipeline_default_fragment_shader_path =
     "shaders/flat_color.frag.spv";
 
-// Build a pipeline that renders a fullscreen triangle using dynamic rendering.
+// Build a pipeline using Vulkan dynamic rendering.
 // Returns an invalid BasicPipeline on failure.
 //
 // depth_format:
@@ -64,6 +64,9 @@ inline constexpr char const* basic_pipeline_default_fragment_shader_path =
 //
 // vertex_shader_path / fragment_shader_path:
 //  - If null/empty, defaults are used.
+//
+// vertex_bindings / vertex_attributes:
+//  - If empty, pipeline is created with no vertex input (gl_VertexIndex style).
 [[nodiscard]]
 BasicPipeline create_basic_pipeline(
     VkDevice                               device,
@@ -74,6 +77,8 @@ BasicPipeline create_basic_pipeline(
     bool                                   depth_test   = false,
     bool                                   depth_write  = false,
     char const* vertex_shader_path                      = basic_pipeline_default_vertex_shader_path,
-    char const* fragment_shader_path = basic_pipeline_default_fragment_shader_path);
+    char const* fragment_shader_path = basic_pipeline_default_fragment_shader_path,
+    std::span<VkVertexInputBindingDescription const>   vertex_bindings   = {},
+    std::span<VkVertexInputAttributeDescription const> vertex_attributes = {});
 
 } // namespace strata::gfx::vk

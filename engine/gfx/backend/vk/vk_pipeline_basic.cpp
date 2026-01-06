@@ -188,15 +188,18 @@ BasicPipeline& BasicPipeline::operator=(BasicPipeline&& other) noexcept
     return *this;
 }
 
-BasicPipeline create_basic_pipeline(VkDevice                               device,
-                                    VkFormat                               color_format,
-                                    base::Diagnostics*                     diag,
-                                    std::span<VkDescriptorSetLayout const> set_layouts,
-                                    VkFormat                               depth_format,
-                                    bool                                   depth_test,
-                                    bool                                   depth_write,
-                                    char const*                            vertex_shader_path,
-                                    char const*                            fragment_shader_path)
+BasicPipeline create_basic_pipeline(
+    VkDevice                                           device,
+    VkFormat                                           color_format,
+    base::Diagnostics*                                 diag,
+    std::span<VkDescriptorSetLayout const>             set_layouts,
+    VkFormat                                           depth_format,
+    bool                                               depth_test,
+    bool                                               depth_write,
+    char const*                                        vertex_shader_path,
+    char const*                                        fragment_shader_path,
+    std::span<VkVertexInputBindingDescription const>   vertex_bindings,
+    std::span<VkVertexInputAttributeDescription const> vertex_attributes)
 {
     if (!diag)
         return {};
@@ -256,9 +259,18 @@ BasicPipeline create_basic_pipeline(VkDevice                               devic
 
     VkPipelineShaderStageCreateInfo stages[] = {vert_stage, frag_stage};
 
-    // No vertex buffers: positions are generated in the vertex shader using gl_VertexIndex.
+    // Vertex input is optional:
+    // - empty => gl_VertexIndex style (procedural vertices)
+    // - non-empty => binds real vertex buffers
     VkPipelineVertexInputStateCreateInfo vertex_input{};
     vertex_input.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_input.vertexBindingDescriptionCount = static_cast<std::uint32_t>(vertex_bindings.size());
+    vertex_input.pVertexBindingDescriptions =
+        vertex_bindings.empty() ? nullptr : vertex_bindings.data();
+    vertex_input.vertexAttributeDescriptionCount =
+        static_cast<std::uint32_t>(vertex_attributes.size());
+    vertex_input.pVertexAttributeDescriptions =
+        vertex_attributes.empty() ? nullptr : vertex_attributes.data();
 
     VkPipelineInputAssemblyStateCreateInfo input_asm{};
     input_asm.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
