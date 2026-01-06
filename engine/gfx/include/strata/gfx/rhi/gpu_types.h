@@ -48,6 +48,10 @@ enum class TextureUsage : std::uint32_t
     ColorAttachment = 1 << 1,
     DepthStencil    = 1 << 2,
 };
+inline TextureUsage operator|(TextureUsage a, TextureUsage b)
+{
+    return static_cast<TextureUsage>(static_cast<std::uint32_t>(a) | static_cast<std::uint32_t>(b));
+}
 
 struct BufferDesc
 {
@@ -64,7 +68,45 @@ struct TextureDesc
     std::uint32_t mip_levels{1};
 };
 
+// --- Vertex input ------------------------------------------------------------
+// Minimal explicit vertex input description. Backends map this to API-specific
+// vertex binding/attribute descriptions.
+
+enum class VertexInputRate : std::uint8_t
+{
+    Vertex,
+    Instance,
+};
+
+enum class VertexFormat : std::uint8_t
+{
+    Float3, // vec3
+    Float4, // vec4
+};
+
+struct VertexBindingDesc
+{
+    std::uint32_t   binding{0};
+    std::uint32_t   stride{0};
+    VertexInputRate rate{VertexInputRate::Vertex};
+};
+
+struct VertexAttributeDesc
+{
+    std::uint32_t location{0};
+    std::uint32_t binding{0};
+    VertexFormat  format{VertexFormat::Float3};
+    std::uint32_t offset{0};
+};
+
+enum class IndexType : std::uint8_t
+{
+    UInt16,
+    UInt32,
+};
+
 struct DescriptorSetLayoutHandle; // forward declare
+
 struct PipelineDesc
 {
     // We can evolve this later with real shader reflection data, etc.
@@ -78,6 +120,10 @@ struct PipelineDesc
     Format depth_format{Format::Unknown};
     bool   depth_test{false};
     bool   depth_write{false};
+
+    // Optional vertex input. If empty, pipeline is created with no vertex input.
+    std::span<VertexBindingDesc const>   vertex_bindings{};
+    std::span<VertexAttributeDesc const> vertex_attributes{};
 
     std::span<DescriptorSetLayoutHandle const> set_layouts{};
 };

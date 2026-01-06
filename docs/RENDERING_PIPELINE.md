@@ -12,7 +12,7 @@ The frame path looks like this:
 
 1. `core::Application::run()` drives the loop and owns the resize policy:
    - it calls `renderer.draw_frame()` and reacts to the returned `FrameResult` (see below)
-2. `Render2D::draw_frame()` now owns the frame:
+2. `Renderer::draw_frame()` now owns the frame (via `RenderGraph` → `Render2D`):
    - **acquire → begin cmd → record pass → end cmd → submit → present**
 3. The Vulkan backend (`vk::VkGpuDevice`) provides the building blocks:
    - `acquire_next_image`, `begin_commands`, `cmd_*`, `end_commands`, `submit`, `present`
@@ -27,8 +27,8 @@ The frame path looks like this:
 ## Key design choices
 
 - **Vulkan is contained** in `engine/gfx/backend/vk/*` (`namespace strata::gfx::vk`).
-- The renderer (`Render2D`) depends only on the **RHI** (`IGpuDevice`), `base::Diagnostics`, and opaque handles.
-- Camera is external: game code owns camera control and feeds a `Camera3D` into the renderer via `Render2D::set_camera(...)`.
+- The renderer (`Renderer`) depends only on the **RHI** (`IGpuDevice`), `base::Diagnostics`, and opaque handles.
+- Camera is external: game code owns camera control and feeds a `Camera3D` into the renderer via `Renderer::set_camera(...)`.
 - The backend uses a **frames-in-flight ring** (per-frame command buffers + fences + image-available semaphores).
 - Rendering uses **Vulkan 1.3 dynamic rendering** (`vkCmdBeginRendering`) and **dynamic viewport/scissor**.
 - Barriers use **Synchronization2** (`vkCmdPipelineBarrier2`).
@@ -54,9 +54,9 @@ The frame path looks like this:
 6. Create swapchain:
    - `swapchain = device->create_swapchain(config.swapchain_desc, wsi_handle)`
 7. Create renderer:
-   - `auto renderer_exp = gfx::renderer::Render2D::create(*diagnostics, *device, swapchain);`
+   - `auto renderer_exp = gfx::renderer::Renderer::create(*diagnostics, *device, swapchain);`
    - `if (!renderer_exp) return std::unexpected(ApplicationError::RendererCreateFailed);`
-   - `gfx::renderer::Render2D renderer = std::move(*renderer_exp);`
+   - `gfx::renderer::Renderer renderer = std::move(*renderer_exp);`
 
 
 Ownership is explicit (PImpl inside `Application`):
@@ -83,9 +83,13 @@ On exit, `device->wait_idle()` is called once more.
 
 ---
 
-## Renderer frontend: `gfx::renderer::Render2D`
+## Renderer frontend: `gfx::renderer::Renderer`
 
-`Render2D` is the “frontend” renderer object. It owns:
+`Renderer` is the public renderer facade owned by `core::Application`.
+
+It owns a `RenderScene` (what to draw) and a `RenderGraph` (how to draw).
+
+MVP v1: `RenderGraph` is a thin wrapper around the existing `Render2D` implementation, which owns:
 - `rhi::SwapchainHandle swapchain_` (opaque)
 - `Camera3D camera_` (value; the current camera state consumed for view/proj in the scene UBO)
 - `rhi::PipelineHandle pipeline_` (opaque; currently functions as a “valid/created” token)
@@ -188,7 +192,7 @@ Commands/submission:
 - `begin_commands() -> CommandBufferHandle`
 - `end_commands(cmd) -> FrameResult`
 - `submit(SubmitDesc{ command_buffer, swapchain, image_index, frame_index }) -> FrameResult`
-- `cmd_begin_swapchain_pass(...)`, `cmd_bind_pipeline(...)`, `cmd_bind_descriptor_set(...)`, `cmd_draw(...)`, ...
+- `cmd_begin_swapchain_pass(...)`, `cmd_bind_pipeline(...)`, `cmd_bind_descriptor_set(...)`, `cmd_bind_vertex_buffer(...)`, `cmd_bind_index_buffer(...)`, `cmd_draw(...)`, `cmd_draw_indexed(...)`, ...
 
 ---
 
@@ -271,7 +275,7 @@ Resize mirrors creation:
 
 ## The actual frame: renderer + backend split
 
-`Render2D::draw_frame()` drives the frame while `VkGpuDevice` supplies the Vulkan-backed primitives.
+`Renderer::draw_frame()` drives the frame (via `RenderGraph` → `Render2D`) while `VkGpuDevice` supplies the Vulkan-backed primitives.
 
 ### 0) Ensure pipeline exists
 When `Render2D` is created (or rebuilt after resize), it calls:
@@ -324,14 +328,14 @@ The Vulkan backend rebuilds its `basic_pipeline_` when this is called, and also 
 ## Basic pipeline: `vk_pipeline_basic.*`
 
 Strata’s initial pipeline is built by:
-- `create_basic_pipeline(VkDevice device, VkFormat color_format, base::Diagnostics* diag, std::span<VkDescriptorSetLayout const> set_layouts = {}, VkFormat depth_format = VK_FORMAT_UNDEFINED, bool depth_test = false, bool depth_write = false)`
+- `create_basic_pipeline(VkDevice device, VkFormat color_format, base::Diagnostics* diag, std::span<VkDescriptorSetLayout const> set_layouts = {}, VkFormat depth_format = VK_FORMAT_UNDEFINED, bool depth_test = false, bool depth_write = false, char const* vertex_shader_path = basic_pipeline_default_vertex_shader_path, char const* fragment_shader_path = basic_pipeline_default_fragment_shader_path, std::span<VkVertexInputBindingDescription const> vertex_bindings = {}, std::span<VkVertexInputAttributeDescription const> vertex_attributes = {})`
 
 Key details:
 - Loads SPIR-V from disk:
   - `shaders/fullscreen_triangle.vert.spv`
   - `shaders/flat_color.frag.spv`
 - Creates shader modules, builds pipeline, then destroys shader modules
-- No vertex buffers:
+- No vertex buffers (current default):
   - cube vertex positions are generated using `gl_VertexIndex`
 - Uses dynamic viewport + scissor
 - Uses dynamic rendering (`VkPipelineRenderingCreateInfo` specifies the swapchain color format)

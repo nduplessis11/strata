@@ -77,7 +77,7 @@ Responsibilities:
 - High-level config and error propagation.
 
 Key types:
-- `strata::core::Application` (owning façade around an `Impl`)
+- `strata::core::Application` (owning facade around an `Impl`)
 - `strata::core::ApplicationConfig` (window + device + swapchain config)
 - `strata::core::FrameContext` (frame index + delta time)
 - `strata::core::Action` / `strata::core::ActionMap` (input-driven action mapping; built on `platform::InputState`)
@@ -91,7 +91,7 @@ Responsibilities:
 
 Submodules:
 - `gfx/rhi/*`: backend-agnostic interfaces and handle types.
-- `gfx/renderer/*`: higher-level rendering code (e.g., `Render2D`) built on RHI.
+- `gfx/renderer/*`: higher-level rendering code (e.g., `Renderer`) built on RHI.
 - `gfx/backend/vk/*` (namespace `strata::gfx::vk`): Vulkan implementation details (instance/device/swapchain/command pool/pipeline).
 - `gfx/backend/vk/vk_wsi_bridge*`: platform-specific WSI bridge for:
   - required instance extensions
@@ -163,7 +163,7 @@ At runtime, `strata::core::Application` owns the high-level system objects and c
 - `platform::WsiHandle` (non-owning descriptor derived from the native window)
 - `gfx::rhi::IGpuDevice` (backend-agnostic device interface; owned via `unique_ptr`)
 - `gfx::rhi::SwapchainHandle` (opaque handle managed by the GPU backend)
-- `gfx::renderer::Render2D`
+- `gfx::renderer::Renderer`
 
 Inside the Vulkan backend (`gfx::vk::VkGpuDevice`):
 - `VkInstanceWrapper` owns `VkInstance`, `VkSurfaceKHR`, and optional debug messenger.
@@ -188,7 +188,7 @@ flowchart LR
   A --> WH[platform::WsiHandle]
   A --> D[gfx::rhi::IGpuDevice]
   A --> SC[gfx::rhi::SwapchainHandle]
-  A --> R[gfx::renderer::Render2D]
+  A --> R[gfx::renderer::Renderer]
 
   D -->|implemented by| VK[gfx::vk::VkGpuDevice]
   VK --> VKI["VkInstanceWrapper(VkInstance + VkSurfaceKHR)"]
@@ -223,10 +223,12 @@ The RHI is designed as:
 This structure keeps renderer code clean and backend-agnostic.
 
 ### Renderer (`gfx/renderer`)
-`Render2D` is a higher-level renderer built on the RHI:
-- Holds a pointer/reference to `IGpuDevice`
-- Holds RHI handles (e.g., swapchain/pipeline, descriptor set layout/set, uniform buffer handles)
-- Exposes a simple `draw_frame()` that returns `rhi::FrameResult`
+`Renderer` is a higher-level renderer facade owned by `core::Application`:
+- Owns a `RenderScene` (what to draw) and a `RenderGraph` (how to draw)
+- MVP v1: `RenderGraph` is a thin wrapper around the existing `Render2D` implementation, which:
+  - holds a pointer/reference to `IGpuDevice`
+  - holds RHI handles (e.g., swapchain/pipeline, descriptor set layout/set, uniform buffer handles)
+  - exposes a simple `draw_frame()` that returns `rhi::FrameResult`
 
 ### Vulkan backend (`gfx/backend/vk`)
 The Vulkan backend provides the concrete implementation:
@@ -270,7 +272,7 @@ Strata prefers:
 - **RAII cleanup** at destructor boundaries
 
 A common pattern in the codebase:
-- High-level façade with a PImpl (`Window`, `Application`)
+- High-level facade with a PImpl (`Window`, `Application`)
 - Backend wrappers that are move-only and have `init()`/`cleanup()` pairs (Vulkan wrappers)
 - Resource references across layers are done via:
   - references/pointers to stable “manager” objects (`IGpuDevice&`)
@@ -313,7 +315,7 @@ A suggested “follow the call graph” walkthrough:
 
 1. `strata::core::Application::create(...)`
 2. `strata::core::Application::run(...)` / main loop + `FrameContext`
-3. `strata::gfx::renderer::Render2D::draw_frame()`
+3. `strata::gfx::renderer::Renderer::draw_frame()`
 4. RHI calls (`IGpuDevice::begin_commands / submit / present / resize_swapchain`)
 5. Vulkan backend implementation (`VkGpuDevice` and wrapper types)
 6. WSI bridge (`vk_wsi_bridge_*`) + platform window backends (`window_*`)

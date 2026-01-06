@@ -43,7 +43,7 @@ If you’re looking for a “read the code top-to-bottom” entry point, follow 
 
 1. `strata::core::Application::create(...)`
 2. `strata::core::Application::run(...)`
-3. `strata::gfx::renderer::Render2D::draw_frame()`
+3. `strata::gfx::renderer::Renderer::draw_frame()`
 4. `strata::gfx::rhi::IGpuDevice::present(...)`
 5. `strata::gfx::vk::VkGpuDevice::present(...)`
 

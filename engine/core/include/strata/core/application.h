@@ -19,7 +19,7 @@
 #include <expected>
 #include <functional>
 
-#include "strata/gfx/renderer/render_2d.h"
+#include "strata/gfx/renderer/renderer.h"
 #include "strata/gfx/rhi/gpu_device.h"
 #include "strata/platform/window.h"
 
@@ -101,8 +101,8 @@ class Application
 
     [[nodiscard]] strata::gfx::rhi::SwapchainHandle swapchain() const noexcept;
 
-    [[nodiscard]] strata::gfx::renderer::Render2D&       renderer() noexcept;
-    [[nodiscard]] strata::gfx::renderer::Render2D const& renderer() const noexcept;
+    [[nodiscard]] strata::gfx::renderer::Renderer&       renderer() noexcept;
+    [[nodiscard]] strata::gfx::renderer::Renderer const& renderer() const noexcept;
 
     [[nodiscard]] strata::base::Diagnostics&       diagnostics() noexcept;
     [[nodiscard]] strata::base::Diagnostics const& diagnostics() const noexcept;
@@ -117,7 +117,8 @@ class Application
         void operator()(Impl*) const noexcept;
     };
 
-    explicit Application(std::unique_ptr<Impl, ImplDeleter> impl) noexcept : impl_(std::move(impl))
+    explicit Application(std::unique_ptr<Impl, ImplDeleter> impl) noexcept
+          : impl_(std::move(impl))
     {
     }
 
