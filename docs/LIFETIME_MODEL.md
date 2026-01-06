@@ -20,7 +20,7 @@ It reflects the current “production-leaning, learning-first” approach:
 - `platform::Window`
 - `rhi::IGpuDevice`
 - `rhi::SwapchainHandle`
-- `renderer::Render2D`
+- `renderer::Renderer`
 
 ### “GPU idle before teardown”
 Strata currently uses `IGpuDevice::wait_idle()` as the main safety lever:
@@ -31,7 +31,7 @@ Strata currently uses `IGpuDevice::wait_idle()` as the main safety lever:
 This is safe, simple, and predictable for early development.
 
 ### Renderer-owned frame recording
-`Render2D::draw_frame()` drives the full frame:
+`Renderer::draw_frame()` drives the full frame (via `RenderGraph` → `Render2D`):
 > acquire → begin cmd → record → end cmd → submit → present
 
 The Vulkan backend owns the actual `VkCommandBuffer` and sync primitives, but the renderer owns **when** command recording happens in the frame.
@@ -50,7 +50,7 @@ flowchart TD
   I --> WH["platform::WsiHandle (value copy)"]
   I --> D["rhi::IGpuDevice (unique_ptr)"]
   I --> SC["rhi::SwapchainHandle (value)"]
-  I --> R["gfx::renderer::Render2D (value)"]
+  I --> R["gfx::renderer::Renderer (value)"]
 
   R -->|non-owning ptr| D
   R -->|non-owning ptr| DIAG
@@ -74,9 +74,9 @@ flowchart TD
 ```
 
 ### Ownership rules
-- `Application::Impl` **owns** the `Window`, `IGpuDevice`, and `Render2D`.
+- `Application::Impl` **owns** the `Window`, `IGpuDevice`, and `Renderer`.
 - `platform::WsiHandle` is a **non-owning value** describing native window system state needed to create a Vulkan surface.
-- `Render2D` **owns RHI handles** (e.g., `PipelineHandle`, plus UBO `DescriptorSetLayoutHandle` and per-swapchain-image `DescriptorSetHandle` / `BufferHandle` collections) but not Vulkan objects directly.
+- `RenderGraph` (MVP v1: `Render2D`) **owns RHI handles** (e.g., `PipelineHandle`, plus UBO `DescriptorSetLayoutHandle` and per-swapchain-image `DescriptorSetHandle` / `BufferHandle` collections) but not Vulkan objects directly.
 - `VkGpuDevice` **owns Vulkan objects** via RAII wrappers and explicit teardown order.
 - `VkSwapchainWrapper` owns:
   - `VkSwapchainKHR`
@@ -178,10 +178,10 @@ Creation happens in a strict “bring-up” sequence:
    - Determine framebuffer size and write it into `config.swapchain_desc.size`
    - `swapchain = device->create_swapchain(config.swapchain_desc, surface)`
 6. **Renderer**
-   - `auto renderer_exp = Render2D::create(*diagnostics, *device, swapchain);`
+   - `auto renderer_exp = Renderer::create(*diagnostics, *device, swapchain);`
    - `if (!renderer_exp) return std::unexpected(ApplicationError::RendererCreateFailed);`
-   - `Render2D renderer = std::move(*renderer_exp);`
-   - This calls `device.create_pipeline(...)` inside `Render2D::create(...)`
+   - `Renderer renderer = std::move(*renderer_exp);`
+   - This calls `device.create_pipeline(...)` inside `Render2D::create(...)` (via `RenderGraph::create(...)`).
 
 
 Only after all of the above succeed is `Application` returned as a valid value.
@@ -293,7 +293,7 @@ The critical part is `~Impl()`:
 
 Then C++ destroys members in reverse declaration order. In our `Impl`, the key sequence is effectively:
 
-1. **`Render2D` destructor**
+1. **`Renderer` destructor** (via `RenderGraph` / `Render2D`)
    - calls `device->destroy_pipeline(pipeline_)`
    - frees/destroys renderer-owned UBO descriptor resources (per-swapchain-image descriptor sets + uniform buffers via `free_descriptor_set` / `destroy_buffer`, plus `destroy_descriptor_set_layout`)
 2. **`device` destructor**
@@ -305,7 +305,7 @@ Then C++ destroys members in reverse declaration order. In our `Impl`, the key s
    - destroyed last (native window resources released per platform)
 
 Required invariants:
-- `device` must still be alive and valid when `Render2D` destructs (the member order guarantees this).
+- `device` must still be alive and valid when the renderer destructs (the member order guarantees this).
 - `Window` must outlive `VkSurfaceKHR` (the member order guarantees this).
 
 ### Vulkan backend `VkGpuDevice` teardown (explicit sequence)
@@ -384,7 +384,7 @@ This is fine for early development, but future refactors should turn handles int
 
 ### Rules for engine code
 1. If we have a valid `Application`, then `window()`, `device()`, `swapchain()`, and `renderer()` are non-null/valid and usable.
-2. Don’t store references/pointers to `IGpuDevice` or `Render2D` beyond the lifetime of the `Application`.
+2. Don’t store references/pointers to `IGpuDevice` or `Renderer` beyond the lifetime of the `Application`.
 3. Assume rendering happens on the thread that calls `Application::run()` (no multithreaded rendering invariants yet).
 
 ### Rules for backend code

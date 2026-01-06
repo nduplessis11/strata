@@ -347,8 +347,8 @@ class C_0005212081933056084623 {
 +device() const noexcept : const strata::gfx::rhi::IGpuDevice &
 +diagnostics() noexcept : strata::base::Diagnostics &
 +diagnostics() const noexcept : const strata::base::Diagnostics &
-+renderer() noexcept : strata::gfx::renderer::Render2D &
-+renderer() const noexcept : const strata::gfx::renderer::Render2D &
++renderer() noexcept : strata::gfx::renderer::Renderer &
++renderer() const noexcept : const strata::gfx::renderer::Renderer &
 +request_exit() noexcept : void
 +run(TickFn tick = = {}) : std::int16_t
 +swapchain() const noexcept : strata::gfx::rhi::SwapchainHandle
@@ -364,7 +364,7 @@ __
 }
 class "strata::core::Application::Impl" as C_0003684588886580275255
 class C_0003684588886580275255 {
-+Impl(ApplicationConfig cfg, std::unique_ptr<base::Diagnostics> && diag, platform::Window && window, platform::WsiHandle surface, std::unique_ptr<gfx::rhi::IGpuDevice> && device, gfx::rhi::SwapchainHandle swapchain, gfx::renderer::Render2D && render) : void
++Impl(ApplicationConfig cfg, std::unique_ptr<base::Diagnostics> && diag, platform::Window && window, platform::WsiHandle surface, std::unique_ptr<gfx::rhi::IGpuDevice> && device, gfx::rhi::SwapchainHandle swapchain, gfx::renderer::Renderer && render) : void
 +~Impl() noexcept : void
 __
 +config : ApplicationConfig
@@ -373,7 +373,7 @@ __
 +exit_requested : bool
 +frame_index : std::uint64_t
 +last_frame : clock::time_point
-+renderer : gfx::renderer::Render2D
++renderer : gfx::renderer::Renderer
 +suboptimal_pending_recreate_ : bool
 +surface : platform::WsiHandle
 +swapchain : gfx::rhi::SwapchainHandle
@@ -439,6 +439,70 @@ __
 -ubo_layout_ : rhi::DescriptorSetLayoutHandle
 -ubo_sets_ : std::vector<rhi::DescriptorSetHandle>
 }
+class "strata::gfx::renderer::GpuMesh" as C_0000567028886874535223
+class C_0000567028886874535223 {
+__
++index_buffer : rhi::BufferHandle
++index_count : std::uint32_t
++index_type : rhi::IndexType
++vertex_buffer : rhi::BufferHandle
+}
+class "strata::gfx::renderer::RenderScene" as C_0015684162672813940184
+class C_0015684162672813940184 {
++camera() const noexcept : const Camera3D &
++clear_selected_mesh() noexcept : void
++selected_mesh() const noexcept : const GpuMesh &
++set_camera(const Camera3D & c) noexcept : void
++set_selected_mesh(GpuMesh m) noexcept : void
++set_world_mesh(GpuMesh m) noexcept : void
++world_mesh() const noexcept : const GpuMesh &
+__
+-camera_ : Camera3D
+-selected_ : GpuMesh
+-world_ : GpuMesh
+}
+class "strata::gfx::renderer::RenderGraph" as C_0003825896585735230996
+class C_0003825896585735230996 {
++RenderGraph(RenderGraph &&) noexcept = default : void
++RenderGraph(const RenderGraph &) = deleted : void
+-RenderGraph(Render2D && r) noexcept : void
++~RenderGraph() constexpr = default : void
+..
++operator=(RenderGraph &&) constexpr noexcept = default : RenderGraph &
++operator=(const RenderGraph &) = deleted : RenderGraph &
+..
+{static} +create(base::Diagnostics & diagnostics, rhi::IGpuDevice & device, rhi::SwapchainHandle swapchain) : std::expected<RenderGraph,RenderGraphError>
++draw_frame(const RenderScene & scene) : rhi::FrameResult
++is_valid() const noexcept : bool
++on_before_swapchain_resize() noexcept : void
++recreate_pipeline() : rhi::FrameResult
+__
+-render_ : Render2D
+}
+class "strata::gfx::renderer::Renderer" as C_0010781705541623728263
+class C_0010781705541623728263 {
++Renderer(Renderer &&) noexcept = default : void
++Renderer(const Renderer &) = deleted : void
+-Renderer(RenderGraph && g) noexcept : void
++~Renderer() constexpr = default : void
+..
++operator=(Renderer &&) constexpr noexcept = default : Renderer &
++operator=(const Renderer &) = deleted : Renderer &
+..
++camera() const noexcept : const Camera3D &
++clear_selected_mesh() noexcept : void
+{static} +create(base::Diagnostics & diagnostics, rhi::IGpuDevice & device, rhi::SwapchainHandle swapchain) : std::expected<Renderer,RendererError>
++draw_frame() : rhi::FrameResult
++is_valid() const noexcept : bool
++on_before_swapchain_resize() noexcept : void
++recreate_pipeline() : rhi::FrameResult
++set_camera(const Camera3D & c) noexcept : void
++set_selected_mesh(GpuMesh m) noexcept : void
++set_world_mesh(GpuMesh m) noexcept : void
+__
+-graph_ : RenderGraph
+-scene_ : RenderScene
+}
 class "strata::gfx::renderer::UboScene" as C_0009733119764679159440
 class C_0009733119764679159440 {
 __
@@ -490,6 +554,36 @@ __
 +size : Extent2D
 +usage : TextureUsage
 }
+enum "strata::gfx::rhi::VertexInputRate" as C_0001802303524078097820
+enum C_0001802303524078097820 {
+Vertex
+Instance
+}
+enum "strata::gfx::rhi::VertexFormat" as C_0013254045494106650953
+enum C_0013254045494106650953 {
+Float3
+Float4
+}
+class "strata::gfx::rhi::VertexBindingDesc" as C_0007498818984757103426
+class C_0007498818984757103426 {
+__
++binding : std::uint32_t
++rate : VertexInputRate
++stride : std::uint32_t
+}
+class "strata::gfx::rhi::VertexAttributeDesc" as C_0000389672394792426519
+class C_0000389672394792426519 {
+__
++binding : std::uint32_t
++format : VertexFormat
++location : std::uint32_t
++offset : std::uint32_t
+}
+enum "strata::gfx::rhi::IndexType" as C_0004196736832558472128
+enum C_0004196736832558472128 {
+UInt16
+UInt32
+}
 class "strata::gfx::rhi::PipelineDesc" as C_0003569144566224904043
 class C_0003569144566224904043 {
 __
@@ -499,6 +593,8 @@ __
 +depth_write : bool
 +fragment_shader_path : const char *
 +set_layouts : std::span<const DescriptorSetLayoutHandle>
++vertex_attributes : std::span<const VertexAttributeDesc>
++vertex_bindings : std::span<const VertexBindingDesc>
 +vertex_shader_path : const char *
 }
 enum "strata::gfx::rhi::FrameResult" as C_0007898125113726414504
@@ -619,8 +715,11 @@ abstract C_0017920997868415439149 {
 {abstract} +begin_commands() = 0 : CommandBufferHandle
 {abstract} +cmd_begin_swapchain_pass(CommandBufferHandle cmd, SwapchainHandle swapchain, std::uint32_t image_index, const ClearColor & clear, TextureHandle depth_texture = {}, float clear_depth = 1.0f, std::uint32_t clear_stencil = 0) = 0 : FrameResult
 {abstract} +cmd_bind_descriptor_set(CommandBufferHandle cmd, PipelineHandle pipeline, std::uint32_t set_index, DescriptorSetHandle set) = 0 : FrameResult
+{abstract} +cmd_bind_index_buffer(CommandBufferHandle cmd, BufferHandle buffer, IndexType type, std::uint64_t offset_bytes = 0) = 0 : FrameResult
 {abstract} +cmd_bind_pipeline(CommandBufferHandle cmd, PipelineHandle pipeline) = 0 : FrameResult
+{abstract} +cmd_bind_vertex_buffer(CommandBufferHandle cmd, std::uint32_t binding, BufferHandle buffer, std::uint64_t offset_bytes = 0) = 0 : FrameResult
 {abstract} +cmd_draw(CommandBufferHandle cmd, std::uint32_t vertex_count, std::uint32_t instance_count, std::uint32_t first_vertex, std::uint32_t first_instance) = 0 : FrameResult
+{abstract} +cmd_draw_indexed(CommandBufferHandle cmd, std::uint32_t index_count, std::uint32_t instance_count, std::uint32_t first_index, std::int32_t vertex_offset, std::uint32_t first_instance) = 0 : FrameResult
 {abstract} +cmd_end_swapchain_pass(CommandBufferHandle cmd, SwapchainHandle swapchain, std::uint32_t image_index) = 0 : FrameResult
 {abstract} +cmd_set_viewport_scissor(CommandBufferHandle cmd, Extent2D extent) = 0 : FrameResult
 {abstract} +create_buffer(const BufferDesc & desc, std::span<const std::byte> initial_data = = {}) = 0 : BufferHandle
@@ -812,8 +911,11 @@ class C_0002997308125348651313 {
 -cleanup_textures() : void
 +cmd_begin_swapchain_pass(rhi::CommandBufferHandle cmd, rhi::SwapchainHandle swapchain, std::uint32_t image_index, const rhi::ClearColor & clear, rhi::TextureHandle depth_texture, float clear_depth, std::uint32_t clear_stencil) : rhi::FrameResult
 +cmd_bind_descriptor_set(rhi::CommandBufferHandle cmd, rhi::PipelineHandle pipeline, std::uint32_t set_index, rhi::DescriptorSetHandle set) : rhi::FrameResult
++cmd_bind_index_buffer(rhi::CommandBufferHandle cmd, rhi::BufferHandle buffer, rhi::IndexType type, std::uint64_t offset_bytes) : rhi::FrameResult
 +cmd_bind_pipeline(rhi::CommandBufferHandle cmd, rhi::PipelineHandle pipeline) : rhi::FrameResult
++cmd_bind_vertex_buffer(rhi::CommandBufferHandle cmd, std::uint32_t binding, rhi::BufferHandle buffer, std::uint64_t offset_bytes) : rhi::FrameResult
 +cmd_draw(rhi::CommandBufferHandle cmd, std::uint32_t vertex_count, std::uint32_t instance_count, std::uint32_t first_vertex, std::uint32_t first_instance) : rhi::FrameResult
++cmd_draw_indexed(rhi::CommandBufferHandle cmd, std::uint32_t index_count, std::uint32_t instance_count, std::uint32_t first_index, std::int32_t vertex_offset, std::uint32_t first_instance) : rhi::FrameResult
 +cmd_end_swapchain_pass(rhi::CommandBufferHandle cmd, rhi::SwapchainHandle swapchain, std::uint32_t image_index) : rhi::FrameResult
 +cmd_set_viewport_scissor(rhi::CommandBufferHandle cmd, rhi::Extent2D extent) : rhi::FrameResult
 {static} +create(base::Diagnostics & diagnostics, const rhi::DeviceCreateInfo & info, const platform::WsiHandle & surface) : std::unique_ptr<VkGpuDevice>
@@ -876,6 +978,8 @@ __
 -next_texture_ : std::uint32_t
 -pending_submit_frame_index_ : std::uint32_t
 -pipeline_set_layout_handles_ : std::vector<rhi::DescriptorSetLayoutHandle>
+-pipeline_vertex_attributes_ : std::vector<rhi::VertexAttributeDesc>
+-pipeline_vertex_bindings_ : std::vector<rhi::VertexBindingDesc>
 -recording_active_ : bool
 -recording_frame_index_ : std::uint32_t
 -swapchain_ : VkSwapchainWrapper
@@ -967,7 +1071,7 @@ C_0005212081933056084623 ..> C_0009952609517611504575
 C_0005212081933056084623 ..> C_0005247819231906793915
 C_0005212081933056084623 ..> C_0017920997868415439149
 C_0005212081933056084623 ..> C_0010872083216687935010
-C_0005212081933056084623 ..> C_0010824766815022468742
+C_0005212081933056084623 ..> C_0010781705541623728263
 C_0005212081933056084623 ..> C_0015969163135226357711
 C_0005212081933056084623 ..> C_0003684588886580275255
 C_0005212081933056084623 ..> C_0009403174502820656066
@@ -982,7 +1086,7 @@ C_0003684588886580275255 o-- C_0009424639203119917878 : +surface
 C_0003684588886580275255 o-- C_0016276992989547283338 : +surface
 C_0003684588886580275255 o-- C_0017920997868415439149 : +device
 C_0003684588886580275255 o-- C_0010872083216687935010 : +swapchain
-C_0003684588886580275255 o-- C_0010824766815022468742 : +renderer
+C_0003684588886580275255 o-- C_0010781705541623728263 : +renderer
 C_0012459060599726822032 ..> C_0005603721019384004173
 C_0012459060599726822032 o-- C_0013825134702652866176 : +position
 C_0012459060599726822032 o-- C_0013825134702652866176 : +world_up
@@ -999,6 +1103,28 @@ C_0010824766815022468742 o-- C_0011402702226009568895 : -depth_format_
 C_0010824766815022468742 o-- C_0016237545735345995570 : -depth_extent_
 C_0010824766815022468742 o-- C_0005096713740152516201 : -depth_textures_
 C_0010824766815022468742 o-- C_0012459060599726822032 : -camera_
+C_0000567028886874535223 o-- C_0008321628638204963712 : +vertex_buffer
+C_0000567028886874535223 o-- C_0008321628638204963712 : +index_buffer
+C_0000567028886874535223 o-- C_0004196736832558472128 : +index_type
+C_0015684162672813940184 o-- C_0012459060599726822032 : -camera_
+C_0015684162672813940184 o-- C_0000567028886874535223 : -world_
+C_0015684162672813940184 o-- C_0000567028886874535223 : -selected_
+C_0003825896585735230996 ..> C_0015969163135226357711
+C_0003825896585735230996 ..> C_0017920997868415439149
+C_0003825896585735230996 ..> C_0010872083216687935010
+C_0003825896585735230996 ..> C_0001528822942849330672
+C_0003825896585735230996 ..> C_0015684162672813940184
+C_0003825896585735230996 ..> C_0007898125113726414504
+C_0003825896585735230996 o-- C_0010824766815022468742 : -render_
+C_0010781705541623728263 ..> C_0015969163135226357711
+C_0010781705541623728263 ..> C_0017920997868415439149
+C_0010781705541623728263 ..> C_0010872083216687935010
+C_0010781705541623728263 ..> C_0001528822942849330672
+C_0010781705541623728263 ..> C_0012459060599726822032
+C_0010781705541623728263 ..> C_0000567028886874535223
+C_0010781705541623728263 ..> C_0007898125113726414504
+C_0010781705541623728263 o-- C_0015684162672813940184 : -scene_
+C_0010781705541623728263 o-- C_0003825896585735230996 : -graph_
 C_0009733119764679159440 o-- C_0005603721019384004173 : +view_proj
 C_0009733119764679159440 o-- C_0005603721019384004173 : +model
 C_0009733119764679159440 o-- C_0013825142399234263653 : +tint
@@ -1006,7 +1132,11 @@ C_0006233893228748483879 o-- C_0002710142173650316241 : +usage
 C_0003925641868641178642 o-- C_0016237545735345995570 : +size
 C_0003925641868641178642 o-- C_0011402702226009568895 : +format
 C_0003925641868641178642 o-- C_0002766783461747024134 : +usage
+C_0007498818984757103426 o-- C_0001802303524078097820 : +rate
+C_0000389672394792426519 o-- C_0013254045494106650953 : +format
 C_0003569144566224904043 o-- C_0011402702226009568895 : +depth_format
+C_0003569144566224904043 o-- C_0007498818984757103426 : +vertex_bindings
+C_0003569144566224904043 o-- C_0000389672394792426519 : +vertex_attributes
 C_0003569144566224904043 o-- C_0016589488479329003951 : +set_layouts
 C_0008242555543376944237 o-- C_0016237545735345995570 : +size
 C_0008242555543376944237 o-- C_0011402702226009568895 : +format
@@ -1038,6 +1168,7 @@ C_0017920997868415439149 ..> C_0006045791603826491485
 C_0017920997868415439149 ..> C_0002405713255390004788
 C_0017920997868415439149 ..> C_0004513109977142259876
 C_0017920997868415439149 ..> C_0016237545735345995570
+C_0017920997868415439149 ..> C_0004196736832558472128
 C_0003024045260444283542 --+ C_0017920997868415439149
 C_0003024045260444283542 o-- C_0003121492588360617453 : +command_buffer
 C_0003024045260444283542 o-- C_0010872083216687935010 : +swapchain
@@ -1071,6 +1202,7 @@ C_0002997308125348651313 ..> C_0006045791603826491485
 C_0002997308125348651313 ..> C_0002405713255390004788
 C_0002997308125348651313 ..> C_0004513109977142259876
 C_0002997308125348651313 ..> C_0016237545735345995570
+C_0002997308125348651313 ..> C_0004196736832558472128
 C_0002997308125348651313 --> C_0015969163135226357711 : -diagnostics_
 C_0002997308125348651313 o-- C_0016636178717209631603 : -instance_
 C_0002997308125348651313 o-- C_0011145604038376368072 : -device_
@@ -1078,6 +1210,8 @@ C_0002997308125348651313 o-- C_0005469923327072863924 : -swapchain_
 C_0002997308125348651313 o-- C_0010554209192484980512 : -command_pool_
 C_0002997308125348651313 o-- C_0011075689005501709456 : -basic_pipeline_
 C_0002997308125348651313 o-- C_0016589488479329003951 : -pipeline_set_layout_handles_
+C_0002997308125348651313 o-- C_0007498818984757103426 : -pipeline_vertex_bindings_
+C_0002997308125348651313 o-- C_0000389672394792426519 : -pipeline_vertex_attributes_
 C_0002997308125348651313 o-- C_0018051402234945093614 : -swapchain_sync_
 C_0002997308125348651313 o-- C_0002011638324630400963 : -descriptor_pool_
 C_0017920997868415439149 <|-- C_0002997308125348651313
