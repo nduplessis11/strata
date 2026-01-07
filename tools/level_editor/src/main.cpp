@@ -493,6 +493,7 @@ int main()
     // Cleanup (best-effort)
     {
         auto& dev = app.device();
+        dev.wait_idle();
         if (st.selected_gpu.mesh.vertex_buffer)
             dev.destroy_buffer(st.selected_gpu.mesh.vertex_buffer);
         if (st.selected_gpu.mesh.index_buffer)
