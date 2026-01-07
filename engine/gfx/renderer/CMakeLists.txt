@@ -1,7 +1,7 @@
 # engine/gfx/renderer/CMakeLists.txt
 
 add_library(strata_gfx_renderer STATIC
-    src/render_2d.cpp
+    src/basic_pass.cpp
     src/render_scene.cpp
     src/render_graph.cpp
     src/renderer.cpp

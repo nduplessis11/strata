@@ -399,24 +399,26 @@ __
 +world_up : base::math::Vec3
 +yaw_radians : float
 }
-enum "strata::gfx::renderer::Render2DError" as C_0001528822942849330672
-enum C_0001528822942849330672 {
+enum "strata::gfx::renderer::BasicPassError" as C_0016074008183180112791
+enum C_0016074008183180112791 {
 InvalidSwapchain
 CreateDescriptorSetLayoutFailed
 CreatePipelineFailed
+CreateDemoCubeVertexBufferFailed
 }
-class "strata::gfx::renderer::Render2D" as C_0010824766815022468742
-class C_0010824766815022468742 {
-+Render2D(Render2D &&) noexcept : void
--Render2D() = default : void
-+~Render2D() : void
+class "strata::gfx::renderer::BasicPass" as C_0015375315215051567271
+class C_0015375315215051567271 {
++BasicPass(BasicPass &&) noexcept : void
+-BasicPass() = default : void
++~BasicPass() : void
 ..
-+operator=(Render2D &&) noexcept : Render2D &
++operator=(BasicPass &&) noexcept : BasicPass &
 ..
 +camera() const noexcept : const Camera3D &
-{static} +create(base::Diagnostics & diagnostics, rhi::IGpuDevice & device, rhi::SwapchainHandle swapchain) : std::expected<Render2D,Render2DError>
+{static} +create(base::Diagnostics & diagnostics, rhi::IGpuDevice & device, rhi::SwapchainHandle swapchain) : std::expected<BasicPass,BasicPassError>
 -destroy_depth_textures() noexcept : void
 -destroy_ubo_resources() noexcept : void
++draw_frame(const RenderScene & scene) : rhi::FrameResult
 +draw_frame() : rhi::FrameResult
 -ensure_depth_texture(std::uint32_t image_index, rhi::Extent2D extent) : rhi::FrameResult
 -ensure_ubo_resources(std::uint32_t image_index) : rhi::FrameResult
@@ -427,17 +429,20 @@ class C_0010824766815022468742 {
 +set_camera(const Camera3D & camera) noexcept : void
 __
 -camera_ : Camera3D
+-demo_cube_vb_ : rhi::BufferHandle
+-demo_cube_vertex_count_ : std::uint32_t
 -depth_extent_ : rhi::Extent2D
 -depth_format_ : rhi::Format
 -depth_textures_ : std::vector<rhi::TextureHandle>
 -device_ : rhi::IGpuDevice *
 -diagnostics_ : base::Diagnostics *
 -frame_counter_ : std::uint64_t
+{static} -kUboSlotsPerImage : const std::size_t
 -pipeline_ : rhi::PipelineHandle
 -swapchain_ : rhi::SwapchainHandle
 -ubo_buffers_ : std::vector<rhi::BufferHandle>
 -ubo_layout_ : rhi::DescriptorSetLayoutHandle
--ubo_sets_ : std::vector<rhi::DescriptorSetHandle>
+-ubo_sets_ : std::vector<std::array<rhi::DescriptorSetHandle,kUboSlotsPerImage>>
 }
 class "strata::gfx::renderer::GpuMesh" as C_0000567028886874535223
 class C_0000567028886874535223 {
@@ -465,7 +470,7 @@ class "strata::gfx::renderer::RenderGraph" as C_0003825896585735230996
 class C_0003825896585735230996 {
 +RenderGraph(RenderGraph &&) noexcept = default : void
 +RenderGraph(const RenderGraph &) = deleted : void
--RenderGraph(Render2D && r) noexcept : void
+-RenderGraph(BasicPass && pass) noexcept : void
 +~RenderGraph() constexpr = default : void
 ..
 +operator=(RenderGraph &&) constexpr noexcept = default : RenderGraph &
@@ -477,7 +482,7 @@ class C_0003825896585735230996 {
 +on_before_swapchain_resize() noexcept : void
 +recreate_pipeline() : rhi::FrameResult
 __
--render_ : Render2D
+-pass_ : BasicPass
 }
 class "strata::gfx::renderer::Renderer" as C_0010781705541623728263
 class C_0010781705541623728263 {
@@ -502,6 +507,13 @@ class C_0010781705541623728263 {
 __
 -graph_ : RenderGraph
 -scene_ : RenderScene
+}
+class "strata::gfx::renderer::VertexP3" as C_0007068523741690479307
+class C_0007068523741690479307 {
+__
++x : float
++y : float
++z : float
 }
 class "strata::gfx::renderer::UboScene" as C_0009733119764679159440
 class C_0009733119764679159440 {
@@ -1090,19 +1102,21 @@ C_0003684588886580275255 o-- C_0010781705541623728263 : +renderer
 C_0012459060599726822032 ..> C_0005603721019384004173
 C_0012459060599726822032 o-- C_0013825134702652866176 : +position
 C_0012459060599726822032 o-- C_0013825134702652866176 : +world_up
-C_0010824766815022468742 ..> C_0001528822942849330672
-C_0010824766815022468742 ..> C_0007898125113726414504
-C_0010824766815022468742 --> C_0015969163135226357711 : -diagnostics_
-C_0010824766815022468742 --> C_0017920997868415439149 : -device_
-C_0010824766815022468742 o-- C_0010872083216687935010 : -swapchain_
-C_0010824766815022468742 o-- C_0017877358325141258260 : -pipeline_
-C_0010824766815022468742 o-- C_0016589488479329003951 : -ubo_layout_
-C_0010824766815022468742 o-- C_0006045791603826491485 : -ubo_sets_
-C_0010824766815022468742 o-- C_0008321628638204963712 : -ubo_buffers_
-C_0010824766815022468742 o-- C_0011402702226009568895 : -depth_format_
-C_0010824766815022468742 o-- C_0016237545735345995570 : -depth_extent_
-C_0010824766815022468742 o-- C_0005096713740152516201 : -depth_textures_
-C_0010824766815022468742 o-- C_0012459060599726822032 : -camera_
+C_0015375315215051567271 ..> C_0016074008183180112791
+C_0015375315215051567271 ..> C_0015684162672813940184
+C_0015375315215051567271 ..> C_0007898125113726414504
+C_0015375315215051567271 --> C_0015969163135226357711 : -diagnostics_
+C_0015375315215051567271 --> C_0017920997868415439149 : -device_
+C_0015375315215051567271 o-- C_0010872083216687935010 : -swapchain_
+C_0015375315215051567271 o-- C_0017877358325141258260 : -pipeline_
+C_0015375315215051567271 o-- C_0016589488479329003951 : -ubo_layout_
+C_0015375315215051567271 o-- C_0006045791603826491485 : -ubo_sets_
+C_0015375315215051567271 o-- C_0008321628638204963712 : -ubo_buffers_
+C_0015375315215051567271 o-- C_0011402702226009568895 : -depth_format_
+C_0015375315215051567271 o-- C_0016237545735345995570 : -depth_extent_
+C_0015375315215051567271 o-- C_0005096713740152516201 : -depth_textures_
+C_0015375315215051567271 o-- C_0008321628638204963712 : -demo_cube_vb_
+C_0015375315215051567271 o-- C_0012459060599726822032 : -camera_
 C_0000567028886874535223 o-- C_0008321628638204963712 : +vertex_buffer
 C_0000567028886874535223 o-- C_0008321628638204963712 : +index_buffer
 C_0000567028886874535223 o-- C_0004196736832558472128 : +index_type
@@ -1112,14 +1126,14 @@ C_0015684162672813940184 o-- C_0000567028886874535223 : -selected_
 C_0003825896585735230996 ..> C_0015969163135226357711
 C_0003825896585735230996 ..> C_0017920997868415439149
 C_0003825896585735230996 ..> C_0010872083216687935010
-C_0003825896585735230996 ..> C_0001528822942849330672
+C_0003825896585735230996 ..> C_0016074008183180112791
 C_0003825896585735230996 ..> C_0015684162672813940184
 C_0003825896585735230996 ..> C_0007898125113726414504
-C_0003825896585735230996 o-- C_0010824766815022468742 : -render_
+C_0003825896585735230996 o-- C_0015375315215051567271 : -pass_
 C_0010781705541623728263 ..> C_0015969163135226357711
 C_0010781705541623728263 ..> C_0017920997868415439149
 C_0010781705541623728263 ..> C_0010872083216687935010
-C_0010781705541623728263 ..> C_0001528822942849330672
+C_0010781705541623728263 ..> C_0016074008183180112791
 C_0010781705541623728263 ..> C_0012459060599726822032
 C_0010781705541623728263 ..> C_0000567028886874535223
 C_0010781705541623728263 ..> C_0007898125113726414504

@@ -2,7 +2,7 @@
 // engine/gfx/renderer/src/render_graph.cpp
 //
 // Purpose:
-//   MVP v1: RenderGraph is a thin wrapper around Render2D.
+//   MVP v1: RenderGraph is a thin wrapper around a single BasicPass.
 // -----------------------------------------------------------------------------
 
 #include <expected>
@@ -18,7 +18,7 @@ std::expected<RenderGraph, RenderGraphError> RenderGraph::create(base::Diagnosti
                                                                  rhi::IGpuDevice&     device,
                                                                  rhi::SwapchainHandle swapchain)
 {
-    auto exp = Render2D::create(diagnostics, device, swapchain);
+    auto exp = BasicPass::create(diagnostics, device, swapchain);
     if (!exp)
         return std::unexpected(exp.error());
 
@@ -27,12 +27,8 @@ std::expected<RenderGraph, RenderGraphError> RenderGraph::create(base::Diagnosti
 
 rhi::FrameResult RenderGraph::draw_frame(RenderScene const& scene)
 {
-    // MVP v1: Render2D owns the per-frame rendering logic. We feed it the camera.
-    render_.set_camera(scene.camera());
-
-    // NOTE: world_mesh/selected_mesh are not yet used by Render2D. Those will be
-    // wired once the mesh-capable pipeline lands.
-    return render_.draw_frame();
+    // MVP v1: a single pass consumes the whole RenderScene.
+    return pass_.draw_frame(scene);
 }
 
 } // namespace strata::gfx::renderer

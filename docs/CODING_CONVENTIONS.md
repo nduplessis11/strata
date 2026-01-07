@@ -52,6 +52,13 @@ Consistency is still valued, and cleverness is a last resort.
 7. **Use east const**
    - Prefer `Type const&` / `Type const*` over `const Type&` / `const Type*`.
 
+8. **Prefer the Rule of Zero**
+   - Wherever possible, write types that **do not** define custom destructors or copy/move operations.
+   - Prefer composition with RAII members (`std::vector`, `std::string`, `std::unique_ptr`, small owning helpers) so special members can be `= default`.
+   - If a type truly owns a non-RAII resource (e.g., a raw Vulkan handle tied to a device), isolate that ownership in a dedicated wrapper and make copy/move behavior explicit (Rule of Five: define or delete).
+   - Avoid “halfway” special member definitions (e.g., custom destructor but implicit copy) unless you are intentionally enforcing a specific semantic.
+
+
 ---
 
 ## Namespaces and module boundaries
