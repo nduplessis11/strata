@@ -412,11 +412,27 @@ struct Window::Impl
             return ::DefWindowProcW(h, msg, w, l);
 
         case WM_SETFOCUS:
+        {
             input.set_focused(true);
-            mouse_pos_valid        = false;
+
+            POINT p{};
+            if (::GetCursorPos(&p))
+            {
+                ::ScreenToClient(hwnd, &p);
+                input.set_mouse_pos(p.x, p.y);
+                last_mouse_x    = p.x;
+                last_mouse_y    = p.y;
+                mouse_pos_valid = true;
+            }
+            else
+            {
+                mouse_pos_valid = false;
+            }
+
             ignore_next_mouse_move = false;
             apply_cursor_mode();
             return 0;
+        }
 
         case WM_KILLFOCUS:
             input.set_focused(false);
@@ -471,14 +487,38 @@ struct Window::Impl
         case WM_LBUTTONDOWN:
         case WM_RBUTTONDOWN:
         case WM_MBUTTONDOWN:
+        {
+            // Button messages include cursor coords in lParam.
+            std::int32_t const x = GET_X_LPARAM(l);
+            std::int32_t const y = GET_Y_LPARAM(l);
+
+            // Make picking work even if there was no prior WM_MOUSEMOVE.
+            input.set_mouse_pos(x, y);
+
+            // Also seed delta tracking so first subsequent move computes correctly.
+            last_mouse_x    = x;
+            last_mouse_y    = y;
+            mouse_pos_valid = true;
+
             on_mouse_button(msg, true);
             break;
+        }
 
         case WM_LBUTTONUP:
         case WM_RBUTTONUP:
         case WM_MBUTTONUP:
+        {
+            std::int32_t const x = GET_X_LPARAM(l);
+            std::int32_t const y = GET_Y_LPARAM(l);
+
+            input.set_mouse_pos(x, y);
+            last_mouse_x    = x;
+            last_mouse_y    = y;
+            mouse_pos_valid = true;
+
             on_mouse_button(msg, false);
             return 0;
+        }
 
         case WM_MOUSEMOVE:
         {

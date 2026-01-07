@@ -64,10 +64,10 @@ class InputState
     {
         keys_.fill(false);
         mouse_buttons_.fill(false);
+        begin_frame();
         mouse_pos_valid_ = false;
         mouse_x_         = 0;
         mouse_y_         = 0;
-        begin_frame();
     }
 
     void set_focused(bool focused) noexcept
@@ -82,6 +82,7 @@ class InputState
         {
             // Start clean on focus gain.
             begin_frame();
+            mouse_pos_valid_ = false; // don't trust stale coords on focus gain
         }
     }
 
