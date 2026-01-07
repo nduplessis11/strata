@@ -414,19 +414,16 @@ class C_0015375315215051567271 {
 ..
 +operator=(BasicPass &&) noexcept : BasicPass &
 ..
-+camera() const noexcept : const Camera3D &
 {static} +create(base::Diagnostics & diagnostics, rhi::IGpuDevice & device, rhi::SwapchainHandle swapchain) : std::expected<BasicPass,BasicPassError>
 -destroy_depth_textures() noexcept : void
 -destroy_ubo_resources() noexcept : void
 +draw_frame(const RenderScene & scene) : rhi::FrameResult
-+draw_frame() : rhi::FrameResult
 -ensure_depth_texture(std::uint32_t image_index, rhi::Extent2D extent) : rhi::FrameResult
 -ensure_ubo_resources(std::uint32_t image_index) : rhi::FrameResult
 +is_valid() const noexcept : bool
 +on_before_swapchain_resize() noexcept : void
 +recreate_pipeline() : rhi::FrameResult
 -release() noexcept : void
-+set_camera(const Camera3D & camera) noexcept : void
 __
 -camera_ : Camera3D
 -demo_cube_vb_ : rhi::BufferHandle
@@ -437,12 +434,12 @@ __
 -device_ : rhi::IGpuDevice *
 -diagnostics_ : base::Diagnostics *
 -frame_counter_ : std::uint64_t
-{static} -kUboSlotsPerImage : const std::size_t
 -pipeline_ : rhi::PipelineHandle
 -swapchain_ : rhi::SwapchainHandle
--ubo_buffers_ : std::vector<rhi::BufferHandle>
+-ubo_buffers_ : std::vector<std::array<rhi::BufferHandle,ubo_slots_per_image>>
 -ubo_layout_ : rhi::DescriptorSetLayoutHandle
--ubo_sets_ : std::vector<std::array<rhi::DescriptorSetHandle,kUboSlotsPerImage>>
+-ubo_sets_ : std::vector<std::array<rhi::DescriptorSetHandle,ubo_slots_per_image>>
+{static} -ubo_slots_per_image : const std::size_t
 }
 class "strata::gfx::renderer::GpuMesh" as C_0000567028886874535223
 class C_0000567028886874535223 {

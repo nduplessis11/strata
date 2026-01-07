@@ -2,7 +2,7 @@
 
 This document describes **how Strata renders a frame**, from the game loop down to Vulkan calls.
 
-It is intentionally scoped to the **current** implementation (single pass, spinning cube). As the engine grows (descriptor sets, resource registries, etc.), this doc should evolve alongside it.
+It is intentionally scoped to the **current** implementation (single pass, demo cube + optional scene meshes). As the engine grows (descriptor sets, resource registries, etc.), this doc should evolve alongside it.
 
 ---
 
@@ -12,7 +12,7 @@ The frame path looks like this:
 
 1. `core::Application::run()` drives the loop and owns the resize policy:
    - it calls `renderer.draw_frame()` and reacts to the returned `FrameResult` (see below)
-2. `Renderer::draw_frame()` now owns the frame (via `RenderGraph` → `Render2D`):
+2. `Renderer::draw_frame()` now owns the frame (via `RenderGraph` → `BasicPass`):
    - **acquire → begin cmd → record pass → end cmd → submit → present**
 3. The Vulkan backend (`vk::VkGpuDevice`) provides the building blocks:
    - `acquire_next_image`, `begin_commands`, `cmd_*`, `end_commands`, `submit`, `present`
@@ -32,8 +32,8 @@ The frame path looks like this:
 - The backend uses a **frames-in-flight ring** (per-frame command buffers + fences + image-available semaphores).
 - Rendering uses **Vulkan 1.3 dynamic rendering** (`vkCmdBeginRendering`) and **dynamic viewport/scissor**.
 - Barriers use **Synchronization2** (`vkCmdPipelineBarrier2`).
-- The first “render pass” is a **spinning cube** with a solid clear + draw.
-- `Render2D` now **records commands explicitly** via the RHI command interface.
+- The first “render pass” is a **demo cube** (or a mesh supplied via the `RenderScene`) with a solid clear + one or two draws.
+- `BasicPass` now **records commands explicitly** via the RHI command interface.
 
 ---
 
@@ -89,24 +89,29 @@ On exit, `device->wait_idle()` is called once more.
 
 It owns a `RenderScene` (what to draw) and a `RenderGraph` (how to draw).
 
-MVP v1: `RenderGraph` is a thin wrapper around the existing `Render2D` implementation, which owns:
+MVP v1: `RenderGraph` is a thin wrapper around the existing `BasicPass` implementation, which owns:
 - `rhi::SwapchainHandle swapchain_` (opaque)
 - `Camera3D camera_` (value; the current camera state consumed for view/proj in the scene UBO)
 - `rhi::PipelineHandle pipeline_` (opaque; currently functions as a “valid/created” token)
 - `rhi::DescriptorSetLayoutHandle ubo_layout_` (opaque)
-- `std::vector<rhi::DescriptorSetHandle> ubo_sets_` (opaque; one per swapchain image)
-- `std::vector<rhi::BufferHandle> ubo_buffers_` (opaque; host-visible uniform buffers, one per swapchain image)
+- `static constexpr std::size_t ubo_slots_per_image = 2` (current usage: base draw + selected draw)
+- `std::vector<std::array<rhi::DescriptorSetHandle, ubo_slots_per_image>> ubo_sets_` (opaque; per swapchain image, per UBO slot)
+- `std::vector<std::array<rhi::BufferHandle, ubo_slots_per_image>> ubo_buffers_` (opaque; host-visible uniform buffers, per swapchain image, per UBO slot)
 - `std::vector<rhi::TextureHandle> depth_textures_` (opaque; renderer-owned depth attachment, one per swapchain image)
+- `rhi::BufferHandle demo_cube_vb_` (opaque; demo cube fallback geometry)
+- `std::uint32_t demo_cube_vertex_count_` (vertex count for the demo cube VB)
 - a non-owning `base::Diagnostics* diagnostics_`
 - a non-owning `rhi::IGpuDevice* device_`
 
 V1 camera control:
 - The game can call `renderer.set_camera(camera)` before `draw_frame()` to control view/projection.
+- The game can call `renderer.set_world_mesh(mesh)` to supply a world mesh to draw (optional).
+- The game can call `renderer.set_selected_mesh(mesh)` (or `renderer.clear_selected_mesh()`) to draw a second highlighted mesh (optional).
 
-### Pipeline setup (`Render2D::create`)
-`Render2D::create(...)` (given a `base::Diagnostics&`, `IGpuDevice&`, and `SwapchainHandle`) creates a simple pipeline:
-- vertex shader: `shaders/fullscreen_triangle.vert.spv`
-- fragment shader: `shaders/flat_color.frag.spv`
+### Pipeline setup (`BasicPass::create`)
+`BasicPass::create(...)` (given a `base::Diagnostics&`, `IGpuDevice&`, and `SwapchainHandle`) creates a simple pipeline:
+- vertex shader: `shaders/procedural_cube.vert.spv`
+- fragment shader: `shaders/vertex_color.frag.spv`
 - no blending
 - depth test/write enabled
 - descriptor set layout: set 0, binding 0 = uniform buffer (vertex+fragment-visible; view/proj + model + tint)
@@ -115,23 +120,27 @@ and calls:
 - `ubo_layout_ = device_->create_descriptor_set_layout(layout_desc);`
 - `pipeline_ = device_->create_pipeline(desc);` (with `desc.set_layouts = { ubo_layout_ }`)
 
-UBO buffers + descriptor sets are created per swapchain image lazily in `draw_frame()` (after `acquire_next_image`) and updated per frame via `device_->write_buffer(...)`.
+UBO buffers + descriptor sets are created per swapchain image (per UBO slot) lazily in `draw_frame()` (after `acquire_next_image`) and updated per frame via `device_->write_buffer(...)`.
+
+BasicPass currently allocates **two** UBO slots per swapchain image (base draw + selected draw) so it can bind distinct descriptor sets per draw.
 
 The view/projection values come from the current `camera_` state (set via `set_camera(...)`).
 
-### Frame rendering (`Render2D::draw_frame`)
-`draw_frame()` now drives the full frame:
+### Frame rendering (`BasicPass::draw_frame`)
+`draw_frame(...)` now drives the full frame:
 - validates `diagnostics_`, `device_`, `swapchain_`, `pipeline_`, `ubo_layout_`
 - `device_->acquire_next_image(...)`
-- ensure per-image resources exist (depth texture + UBO descriptor set/buffer for the acquired `image_index`)
-- update the scene UBO via `device_->write_buffer(...)`
+- ensure per-image resources exist (depth texture + per-UBO-slot descriptor sets/buffers for the acquired `image_index`)
+- update the scene UBO(s) via `device_->write_buffer(...)` (one per draw)
 - `cmd = device_->begin_commands()`
 - record a swapchain pass via:
   - `cmd_begin_swapchain_pass(...)`
   - `cmd_bind_pipeline(...)`
-  - `cmd_bind_descriptor_set(...)`
+  - `cmd_bind_descriptor_set(...)` (per draw)
   - `cmd_set_viewport_scissor(...)`
-  - `cmd_draw(...)`
+  - `cmd_bind_vertex_buffer(...)`
+  - `cmd_bind_index_buffer(...)` + `cmd_draw_indexed(...)` (when drawing a mesh)
+  - `cmd_draw(...)` (demo cube fallback)
   - `cmd_end_swapchain_pass(...)`
 - `device_->end_commands(cmd)`
 - `device_->submit({ cmd, swapchain, image_index, frame_index })` (where `frame_index` is `rhi::AcquiredImage::frame_index`)
@@ -275,10 +284,10 @@ Resize mirrors creation:
 
 ## The actual frame: renderer + backend split
 
-`Renderer::draw_frame()` drives the frame (via `RenderGraph` → `Render2D`) while `VkGpuDevice` supplies the Vulkan-backed primitives.
+`Renderer::draw_frame()` drives the frame (via `RenderGraph` → `BasicPass`) while `VkGpuDevice` supplies the Vulkan-backed primitives.
 
 ### 0) Ensure pipeline exists
-When `Render2D` is created (or rebuilt after resize), it calls:
+When `BasicPass` is created (or rebuilt after resize), it calls:
 - `device_->create_pipeline(desc)`
 
 The Vulkan backend rebuilds its `basic_pipeline_` when this is called, and also invalidates it on resize.
@@ -299,9 +308,11 @@ The Vulkan backend rebuilds its `basic_pipeline_` when this is called, and also 
   - optionally transitions `depth_texture` to `DEPTH_STENCIL_ATTACHMENT_OPTIMAL`
   - begins dynamic rendering with clear color (and optional depth/stencil clear)
 - `cmd_bind_pipeline(...)`
-- `cmd_bind_descriptor_set(...)`
+- `cmd_bind_descriptor_set(...)` (per draw)
 - `cmd_set_viewport_scissor(...)`
-- `cmd_draw(..., 36, 1, 0, 0)` (spinning cube)
+- `cmd_bind_vertex_buffer(...)`
+- `cmd_bind_index_buffer(...)` + `cmd_draw_indexed(...)` (when drawing a mesh)
+- `cmd_draw(...)` (demo cube fallback; 36 verts)
 - `cmd_end_swapchain_pass(...)`:
   - ends dynamic rendering
   - transitions swapchain image to `PRESENT_SRC_KHR`
@@ -332,11 +343,11 @@ Strata’s initial pipeline is built by:
 
 Key details:
 - Loads SPIR-V from disk:
-  - `shaders/fullscreen_triangle.vert.spv`
-  - `shaders/flat_color.frag.spv`
+  - `shaders/procedural_cube.vert.spv`
+  - `shaders/vertex_color.frag.spv`
 - Creates shader modules, builds pipeline, then destroys shader modules
-- No vertex buffers (current default):
-  - cube vertex positions are generated using `gl_VertexIndex`
+- Vertex input is optional (via `vertex_bindings` / `vertex_attributes`):
+  - the current renderer uses a position-only vertex format (`VertexP3`, binding 0 / location 0) and binds a vertex buffer (and optionally an index buffer) before drawing
 - Uses dynamic viewport + scissor
 - Uses dynamic rendering (`VkPipelineRenderingCreateInfo` specifies the swapchain color format)
 - `renderPass = VK_NULL_HANDLE`
@@ -365,7 +376,7 @@ Because the pipeline depends on swapchain format (and optional depth format/stat
 ## Current simplifications (intentional)
 - **Fixed frames-in-flight count** (currently 2).
 - **One graphics pipeline** (spinning cube demo).
-- **No vertex/index buffers** in the frame loop.
+- **Minimal vertex/index buffer usage** (demo cube VB; optional scene meshes via `GpuMesh`).
 - **Renderer-owned depth attachment** (one per swapchain image); no MSAA, no post-processing.
 - **Renderer records commands explicitly**, but only for a single basic pass.
 - Swapchain recreation is done with `wait_idle()` (safe, not optimal).

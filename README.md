@@ -124,8 +124,8 @@ On Windows (PowerShell), it will typically be:
 #### Shader assets location
 The Vulkan backend loads SPIR-V binaries from paths like:
 
-- `shaders/fullscreen_triangle.vert.spv`
-- `shaders/flat_color.frag.spv`
+- `shaders/procedural_cube.vert.spv`
+- `shaders/vertex_color.frag.spv`
 
 The `strata_shooter` target has a **post-build step** that copies the built shader outputs to:
 

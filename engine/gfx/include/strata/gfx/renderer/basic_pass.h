@@ -72,16 +72,8 @@ class BasicPass
 
     [[nodiscard]] bool is_valid() const noexcept;
 
-    // Legacy camera API (kept so existing callers don't break).
-    // New code should prefer: draw_frame(RenderScene const&).
-    void                          set_camera(Camera3D const& camera) noexcept;
-    [[nodiscard]] Camera3D const& camera() const noexcept;
-
     // New: consume RenderScene (RenderGraph/Renderer style).
     rhi::FrameResult draw_frame(RenderScene const& scene);
-
-    // Legacy: draw using the internally stored camera (set_camera()).
-    rhi::FrameResult draw_frame();
 
     rhi::FrameResult recreate_pipeline();
 

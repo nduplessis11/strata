@@ -275,17 +275,6 @@ bool BasicPass::is_valid() const noexcept
         demo_cube_vertex_count_ > 0;
 }
 
-// Legacy camera API
-void BasicPass::set_camera(Camera3D const& camera) noexcept
-{
-    camera_ = camera;
-}
-
-Camera3D const& BasicPass::camera() const noexcept
-{
-    return camera_;
-}
-
 void BasicPass::destroy_depth_textures() noexcept
 {
     if (!device_)
@@ -926,14 +915,6 @@ cleanup:
 
 cleanup_after_end:
     return result;
-}
-
-FrameResult BasicPass::draw_frame()
-{
-    // Legacy entry point: create a tiny scene using the stored camera.
-    RenderScene scene{};
-    scene.set_camera(camera_);
-    return draw_frame(scene);
 }
 
 FrameResult BasicPass::recreate_pipeline()

@@ -121,7 +121,7 @@ multiple `.cpp` files, keeping a single public header.
 Naming: `<base>_<area>.cpp`
 Example: `vk_gpu_device_swapchain.cpp`, `vk_gpu_device_recording.cpp`, ...
 - **lower_snake_case**
-  - `application.cpp`, `gpu_device.h`, `render_2d.cpp`
+  - `application.cpp`, `gpu_device.h`, `basic_pass.cpp`
 - Platform/backend suffixes:
   - `window_win32.cpp`, `window_x11.cpp`
   - `vk_wsi_bridge_win32.cpp`
@@ -147,7 +147,7 @@ Private implementation:
 
 ### Classes and structs
 - **PascalCase**
-  - `Application`, `Render2D`, `SwapchainDesc`, `FrameContext`
+  - `Application`, `BasicPass`, `SwapchainDesc`, `FrameContext`
 
 ### Interfaces
 - Interfaces use an `I` prefix + PascalCase:
@@ -339,7 +339,7 @@ Guidelines:
 | Concept | Convention | Example |
 |-------|-----------|--------|
 | Namespace | lower_snake_case | `strata::gfx::rhi` |
-| Class / struct | PascalCase | `Render2D` |
+| Class / struct | PascalCase | `BasicPass` |
 | Interface | `I` + PascalCase | `IGpuDevice` |
 | Function | lower_snake_case | `create_swapchain` |
 | Private member | lower_snake_case_ | `device_` |
