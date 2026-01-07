@@ -64,6 +64,9 @@ class InputState
     {
         keys_.fill(false);
         mouse_buttons_.fill(false);
+        mouse_pos_valid_ = false;
+        mouse_x_         = 0;
+        mouse_y_         = 0;
         begin_frame();
     }
 
@@ -139,6 +142,35 @@ class InputState
         return wheel_delta_;
     }
 
+    // Absolute mouse position in *client/window coordinates* (origin top-left).
+    // This is useful for editor picking, UI hit-testing, etc.
+    //
+    // Platform backends should call set_mouse_pos() on motion events.
+    void set_mouse_pos(std::int32_t x, std::int32_t y) noexcept
+    {
+        mouse_x_         = x;
+        mouse_y_         = y;
+        mouse_pos_valid_ = true;
+    }
+
+    [[nodiscard]]
+    bool mouse_pos_valid() const noexcept
+    {
+        return mouse_pos_valid_;
+    }
+
+    [[nodiscard]]
+    std::int32_t mouse_x() const noexcept
+    {
+        return mouse_x_;
+    }
+
+    [[nodiscard]]
+    std::int32_t mouse_y() const noexcept
+    {
+        return mouse_y_;
+    }
+
   private:
     static constexpr std::size_t to_index(Key k) noexcept
     {
@@ -155,6 +187,10 @@ class InputState
     float mouse_dx_{0.0f};
     float mouse_dy_{0.0f};
     float wheel_delta_{0.0f};
+
+    bool         mouse_pos_valid_{false};
+    std::int32_t mouse_x_{0};
+    std::int32_t mouse_y_{0};
 
     bool focused_{true};
 };

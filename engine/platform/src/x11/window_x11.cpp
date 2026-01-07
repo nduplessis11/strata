@@ -212,6 +212,7 @@ struct Window::Impl
         last_mouse_y       = cy;
         mouse_pos_valid    = true;
         ignore_next_motion = true;
+        input.set_mouse_pos(cx, cy);
     }
 
     void apply_cursor_mode() noexcept
@@ -503,6 +504,7 @@ struct Window::Impl
 
                 int const x = evt.xmotion.x;
                 int const y = evt.xmotion.y;
+                input.set_mouse_pos(x, y);
 
                 if (ignore_next_motion)
                 {
