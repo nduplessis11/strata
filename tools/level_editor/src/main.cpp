@@ -227,9 +227,11 @@ static GpuMeshOwned upload_mesh(strata::gfx::rhi::IGpuDevice&     dev,
     {
         // Best-effort cleanup if partial
         if (out.mesh.vertex_buffer)
-            dev.destroy_buffer(out.mesh.vertex_buffer);
+            dev.wait_idle();
+        dev.destroy_buffer(out.mesh.vertex_buffer);
         if (out.mesh.index_buffer)
-            dev.destroy_buffer(out.mesh.index_buffer);
+            dev.wait_idle();
+        dev.destroy_buffer(out.mesh.index_buffer);
         out = {};
     }
 
@@ -436,11 +438,38 @@ int main()
                             sel_i.reserve(36);
                             append_box(sel_v, sel_i, b.min, b.max);
 
-                            // Replace GPU buffers (simple MVP path)
-                            if (st.selected_gpu.mesh.vertex_buffer)
-                                app.device().destroy_buffer(st.selected_gpu.mesh.vertex_buffer);
-                            if (st.selected_gpu.mesh.index_buffer)
-                                app.device().destroy_buffer(st.selected_gpu.mesh.index_buffer);
+                            // --- SAFE selected-mesh buffer replacement
+                            // 
+                            // Vulkan rule: must not destroy buffers still referenced by 
+                            // in-flight cmd buffers. 
+                            // 
+                            // MVP fix: stall the GPU before freeing the old selection
+                            // buffers.
+                            // 
+                            // Later: replace this with a deferred-destruction queue
+                            // keyed by per-frame fences.
+
+                            auto const old_vb = st.selected_gpu.mesh.vertex_buffer;
+                            auto const old_ib = st.selected_gpu.mesh.index_buffer;
+
+                            // (Re)build st.selected_gpu.mesh.* here (create_buffer for new VB/IB,
+                            // set index_count, etc.) 
+                            // 
+                            // IMPORTANT: set st.selected_gpu.mesh to the NEW
+                            // buffers before destroying old ones.
+
+                            // Now that we've swapped selection to the new buffers, safely free the
+                            // old ones.
+                            if (old_vb || old_ib)
+                            {
+                                // Prevents vkDestroyBuffer-in-use.
+                                app.device().wait_idle();
+
+                                if (old_vb)
+                                    app.device().destroy_buffer(old_vb);
+                                if (old_ib)
+                                    app.device().destroy_buffer(old_ib);
+                            }
 
                             st.selected_gpu = upload_mesh(app.device(), sel_v, sel_i);
 
