@@ -471,7 +471,7 @@ struct Window::Impl
                 int const x = evt.xbutton.x;
                 int const y = evt.xbutton.y;
 
-                input.set_mouse_pos(static_cast<float>(x), static_cast<float>(y));
+                input.set_mouse_pos(x, y);
                 last_mouse_x    = x;
                 last_mouse_y    = y;
                 mouse_pos_valid = true;
@@ -499,7 +499,7 @@ struct Window::Impl
                 int const x = evt.xbutton.x;
                 int const y = evt.xbutton.y;
 
-                input.set_mouse_pos(static_cast<float>(x), static_cast<float>(y));
+                input.set_mouse_pos(x, y);
                 last_mouse_x    = x;
                 last_mouse_y    = y;
                 mouse_pos_valid = true;
