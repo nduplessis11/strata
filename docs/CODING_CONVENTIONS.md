@@ -52,6 +52,13 @@ Consistency is still valued, and cleverness is a last resort.
 7. **Use east const**
    - Prefer `Type const&` / `Type const*` over `const Type&` / `const Type*`.
 
+8. **Prefer the Rule of Zero**
+   - Wherever possible, write types that **do not** define custom destructors or copy/move operations.
+   - Prefer composition with RAII members (`std::vector`, `std::string`, `std::unique_ptr`, small owning helpers) so special members can be `= default`.
+   - If a type truly owns a non-RAII resource (e.g., a raw Vulkan handle tied to a device), isolate that ownership in a dedicated wrapper and make copy/move behavior explicit (Rule of Five: define or delete).
+   - Avoid “halfway” special member definitions (e.g., custom destructor but implicit copy) unless you are intentionally enforcing a specific semantic.
+
+
 ---
 
 ## Namespaces and module boundaries
@@ -114,7 +121,7 @@ multiple `.cpp` files, keeping a single public header.
 Naming: `<base>_<area>.cpp`
 Example: `vk_gpu_device_swapchain.cpp`, `vk_gpu_device_recording.cpp`, ...
 - **lower_snake_case**
-  - `application.cpp`, `gpu_device.h`, `render_2d.cpp`
+  - `application.cpp`, `gpu_device.h`, `basic_pass.cpp`
 - Platform/backend suffixes:
   - `window_win32.cpp`, `window_x11.cpp`
   - `vk_wsi_bridge_win32.cpp`
@@ -140,7 +147,7 @@ Private implementation:
 
 ### Classes and structs
 - **PascalCase**
-  - `Application`, `Render2D`, `SwapchainDesc`, `FrameContext`
+  - `Application`, `BasicPass`, `SwapchainDesc`, `FrameContext`
 
 ### Interfaces
 - Interfaces use an `I` prefix + PascalCase:
@@ -332,7 +339,7 @@ Guidelines:
 | Concept | Convention | Example |
 |-------|-----------|--------|
 | Namespace | lower_snake_case | `strata::gfx::rhi` |
-| Class / struct | PascalCase | `Render2D` |
+| Class / struct | PascalCase | `BasicPass` |
 | Interface | `I` + PascalCase | `IGpuDevice` |
 | Function | lower_snake_case | `create_swapchain` |
 | Private member | lower_snake_case_ | `device_` |

@@ -47,10 +47,10 @@ struct BasicPipeline
 // These match the historical hard-coded paths so behavior remains unchanged if
 // callers don't provide shader paths explicitly.
 inline constexpr char const* basic_pipeline_default_vertex_shader_path =
-    "shaders/fullscreen_triangle.vert.spv";
+    "shaders/procedural_cube.vert.spv";
 
 inline constexpr char const* basic_pipeline_default_fragment_shader_path =
-    "shaders/flat_color.frag.spv";
+    "shaders/vertex_color.frag.spv";
 
 // Build a pipeline using Vulkan dynamic rendering.
 // Returns an invalid BasicPipeline on failure.

@@ -1,3 +1,4 @@
+// path: engine/gfx/backend/vk/vk_gpu_device/vk_gpu_device_descriptors.cpp
 // -----------------------------------------------------------------------------
 // engine/gfx/backend/vk/vk_gpu_device/vk_gpu_device_descriptors.cpp
 //
@@ -11,6 +12,7 @@
 #include "../vk_check.h"
 #include "strata/base/diagnostics.h"
 
+#include <limits>
 #include <vector>
 
 namespace strata::gfx::vk
@@ -44,6 +46,26 @@ VkShaderStageFlags to_vk_shader_stage_flags(rhi::ShaderStage stages)
         out |= VK_SHADER_STAGE_COMPUTE_BIT;
 
     return out;
+}
+
+[[nodiscard]]
+constexpr VkDeviceSize align_up(VkDeviceSize value, VkDeviceSize alignment) noexcept
+{
+    if (alignment == 0)
+        return value;
+
+    VkDeviceSize const rem = value % alignment;
+    if (rem == 0)
+        return value;
+
+    VkDeviceSize const add = alignment - rem;
+
+    // Overflow-safe (saturate to value if it would overflow).
+    // In practice our sizes are small, but this keeps the helper correct.
+    if (value > (std::numeric_limits<VkDeviceSize>::max() - add))
+        return value;
+
+    return value + add;
 }
 
 } // namespace
@@ -381,6 +403,16 @@ rhi::FrameResult VkGpuDevice::update_descriptor_set(rhi::DescriptorSetHandle    
     if (writes.empty())
         return rhi::FrameResult::Ok;
 
+    // Cache the device limit we need for descriptor offset validation.
+    VkDeviceSize           min_ubo_alignment = 0;
+    VkPhysicalDevice const physical          = device_.physical();
+    if (physical != VK_NULL_HANDLE)
+    {
+        VkPhysicalDeviceProperties props{};
+        vkGetPhysicalDeviceProperties(physical, &props);
+        min_ubo_alignment = props.limits.minUniformBufferOffsetAlignment;
+    }
+
     std::vector<VkDescriptorBufferInfo> vk_buffer_infos;
     std::vector<VkWriteDescriptorSet>   vk_writes;
     vk_buffer_infos.reserve(writes.size());
@@ -409,8 +441,70 @@ rhi::FrameResult VkGpuDevice::update_descriptor_set(rhi::DescriptorSetHandle    
 
         VkDeviceSize const offset = static_cast<VkDeviceSize>(w.buffer.offset_bytes);
         VkDeviceSize const range  = (w.buffer.range_bytes == 0)
-                                        ? VK_WHOLE_SIZE
-                                        : static_cast<VkDeviceSize>(w.buffer.range_bytes);
+             ? VK_WHOLE_SIZE
+             : static_cast<VkDeviceSize>(w.buffer.range_bytes);
+
+        // Vulkan spec requirement:
+        // UNIFORM_BUFFER (and UNIFORM_BUFFER_DYNAMIC) descriptor offsets must be aligned to
+        // minUniformBufferOffsetAlignment.
+        if (min_ubo_alignment != 0)
+        {
+            VkDeviceSize const aligned = align_up(offset, min_ubo_alignment);
+            if (aligned != offset)
+            {
+                STRATA_LOG_ERROR(diag.logger(),
+                                 "vk.desc",
+                                 "update_descriptor_set: uniform buffer offset {} is not aligned "
+                                 "to minUniformBufferOffsetAlignment {} (buffer={}, binding={})",
+                                 static_cast<std::uint64_t>(offset),
+                                 static_cast<std::uint64_t>(min_ubo_alignment),
+                                 w.buffer.buffer.value,
+                                 w.binding);
+                diag.debug_break_on_error();
+                return rhi::FrameResult::Error;
+            }
+        }
+
+        // Extra defensive bounds check against our tracked buffer sizes (when range is explicit).
+        if (w.buffer.buffer)
+        {
+            std::size_t const bindex = static_cast<std::size_t>(w.buffer.buffer.value - 1);
+            if (bindex < buffers_.size())
+            {
+                VkDeviceSize const buf_size =
+                    static_cast<VkDeviceSize>(buffers_[bindex].size_bytes);
+
+                if (offset > buf_size)
+                {
+                    STRATA_LOG_ERROR(diag.logger(),
+                                     "vk.desc",
+                                     "update_descriptor_set: offset {} exceeds buffer {} size {}",
+                                     static_cast<std::uint64_t>(offset),
+                                     w.buffer.buffer.value,
+                                     static_cast<std::uint64_t>(buf_size));
+                    diag.debug_break_on_error();
+                    return rhi::FrameResult::Error;
+                }
+
+                if (range != VK_WHOLE_SIZE)
+                {
+                    // Overflow-safe check: offset + range <= buf_size
+                    if (range > (buf_size - offset))
+                    {
+                        STRATA_LOG_ERROR(diag.logger(),
+                                         "vk.desc",
+                                         "update_descriptor_set: range {} at offset {} exceeds "
+                                         "buffer {} size {}",
+                                         static_cast<std::uint64_t>(range),
+                                         static_cast<std::uint64_t>(offset),
+                                         w.buffer.buffer.value,
+                                         static_cast<std::uint64_t>(buf_size));
+                        diag.debug_break_on_error();
+                        return rhi::FrameResult::Error;
+                    }
+                }
+            }
+        }
 
         vk_buffer_infos.push_back(VkDescriptorBufferInfo{
             .buffer = vk_buffer,

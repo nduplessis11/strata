@@ -7,7 +7,7 @@ It reflects the current “production-leaning, learning-first” approach:
 - Prefer **RAII cleanup**
 - Prefer **safe destruction** (often via `wait_idle()`), even if it’s not the most performant yet
 
-> Scope: what exists in `core::Application`, `base::Diagnostics`, `platform::Window`, `platform::WsiHandle`, `gfx::renderer::Render2D`, `gfx::rhi::IGpuDevice`, and the Vulkan backend (`gfx/backend/vk/*`).  
+> Scope: what exists in `core::Application`, `base::Diagnostics`, `platform::Window`, `platform::WsiHandle`, `gfx::renderer::BasicPass`, `gfx::rhi::IGpuDevice`, and the Vulkan backend (`gfx/backend/vk/*`).  
 > Non-scope: future ECS lifetimes, asset systems, multithreading, streaming, etc.
 
 ---
@@ -31,7 +31,7 @@ Strata currently uses `IGpuDevice::wait_idle()` as the main safety lever:
 This is safe, simple, and predictable for early development.
 
 ### Renderer-owned frame recording
-`Renderer::draw_frame()` drives the full frame (via `RenderGraph` → `Render2D`):
+`Renderer::draw_frame()` drives the full frame (via `RenderGraph` → `BasicPass`):
 > acquire → begin cmd → record → end cmd → submit → present
 
 The Vulkan backend owns the actual `VkCommandBuffer` and sync primitives, but the renderer owns **when** command recording happens in the frame.
@@ -76,7 +76,7 @@ flowchart TD
 ### Ownership rules
 - `Application::Impl` **owns** the `Window`, `IGpuDevice`, and `Renderer`.
 - `platform::WsiHandle` is a **non-owning value** describing native window system state needed to create a Vulkan surface.
-- `RenderGraph` (MVP v1: `Render2D`) **owns RHI handles** (e.g., `PipelineHandle`, plus UBO `DescriptorSetLayoutHandle` and per-swapchain-image `DescriptorSetHandle` / `BufferHandle` collections) but not Vulkan objects directly.
+- `RenderGraph` (MVP v1: `BasicPass`) **owns RHI handles** (e.g., `PipelineHandle`, plus UBO `DescriptorSetLayoutHandle` and per-swapchain-image (per-UBO-slot) `DescriptorSetHandle` / `BufferHandle` collections) but not Vulkan objects directly.
 - `VkGpuDevice` **owns Vulkan objects** via RAII wrappers and explicit teardown order.
 - `VkSwapchainWrapper` owns:
   - `VkSwapchainKHR`
@@ -181,7 +181,7 @@ Creation happens in a strict “bring-up” sequence:
    - `auto renderer_exp = Renderer::create(*diagnostics, *device, swapchain);`
    - `if (!renderer_exp) return std::unexpected(ApplicationError::RendererCreateFailed);`
    - `Renderer renderer = std::move(*renderer_exp);`
-   - This calls `device.create_pipeline(...)` inside `Render2D::create(...)` (via `RenderGraph::create(...)`).
+   - This calls `device.create_pipeline(...)` inside `BasicPass::create(...)` (via `RenderGraph::create(...)`).
 
 
 Only after all of the above succeed is `Application` returned as a valid value.
@@ -293,9 +293,10 @@ The critical part is `~Impl()`:
 
 Then C++ destroys members in reverse declaration order. In our `Impl`, the key sequence is effectively:
 
-1. **`Renderer` destructor** (via `RenderGraph` / `Render2D`)
+1. **`Renderer` destructor** (via `RenderGraph` / `BasicPass`)
    - calls `device->destroy_pipeline(pipeline_)`
-   - frees/destroys renderer-owned UBO descriptor resources (per-swapchain-image descriptor sets + uniform buffers via `free_descriptor_set` / `destroy_buffer`, plus `destroy_descriptor_set_layout`)
+   - destroys renderer-owned demo geometry buffers (e.g., demo cube vertex buffer) via `destroy_buffer`
+   - frees/destroys renderer-owned UBO descriptor resources (per-swapchain-image (per-UBO-slot) descriptor sets + uniform buffers via `free_descriptor_set` / `destroy_buffer`, plus `destroy_descriptor_set_layout`)
 2. **`device` destructor**
    - destroys the Vulkan backend objects (through virtual destructor dispatch)
    - destroys `VkSurfaceKHR` during `VkInstanceWrapper` cleanup (inside backend lifetime)

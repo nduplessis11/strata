@@ -225,7 +225,7 @@ This structure keeps renderer code clean and backend-agnostic.
 ### Renderer (`gfx/renderer`)
 `Renderer` is a higher-level renderer facade owned by `core::Application`:
 - Owns a `RenderScene` (what to draw) and a `RenderGraph` (how to draw)
-- MVP v1: `RenderGraph` is a thin wrapper around the existing `Render2D` implementation, which:
+- MVP v1: `RenderGraph` is a thin wrapper around the existing `BasicPass` implementation, which:
   - holds a pointer/reference to `IGpuDevice`
   - holds RHI handles (e.g., swapchain/pipeline, descriptor set layout/set, uniform buffer handles)
   - exposes a simple `draw_frame()` that returns `rhi::FrameResult`
@@ -284,7 +284,7 @@ A common pattern in the codebase:
 
 The file `strata_core.puml` is a generated class diagram (from clang-uml).
 
-Suggested repo layout:
+Location:
 
 ```
 docs/
