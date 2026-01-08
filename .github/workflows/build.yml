@@ -7,7 +7,6 @@ on:
   pull_request:
     branches: ["master"]
 
-# Needed for creating Releases (tag pushes). Safe to keep for PRs.
 permissions:
   contents: write
 
@@ -35,7 +34,6 @@ jobs:
           test -f "$VULKAN_SDK/Include/vulkan/vulkan.h"
           test -f "$VULKAN_SDK/Lib/vulkan-1.lib"
 
-          # Make shader tools available if your build uses them
           echo "$VULKAN_SDK/Bin" >> "$GITHUB_PATH"
           echo "$VULKAN_SDK/bin" >> "$GITHUB_PATH"
 
@@ -58,60 +56,104 @@ jobs:
         run: |
           ctest --test-dir "$env:GITHUB_WORKSPACE\build" --build-config Release --output-on-failure
 
-      # ---- Stage files to publish ----
+      # ----------------------------------------------------------------------------
+      # Stage: arcade shooter
+      # ----------------------------------------------------------------------------
       - name: Stage arcade shooter dist
-        id: stage
+        id: stage_shooter
         shell: pwsh
         run: |
           $buildDir = Join-Path $env:GITHUB_WORKSPACE "build"
-          $distDir  = Join-Path $env:GITHUB_WORKSPACE "dist"
+          $distRoot = Join-Path $env:GITHUB_WORKSPACE "dist"
+          $distDir  = Join-Path $distRoot "arcade_shooter"
           New-Item -ItemType Directory -Force -Path $distDir | Out-Null
 
-          # Find arcade shooter EXE (current target output name)
           $exe = Get-ChildItem -Path $buildDir -Recurse -File -Filter "strata_shooter.exe" | Select-Object -First 1
           if (-not $exe) { throw "Could not find strata_shooter.exe under $buildDir" }
 
-          # Publish name (you can keep strata_shooter.exe if you prefer)
           Copy-Item $exe.FullName (Join-Path $distDir "arcade_shooter.exe") -Force
 
-          # Optional: include PDB if present
           $pdbPath = [System.IO.Path]::ChangeExtension($exe.FullName, ".pdb")
           if (Test-Path $pdbPath) { Copy-Item $pdbPath $distDir -Force }
 
-          # Shaders: safest is the shaders folder next to the EXE output
           $exeDir    = $exe.Directory.FullName
           $shaderDir = Join-Path $exeDir "shaders"
           if (Test-Path $shaderDir) {
             Copy-Item $shaderDir (Join-Path $distDir "shaders") -Recurse -Force
           } else {
-            Write-Host "::warning::No shaders folder found next to exe at $shaderDir. If runtime needs shaders, ensure your post-build copy step runs in CI."
+            Write-Host "::warning::No shaders folder found next to shooter exe at $shaderDir."
           }
 
           "distDir=$distDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      # ---- 1) Upload as Actions artifact (always) ----
-      - name: Upload artifact (Actions)
+      - name: Upload artifact (Actions) - arcade shooter
         uses: actions/upload-artifact@v4
         with:
           name: arcade_shooter-windows-Release
-          path: ${{ steps.stage.outputs.distDir }}
+          path: ${{ steps.stage_shooter.outputs.distDir }}
           if-no-files-found: error
           retention-days: 14
 
-      # ---- 2) Publish to GitHub Releases (only on tag pushes) ----
-      - name: Zip release payload
+      # ----------------------------------------------------------------------------
+      # Stage: level editor
+      # ----------------------------------------------------------------------------
+      - name: Stage level editor dist
+        id: stage_editor
+        shell: pwsh
+        run: |
+          $buildDir = Join-Path $env:GITHUB_WORKSPACE "build"
+          $distRoot = Join-Path $env:GITHUB_WORKSPACE "dist"
+          $distDir  = Join-Path $distRoot "level_editor"
+          New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+
+          $exe = Get-ChildItem -Path $buildDir -Recurse -File -Filter "strata_level_editor.exe" | Select-Object -First 1
+          if (-not $exe) { throw "Could not find strata_level_editor.exe under $buildDir (did you add add_subdirectory(tools/level_editor) to root CMakeLists.txt?)" }
+
+          Copy-Item $exe.FullName (Join-Path $distDir "level_editor.exe") -Force
+
+          $pdbPath = [System.IO.Path]::ChangeExtension($exe.FullName, ".pdb")
+          if (Test-Path $pdbPath) { Copy-Item $pdbPath $distDir -Force }
+
+          # Shaders: your editor target POST_BUILD copies them next to the exe
+          $exeDir    = $exe.Directory.FullName
+          $shaderDir = Join-Path $exeDir "shaders"
+          if (Test-Path $shaderDir) {
+            Copy-Item $shaderDir (Join-Path $distDir "shaders") -Recurse -Force
+          } else {
+            Write-Host "::warning::No shaders folder found next to editor exe at $shaderDir. Ensure the POST_BUILD copy_directory runs in CI."
+          }
+
+          "distDir=$distDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Upload artifact (Actions) - level editor
+        uses: actions/upload-artifact@v4
+        with:
+          name: level_editor-windows-Release
+          path: ${{ steps.stage_editor.outputs.distDir }}
+          if-no-files-found: error
+          retention-days: 14
+
+      # ---- Publish to GitHub Releases (only on tag pushes) ----
+      - name: Zip release payloads (Windows)
         if: github.ref_type == 'tag'
         shell: pwsh
         run: |
-          $zip = Join-Path $env:GITHUB_WORKSPACE ("arcade_shooter-" + "${{ github.ref_name }}" + "-windows.zip")
-          if (Test-Path $zip) { Remove-Item $zip -Force }
-          Compress-Archive -Path (Join-Path $env:GITHUB_WORKSPACE "dist\*") -DestinationPath $zip
+          $zipShooter = Join-Path $env:GITHUB_WORKSPACE ("arcade_shooter-" + "${{ github.ref_name }}" + "-windows.zip")
+          $zipEditor  = Join-Path $env:GITHUB_WORKSPACE ("level_editor-" + "${{ github.ref_name }}" + "-windows.zip")
 
-      - name: Create/Update GitHub Release + upload asset
+          if (Test-Path $zipShooter) { Remove-Item $zipShooter -Force }
+          if (Test-Path $zipEditor)  { Remove-Item $zipEditor  -Force }
+
+          Compress-Archive -Path (Join-Path $env:GITHUB_WORKSPACE "dist\arcade_shooter\*") -DestinationPath $zipShooter
+          Compress-Archive -Path (Join-Path $env:GITHUB_WORKSPACE "dist\level_editor\*")   -DestinationPath $zipEditor
+
+      - name: Create/Update GitHub Release + upload assets (Windows)
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ github.workspace }}/arcade_shooter-${{ github.ref_name }}-windows.zip
+          files: |
+            ${{ github.workspace }}/arcade_shooter-${{ github.ref_name }}-windows.zip
+            ${{ github.workspace }}/level_editor-${{ github.ref_name }}-windows.zip
           generate_release_notes: true
 
   build-linux-x11:
@@ -135,7 +177,6 @@ jobs:
           echo "gcc-14: $(gcc-14 --version | head -n 1)"
           echo "g++-14: $(g++-14 --version | head -n 1)"
 
-      # ---- Vulkan SDK (PINNED; same as Windows) ----
       - name: Install Vulkan SDK
         uses: humbletim/install-vulkan-sdk@v1.2
         with:
@@ -147,7 +188,6 @@ jobs:
         run: |
           echo "VULKAN_SDK=$VULKAN_SDK"
           ls -la "$VULKAN_SDK" || true
-          # SDK layout differs a bit by platform; accept either casing.
           test -f "$VULKAN_SDK/include/vulkan/vulkan.h" || test -f "$VULKAN_SDK/Include/vulkan/vulkan.h"
 
       # ---- Configure / Build / Test ----
@@ -175,23 +215,23 @@ jobs:
         run: |
           xvfb-run -a ctest --test-dir "$GITHUB_WORKSPACE/build" -C Release --output-on-failure
 
-      # ---- Stage files to publish ----
+      # ----------------------------------------------------------------------------
+      # Stage: arcade shooter
+      # ----------------------------------------------------------------------------
       - name: Stage arcade shooter dist
-        id: stage
+        id: stage_shooter
         shell: bash
         run: |
           buildDir="$GITHUB_WORKSPACE/build"
-          distDir="$GITHUB_WORKSPACE/dist"
+          distDir="$GITHUB_WORKSPACE/dist/arcade_shooter"
           mkdir -p "$distDir"
 
-          # Find Linux executable (expected output name)
           exe="$(find "$buildDir" -type f -name "strata_shooter" -perm -111 | head -n 1 || true)"
           if [ -z "$exe" ]; then
             exe="$(find "$buildDir" -type f -name "strata_shooter" | head -n 1 || true)"
           fi
           if [ -z "$exe" ]; then
             echo "Could not find strata_shooter under $buildDir"
-            echo "Here are some files near the build root to help debug:"
             find "$buildDir" -maxdepth 4 -type f | head -n 200
             exit 1
           fi
@@ -199,24 +239,62 @@ jobs:
           cp -f "$exe" "$distDir/arcade_shooter"
           chmod +x "$distDir/arcade_shooter"
 
-          # Shaders: prefer folder next to the executable; fall back to repo root /shaders if present
           shaderDir="$(dirname "$exe")/shaders"
           if [ -d "$shaderDir" ]; then
             cp -R "$shaderDir" "$distDir/shaders"
-          elif [ -d "$GITHUB_WORKSPACE/shaders" ]; then
-            cp -R "$GITHUB_WORKSPACE/shaders" "$distDir/shaders"
           else
-            echo "::warning::No shaders folder found. If runtime needs shaders, ensure your post-build copy step runs in CI."
+            echo "::warning::No shaders folder found next to shooter exe at $shaderDir."
           fi
 
           echo "distDir=$distDir" >> "$GITHUB_OUTPUT"
 
-      # ---- 1) Upload as Actions artifact (always) ----
-      - name: Upload artifact (Actions)
+      - name: Upload artifact (Actions) - arcade shooter
         uses: actions/upload-artifact@v4
         with:
           name: arcade_shooter-linux-x11-Release
-          path: ${{ steps.stage.outputs.distDir }}
+          path: ${{ steps.stage_shooter.outputs.distDir }}
+          if-no-files-found: error
+          retention-days: 14
+
+      # ----------------------------------------------------------------------------
+      # Stage: level editor
+      # ----------------------------------------------------------------------------
+      - name: Stage level editor dist
+        id: stage_editor
+        shell: bash
+        run: |
+          buildDir="$GITHUB_WORKSPACE/build"
+          distDir="$GITHUB_WORKSPACE/dist/level_editor"
+          mkdir -p "$distDir"
+
+          exe="$(find "$buildDir" -type f -name "strata_level_editor" -perm -111 | head -n 1 || true)"
+          if [ -z "$exe" ]; then
+            exe="$(find "$buildDir" -type f -name "strata_level_editor" | head -n 1 || true)"
+          fi
+          if [ -z "$exe" ]; then
+            echo "Could not find strata_level_editor under $buildDir (did you add add_subdirectory(tools/level_editor)?)"
+            find "$buildDir" -maxdepth 5 -type f | head -n 250
+            exit 1
+          fi
+
+          cp -f "$exe" "$distDir/level_editor"
+          chmod +x "$distDir/level_editor"
+
+          # Shaders: your editor target POST_BUILD copies them next to the exe
+          shaderDir="$(dirname "$exe")/shaders"
+          if [ -d "$shaderDir" ]; then
+            cp -R "$shaderDir" "$distDir/shaders"
+          else
+            echo "::warning::No shaders folder found next to editor exe at $shaderDir. Ensure POST_BUILD copy_directory runs in CI."
+          fi
+
+          echo "distDir=$distDir" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact (Actions) - level editor
+        uses: actions/upload-artifact@v4
+        with:
+          name: level_editor-linux-x11-Release
+          path: ${{ steps.stage_editor.outputs.distDir }}
           if-no-files-found: error
           retention-days: 14
 
@@ -233,20 +311,32 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends zip
 
-      - name: Download linux artifact
+      - name: Download linux shooter artifact
         uses: actions/download-artifact@v4
         with:
           name: arcade_shooter-linux-x11-Release
-          path: dist
+          path: dist/arcade_shooter
 
-      - name: Zip release payload (Linux X11)
+      - name: Download linux editor artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: level_editor-linux-x11-Release
+          path: dist/level_editor
+
+      - name: Zip release payloads (Linux X11)
         shell: bash
         run: |
-          zipPath="$GITHUB_WORKSPACE/arcade_shooter-${{ github.ref_name }}-linux-x11.zip"
-          rm -f "$zipPath"
-          (cd "$GITHUB_WORKSPACE/dist" && zip -r "$zipPath" .)
+          zipShooter="$GITHUB_WORKSPACE/arcade_shooter-${{ github.ref_name }}-linux-x11.zip"
+          zipEditor="$GITHUB_WORKSPACE/level_editor-${{ github.ref_name }}-linux-x11.zip"
 
-      - name: Upload asset to GitHub Release
+          rm -f "$zipShooter" "$zipEditor"
+
+          (cd "$GITHUB_WORKSPACE/dist/arcade_shooter" && zip -r "$zipShooter" .)
+          (cd "$GITHUB_WORKSPACE/dist/level_editor"  && zip -r "$zipEditor"  .)
+
+      - name: Upload assets to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ github.workspace }}/arcade_shooter-${{ github.ref_name }}-linux-x11.zip
+          files: |
+            ${{ github.workspace }}/arcade_shooter-${{ github.ref_name }}-linux-x11.zip
+            ${{ github.workspace }}/level_editor-${{ github.ref_name }}-linux-x11.zip
