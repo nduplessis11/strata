@@ -96,7 +96,7 @@ flowchart TD
 
 The application loop uses:
 - `window.poll_events()`
-- `window.input()` (raw input snapshot (includes focus state); `poll_events()` refreshes it and resets per-frame deltas)
+- `window.input()` (raw input snapshot (includes focus state + mouse position); `poll_events()` refreshes it and resets per-frame deltas)
 - `window.should_close()` / `window.request_close()`
 - `window.window_size()` / `window.framebuffer_size()`
 

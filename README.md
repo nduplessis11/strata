@@ -57,6 +57,7 @@ engine/platform      OS + windowing + input + event polling + WSI handle product
 engine/core          Application wrapper, main loop, runtime helpers
 engine/gfx           RHI + renderer + backend/vk + shaders
 games/arcade_shooter  Example game / executable
+tools/level_editor   MVP level editor tool / executable
 docs/                Architecture + pipeline + lifetime + conventions
 cmake/               CMake helper modules (warnings, etc.)
 ```
@@ -104,21 +105,24 @@ cmake --build --preset release
 
 ### Running
 
-The example executable target is:
+The example executable targets are:
 
 - `strata_shooter` (from `games/arcade_shooter`)
+- `strata_level_editor` (from `tools/level_editor`)
 
-After building, you can usually run it from the build tree, e.g.:
+After building, you can usually run them from the build tree, e.g.:
 
 ```bash
 # Linux/macOS-like shells
 ./build/debug/games/arcade_shooter/strata_shooter
+./build/debug/tools/level_editor/strata_level_editor
 ```
 
 On Windows (PowerShell), it will typically be:
 
 ```powershell
 .\build\debug\games\arcade_shooter\strata_shooter.exe
+.\build\debug\tools\level_editor\strata_level_editor.exe
 ```
 
 #### Shader assets location
@@ -127,7 +131,7 @@ The Vulkan backend loads SPIR-V binaries from paths like:
 - `shaders/procedural_cube.vert.spv`
 - `shaders/vertex_color.frag.spv`
 
-The `strata_shooter` target has a **post-build step** that copies the built shader outputs to:
+The `strata_shooter` and `strata_level_editor` targets have a **post-build step** that copies the built shader outputs to:
 
 - `<exe_dir>/shaders/`
 
@@ -177,6 +181,7 @@ At a high level, the codebase is split into layered targets:
 - `strata_gfx` (INTERFACE): aggregator target (`strata_gfx_rhi` + `strata_gfx_renderer` + active backend(s))
 - `strata_core` (STATIC): `Application` wrapper and orchestration (links `strata_base` + `strata_platform` + `strata_gfx`)
 - `strata_shooter` (EXECUTABLE): example “game” that links `strata_core`
+- `strata_level_editor` (EXECUTABLE): MVP level editor tool that links `strata_core`
 
 ---
 

@@ -53,14 +53,14 @@ Key types:
 ### `engine/platform`
 Responsibilities:
 - Window creation & event polling (pImpl keeps OS headers out of public headers).
-- Raw input snapshot (`platform::InputState`) owned by `platform::Window` and refreshed by `poll_events()` (keys/buttons down + focus state + per-frame deltas).
+- Raw input snapshot (`platform::InputState`) owned by `platform::Window` and refreshed by `poll_events()` (keys/buttons down + focus state + absolute mouse position + per-frame deltas).
 - Cursor control (visibility/confine/lock) via `platform::CursorMode` (set/query via `platform::Window`).
 - WSI integration (Win32/X11/Wayland) via a **platform-neutral handle type**: `platform::WsiHandle`.
 - Platform-facing types like `WindowDesc`, `CursorMode`, `Extent2d`.
 
 Key types:
 - `strata::platform::Window` (PImpl; move-only; owns native window resources)
-- `strata::platform::InputState` (per-window raw input snapshot: key/button down state + focus state + mouse/wheel deltas)
+- `strata::platform::InputState` (per-window raw input snapshot: key/button down state + focus state + mouse position + mouse/wheel deltas)
 - `strata::platform::Key`, `strata::platform::MouseButton` (input enums)
 - `strata::platform::CursorMode` (cursor visibility / confinement / lock policy enum)
 - `strata::platform::WsiHandle` (a `std::variant` of `platform::wsi::Win32 | X11 | Wayland`)
