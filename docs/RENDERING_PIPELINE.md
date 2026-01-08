@@ -70,7 +70,7 @@ Ownership is explicit (PImpl inside `Application`):
 Per iteration:
 
 1. `window.poll_events()`
-   - This refreshes the window-owned `platform::InputState` snapshot and resets per-frame deltas (mouse, wheel).
+   - This refreshes the window-owned `platform::InputState` snapshot (including mouse position) and resets per-frame deltas (mouse, wheel).
 2. Compute `FrameContext { frame_index, delta_seconds }`
 3. Optional user tick callback: `tick(*this, ctx)`
 4. Query framebuffer size and clamp:

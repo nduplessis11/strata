@@ -142,9 +142,13 @@ class C_0013081563177970586290 {
 +mouse_delta_x() const noexcept : float
 +mouse_delta_y() const noexcept : float
 +mouse_down(MouseButton b) const noexcept : bool
++mouse_pos_valid() const noexcept : bool
++mouse_x() const noexcept : std::int32_t
++mouse_y() const noexcept : std::int32_t
 +set_focused(bool focused) noexcept : void
 +set_key(Key key, bool down) noexcept : void
 +set_mouse_button(MouseButton b, bool down) noexcept : void
++set_mouse_pos(std::int32_t x, std::int32_t y) noexcept : void
 {static} -to_index(Key k) constexpr noexcept : std::size_t
 {static} -to_index(MouseButton b) constexpr noexcept : std::size_t
 +wheel_delta() const noexcept : float
@@ -154,6 +158,9 @@ __
 -mouse_buttons_ : std::array<bool,static_cast<std::size_t>(MouseButton::Count)>
 -mouse_dx_ : float
 -mouse_dy_ : float
+-mouse_pos_valid_ : bool
+-mouse_x_ : std::int32_t
+-mouse_y_ : std::int32_t
 -wheel_delta_ : float
 }
 class "strata::platform::wsi::Win32Instance" as C_0009843677739255298692

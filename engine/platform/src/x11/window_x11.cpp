@@ -212,6 +212,7 @@ struct Window::Impl
         last_mouse_y       = cy;
         mouse_pos_valid    = true;
         ignore_next_motion = true;
+        input.set_mouse_pos(cx, cy);
     }
 
     void apply_cursor_mode() noexcept
@@ -467,6 +468,14 @@ struct Window::Impl
 
             case ButtonPress:
             {
+                int const x = evt.xbutton.x;
+                int const y = evt.xbutton.y;
+
+                input.set_mouse_pos(x, y);
+                last_mouse_x    = x;
+                last_mouse_y    = y;
+                mouse_pos_valid = true;
+
                 if (evt.xbutton.button == Button4)
                 {
                     input.add_wheel_delta(+1.0f);
@@ -480,19 +489,25 @@ struct Window::Impl
 
                 MouseButton b{};
                 if (translate_button(evt.xbutton.button, b))
-                {
                     input.set_mouse_button(b, true);
-                }
+
                 break;
             }
 
             case ButtonRelease:
             {
+                int const x = evt.xbutton.x;
+                int const y = evt.xbutton.y;
+
+                input.set_mouse_pos(x, y);
+                last_mouse_x    = x;
+                last_mouse_y    = y;
+                mouse_pos_valid = true;
+
                 MouseButton b{};
                 if (translate_button(evt.xbutton.button, b))
-                {
                     input.set_mouse_button(b, false);
-                }
+
                 break;
             }
 
@@ -503,6 +518,7 @@ struct Window::Impl
 
                 int const x = evt.xmotion.x;
                 int const y = evt.xmotion.y;
+                input.set_mouse_pos(x, y);
 
                 if (ignore_next_motion)
                 {
