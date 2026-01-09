@@ -8,7 +8,7 @@
 // -----------------------------------------------------------------------------
 //
 // NOTE (DIAGNOSTIC BUILD):
-// This is a drop-in replacement of the file with additional logging around:
+// This adds additional logging around:
 //   - RMB transitions (Locked/Normal)
 //   - Camera yaw/pitch + basis vectors
 //   - Mouse->NDC->view-space ray construction
