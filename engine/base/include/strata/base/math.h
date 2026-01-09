@@ -202,32 +202,40 @@ inline Mat4 look_at_rh(Vec3 eye, Vec3 target, Vec3 up) noexcept
     Vec3 const s = normalize(cross(f, up)); // right
     Vec3 const u = cross(s, f);             // true up
 
-    Mat4 out = Mat4::identity();
+    Mat4 out{};
 
-    // Basis (columns): right, up, -forward
+    // IMPORTANT:
+    // Mat4 is column-major (m[col][row]) and vectors are columns (v' = M * v).
+    // For a *view* matrix (world -> view), the basis vectors live in the ROWS.
+    // (This matches GLM's lookAt with the same conventions.)
+
+    // Row 0: s (right)
     out.m[0][0] = s.x;
-    out.m[0][1] = s.y;
-    out.m[0][2] = s.z;
-    out.m[0][3] = 0.0f;
-
-    out.m[1][0] = u.x;
-    out.m[1][1] = u.y;
-    out.m[1][2] = u.z;
-    out.m[1][3] = 0.0f;
-
-    out.m[2][0] = -f.x;
-    out.m[2][1] = -f.y;
-    out.m[2][2] = -f.z;
-    out.m[2][3] = 0.0f;
-
-    // Translation (fourth column)
+    out.m[1][0] = s.y;
+    out.m[2][0] = s.z;
     out.m[3][0] = -dot(s, eye);
+
+    // Row 1: u (up)
+    out.m[0][1] = u.x;
+    out.m[1][1] = u.y;
+    out.m[2][1] = u.z;
     out.m[3][1] = -dot(u, eye);
-    out.m[3][2] = dot(f, eye); // because basis is -f
+
+    // Row 2: -f (forward)
+    out.m[0][2] = -f.x;
+    out.m[1][2] = -f.y;
+    out.m[2][2] = -f.z;
+    out.m[3][2] = dot(f, eye);
+
+    // Row 3
+    out.m[0][3] = 0.0f;
+    out.m[1][3] = 0.0f;
+    out.m[2][3] = 0.0f;
     out.m[3][3] = 1.0f;
 
     return out;
 }
+
 
 // Right-handed perspective projection with Vulkan depth range [0, 1] (ZO).
 //

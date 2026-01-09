@@ -6,6 +6,16 @@
 //   - Camera: WASD + mouse look (hold RMB to lock cursor).
 //   - Picking: LMB selects the box under cursor via ray vs AABB.
 // -----------------------------------------------------------------------------
+//
+// NOTE (DIAGNOSTIC BUILD):
+// This adds additional logging around:
+//   - RMB transitions (Locked/Normal)
+//   - Camera yaw/pitch + basis vectors
+//   - Mouse->NDC->view-space ray construction
+//   - AABB hit results + "project ray point back to screen" sanity check
+//
+// All non-logging behavior is kept the same.
+//
 
 #include "strata/core/action_map.h"
 #include "strata/core/application.h"
@@ -25,6 +35,100 @@
 namespace
 {
 using strata::base::math::Vec3;
+
+// ----------------------------- DIAGNOSTIC TOGGLES ----------------------------
+//
+// Flip to 0 to silence all added logging.
+#ifndef STRATA_LEVEL_EDITOR_PICK_DIAG
+#define STRATA_LEVEL_EDITOR_PICK_DIAG 1
+#endif
+
+// Print full per-pick details (ray, camera, per-box hits).
+#ifndef STRATA_LEVEL_EDITOR_PICK_DIAG_VERBOSE
+#define STRATA_LEVEL_EDITOR_PICK_DIAG_VERBOSE 1
+#endif
+
+// Perform a sanity check: project a point along the computed ray back to screen
+// and compare against the originating mouse pixel.
+#ifndef STRATA_LEVEL_EDITOR_PICK_DIAG_PROJECT_CHECK
+#define STRATA_LEVEL_EDITOR_PICK_DIAG_PROJECT_CHECK 1
+#endif
+
+#if STRATA_LEVEL_EDITOR_PICK_DIAG
+static std::int64_t g_pick_seq = 0; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+static bool is_finite(Vec3 v) noexcept
+{
+    return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+}
+
+static void log_vec3(char const* name, Vec3 v)
+{
+    std::println("  {} = ({:.6f}, {:.6f}, {:.6f})", name, v.x, v.y, v.z);
+}
+
+[[maybe_unused]] static void log_mat4_compact(char const* name, strata::base::math::Mat4 const& m)
+{
+    // Mat4 is stored column-major as m[col][row]. Print as rows for readability.
+    std::println("  {} =", name);
+    for (int r = 0; r < 4; ++r)
+    {
+        std::println("    [{: .6f} {: .6f} {: .6f} {: .6f}]",
+                     m.m[0][r],
+                     m.m[1][r],
+                     m.m[2][r],
+                     m.m[3][r]);
+    }
+}
+
+static bool project_world_to_screen(strata::gfx::renderer::Camera3D const& cam,
+                                    Vec3                                   world,
+                                    std::int32_t                           width,
+                                    std::int32_t                           height,
+                                    float&                                 out_sx,
+                                    float&                                 out_sy,
+                                    float&                                 out_ndc_x,
+                                    float&                                 out_ndc_y,
+                                    float&                                 out_ndc_z)
+{
+    using strata::base::math::Mat4;
+    using strata::base::math::mul;
+    using strata::base::math::Vec4;
+
+    float const w = (width > 0) ? static_cast<float>(width) : 1.0f;
+    float const h = (height > 0) ? static_cast<float>(height) : 1.0f;
+
+    float const aspect = w / h;
+
+    Mat4 const vp = cam.view_proj(aspect, true);
+
+    Vec4 const clip = mul(vp, Vec4{world, 1.0f});
+    if (!std::isfinite(clip.x) ||
+        !std::isfinite(clip.y) ||
+        !std::isfinite(clip.z) ||
+        !std::isfinite(clip.w))
+    {
+        return false;
+    }
+
+    if (std::abs(clip.w) < 1e-6f)
+        return false;
+
+    float const invw = 1.0f / clip.w;
+
+    out_ndc_x = clip.x * invw;
+    out_ndc_y = clip.y * invw;
+    out_ndc_z = clip.z * invw;
+
+    // Vulkan viewport with positive height:
+    // screen_x = (ndc_x * 0.5 + 0.5) * w
+    // screen_y = (ndc_y * 0.5 + 0.5) * h
+    out_sx = (out_ndc_x * 0.5f + 0.5f) * w;
+    out_sy = (out_ndc_y * 0.5f + 0.5f) * h;
+
+    return std::isfinite(out_sx) && std::isfinite(out_sy);
+}
+#endif
 
 // Matches renderer v1 vertex input: location 0 = vec3 position (12 bytes)
 struct VertexP3
@@ -259,6 +363,10 @@ struct EditorState
 
     // Input edge tracking
     bool prev_lmb{false};
+
+#if STRATA_LEVEL_EDITOR_PICK_DIAG
+    bool prev_rmb{false};
+#endif
 };
 
 } // namespace
@@ -338,6 +446,39 @@ int main()
 
             // RMB = mouse look (lock cursor). Otherwise keep cursor normal for selection.
             bool const rmb = win.input().mouse_down(strata::platform::MouseButton::Right);
+
+#if STRATA_LEVEL_EDITOR_PICK_DIAG
+            {
+                bool const rmb_pressed  = (rmb && !st.prev_rmb);
+                bool const rmb_released = (!rmb && st.prev_rmb);
+                st.prev_rmb             = rmb;
+
+                if (rmb_pressed || rmb_released)
+                {
+                    auto [ww, wh] = win.window_size();
+                    auto [fw, fh] = win.framebuffer_size();
+
+                    std::println("[pickdiag] RMB {}  focus={}  cursor_mode->{}",
+                                 rmb_pressed ? "PRESSED" : "RELEASED",
+                                 win.has_focus(),
+                                 (win.has_focus() && rmb) ? "Locked" : "Normal");
+                    std::println(
+                        "  window_size=({},{}) framebuffer_size=({},{}) mouse_valid={} mouse=({},"
+                        "{})",
+                        ww,
+                        wh,
+                        fw,
+                        fh,
+                        win.input().mouse_pos_valid(),
+                        win.input().mouse_x(),
+                        win.input().mouse_y());
+                    std::println("  camera yaw={:.6f} pitch={:.6f}",
+                                 st.camera.yaw_radians,
+                                 st.camera.pitch_radians);
+                }
+            }
+#endif
+
             win.set_cursor_mode((win.has_focus() && rmb) ? strata::platform::CursorMode::Locked
                                                          : strata::platform::CursorMode::Normal);
 
@@ -407,6 +548,166 @@ int main()
                                                    ww,
                                                    wh);
 
+#if STRATA_LEVEL_EDITOR_PICK_DIAG
+                    {
+                        ++g_pick_seq;
+
+                        auto [fw, fh] = win.framebuffer_size();
+
+                        std::println("\n[pickdiag] PICK #{}  mouse=({},{})  window=({},{}) "
+                                     "framebuffer=({},{})",
+                                     g_pick_seq,
+                                     win.input().mouse_x(),
+                                     win.input().mouse_y(),
+                                     ww,
+                                     wh,
+                                     fw,
+                                     fh);
+
+                        // Recompute NDC/view-space scalars to print alongside the ray.
+                        float const w      = (ww > 0) ? static_cast<float>(ww) : 1.0f;
+                        float const h      = (wh > 0) ? static_cast<float>(wh) : 1.0f;
+                        float const aspect = w / h;
+
+                        float const px = static_cast<float>(win.input().mouse_x()) + 0.5f;
+                        float const py = static_cast<float>(win.input().mouse_y()) + 0.5f;
+
+                        float const ndc_x = (2.0f * (px / w)) - 1.0f;
+                        float const ndc_y = (2.0f * (py / h)) - 1.0f;
+
+                        float const tan_half_fovy = std::tan(st.camera.fov_y_radians * 0.5f);
+                        float const x_view        = ndc_x * aspect * tan_half_fovy;
+                        float const y_view        = -ndc_y * tan_half_fovy;
+
+                        std::println("  ndc=({:.6f},{:.6f})  aspect={:.6f}  "
+                                     "tan_half_fovy={:.6f}  view_xy=({:.6f},{:.6f})",
+                                     ndc_x,
+                                     ndc_y,
+                                     aspect,
+                                     tan_half_fovy,
+                                     x_view,
+                                     y_view);
+
+                        std::println("  camera pos=({:.6f},{:.6f},{:.6f}) yaw={:.6f} pitch={:.6f}",
+                                     st.camera.position.x,
+                                     st.camera.position.y,
+                                     st.camera.position.z,
+                                     st.camera.yaw_radians,
+                                     st.camera.pitch_radians);
+
+                        Vec3 const f = st.camera.forward();
+                        Vec3 const r = st.camera.right();
+                        Vec3 const u = st.camera.up();
+
+                        log_vec3("cam.forward", f);
+                        log_vec3("cam.right  ", r);
+                        log_vec3("cam.up     ", u);
+
+                        log_vec3("ray.origin ", ray.origin);
+                        log_vec3("ray.dir    ", ray.dir);
+
+                        if (!is_finite(ray.dir) || (length(ray.dir) < 0.5f))
+                        {
+                            std::println("  [WARN] ray.dir is not finite or suspiciously small!");
+                        }
+
+#if STRATA_LEVEL_EDITOR_PICK_DIAG_PROJECT_CHECK
+                        {
+                            // Project a point along the ray and ensure it maps back to the mouse
+                            // pixel. If this fails, the issue is in ray construction / convention
+                            // mismatch.
+                            Vec3 const p_test = ray.origin + ray.dir * 10.0f;
+
+                            float sx = 0, sy = 0, nx = 0, ny = 0, nz = 0;
+                            if (project_world_to_screen(st.camera,
+                                                        p_test,
+                                                        ww,
+                                                        wh,
+                                                        sx,
+                                                        sy,
+                                                        nx,
+                                                        ny,
+                                                        nz))
+                            {
+                                float const dx =
+                                    sx - (static_cast<float>(win.input().mouse_x()) + 0.5f);
+                                float const dy =
+                                    sy - (static_cast<float>(win.input().mouse_y()) + 0.5f);
+
+                                std::println("  ray->screen check: P=origin+dir*10 => "
+                                             "ndc=({:.6f},{:.6f},{:.6f}) screen=({:.3f},{:.3f}) "
+                                             "delta=({:.3f},{:.3f})",
+                                             nx,
+                                             ny,
+                                             nz,
+                                             sx,
+                                             sy,
+                                             dx,
+                                             dy);
+                            }
+                            else
+                            {
+                                std::println("  [WARN] ray->screen check failed (clip.w ~ 0 or "
+                                             "non-finite).");
+                            }
+
+                        // Also project the centers of all boxes so you can see where the engine
+                        // thinks they land in screen space (helps validate camera math).
+#if STRATA_LEVEL_EDITOR_PICK_DIAG_VERBOSE
+                            {
+                                for (int i = 0; i < static_cast<int>(st.boxes.size()); ++i)
+                                {
+                                    auto const& b = st.boxes[static_cast<std::size_t>(i)];
+                                    Vec3 const  c = (b.min + b.max) * 0.5f;
+
+                                    float csx = 0, csy = 0, cnx = 0, cny = 0, cnz = 0;
+                                    if (project_world_to_screen(st.camera,
+                                                                c,
+                                                                ww,
+                                                                wh,
+                                                                csx,
+                                                                csy,
+                                                                cnx,
+                                                                cny,
+                                                                cnz))
+                                    {
+                                        std::println(
+                                            "  box[{}] center world=({:.3f},{:.3f},{:.3f}) "
+                                            "-> ndc=({:.3f},{:.3f},{:.3f}) screen=({:.1f},{:.1f})",
+                                            i,
+                                            c.x,
+                                            c.y,
+                                            c.z,
+                                            cnx,
+                                            cny,
+                                            cnz,
+                                            csx,
+                                            csy);
+                                    }
+                                }
+                            }
+#endif
+                        }
+#endif // STRATA_LEVEL_EDITOR_PICK_DIAG_PROJECT_CHECK
+
+                        // Optional: plane intersection with y=0 for intuition
+                        if (std::abs(ray.dir.y) > 1e-6f)
+                        {
+                            float const t = (0.0f - ray.origin.y) / ray.dir.y;
+                            if (t > 0.0f && std::isfinite(t))
+                            {
+                                Vec3 const p = ray.origin + ray.dir * t;
+                                std::println(
+                                    "  ray hits plane y=0 at t={:.6f} -> ({:.6f},{:.6f},{:.6f})",
+                                    t,
+                                    p.x,
+                                    p.y,
+                                    p.z);
+                            }
+                        }
+                    }
+#endif // STRATA_LEVEL_EDITOR_PICK_DIAG
+
                     int   best_idx = -1;
                     float best_t   = std::numeric_limits<float>::infinity();
 
@@ -415,6 +716,23 @@ int main()
                         float t = 0.0f;
                         if (ray_intersect_aabb(ray, st.boxes[static_cast<std::size_t>(i)], t))
                         {
+#if STRATA_LEVEL_EDITOR_PICK_DIAG && STRATA_LEVEL_EDITOR_PICK_DIAG_VERBOSE
+                            {
+                                auto const& b = st.boxes[static_cast<std::size_t>(i)];
+                                std::println(
+                                    "  hit box[{}] t={:.6f}  aabb.min=({:.3f},{:.3f},{:.3f}) "
+                                    "aabb.max=({:.3f},{:.3f},{:.3f})",
+                                    i,
+                                    t,
+                                    b.min.x,
+                                    b.min.y,
+                                    b.min.z,
+                                    b.max.x,
+                                    b.max.y,
+                                    b.max.z);
+                            }
+#endif
+
                             if (t < best_t)
                             {
                                 best_t   = t;
@@ -422,6 +740,10 @@ int main()
                             }
                         }
                     }
+
+#if STRATA_LEVEL_EDITOR_PICK_DIAG
+                    std::println("  best hit idx={} t={}", best_idx, best_t);
+#endif
 
                     if (best_idx != st.selected)
                     {
@@ -439,13 +761,13 @@ int main()
                             append_box(sel_v, sel_i, b.min, b.max);
 
                             // --- SAFE selected-mesh buffer replacement
-                            // 
-                            // Vulkan rule: must not destroy buffers still referenced by 
-                            // in-flight cmd buffers. 
-                            // 
+                            //
+                            // Vulkan rule: must not destroy buffers still referenced by
+                            // in-flight cmd buffers.
+                            //
                             // MVP fix: stall the GPU before freeing the old selection
                             // buffers.
-                            // 
+                            //
                             // Later: replace this with a deferred-destruction queue
                             // keyed by per-frame fences.
 
@@ -453,8 +775,8 @@ int main()
                             auto const old_ib = st.selected_gpu.mesh.index_buffer;
 
                             // (Re)build st.selected_gpu.mesh.* here (create_buffer for new VB/IB,
-                            // set index_count, etc.) 
-                            // 
+                            // set index_count, etc.)
+                            //
                             // IMPORTANT: set st.selected_gpu.mesh to the NEW
                             // buffers before destroying old ones.
 
@@ -484,6 +806,12 @@ int main()
                         }
                     }
                 }
+#if STRATA_LEVEL_EDITOR_PICK_DIAG
+                else
+                {
+                    std::println("[pickdiag] PICK attempted but mouse_pos_valid() == false");
+                }
+#endif
             }
 
             // Feed camera to renderer
